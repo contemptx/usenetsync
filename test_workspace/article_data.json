@@ -1,0 +1,56 @@
+[
+  {
+    "timestamp": "2025-07-25T17:19:58.671202",
+    "file_path": "upload\\test_document.txt",
+    "file_name": "test_document.txt",
+    "newsgroup": "alt.binaries.test",
+    "message_id": "<usync-20250725161957-6ulsuw25@news-newshosting-com>",
+    "post_time": 1.55,
+    "retrieved": false
+  },
+  {
+    "timestamp": "2025-07-25T17:20:05.761424",
+    "file_path": "upload\\test_binary.bin",
+    "file_name": "test_binary.bin",
+    "newsgroup": "alt.binaries.test",
+    "message_id": "Illegal characters found",
+    "post_time": 1.55,
+    "retrieved": false
+  },
+  {
+    "timestamp": "2025-07-25T17:20:13.717986",
+    "file_path": "upload\\test_large.dat",
+    "file_name": "test_large.dat",
+    "newsgroup": "alt.binaries.test",
+    "message_id": "Illegal characters found",
+    "post_time": 1.54,
+    "retrieved": false
+  },
+  {
+    "timestamp": "2025-07-25T17:20:21.673474",
+    "file_path": "upload\\small_1.txt",
+    "file_name": "small_1.txt",
+    "newsgroup": "alt.binaries.test",
+    "message_id": "<usync-20250725162020-guuk17am@news-newshosting-com>",
+    "post_time": 1.53,
+    "retrieved": false
+  },
+  {
+    "timestamp": "2025-07-25T17:20:26.173932",
+    "file_path": "upload\\small_2.txt",
+    "file_name": "small_2.txt",
+    "newsgroup": "alt.binaries.test",
+    "message_id": "<usync-20250725162024-np4a2it4@news-newshosting-com>",
+    "post_time": 1.5,
+    "retrieved": false
+  },
+  {
+    "timestamp": "2025-07-25T17:20:30.701118",
+    "file_path": "upload\\small_3.txt",
+    "file_name": "small_3.txt",
+    "newsgroup": "alt.binaries.test",
+    "message_id": "<usync-20250725162029-2t9md7qd@news-newshosting-com>",
+    "post_time": 1.53,
+    "retrieved": false
+  }
+]

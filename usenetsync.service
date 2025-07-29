@@ -1,0 +1,26 @@
+[Unit]
+Description=UsenetSync - Secure Usenet Folder Synchronization
+After=network.target
+
+[Service]
+Type=simple
+User=usenetsync
+Group=usenetsync
+WorkingDirectory=/opt/usenetsync
+ExecStart=/usr/bin/python3 /opt/usenetsync/cli.py daemon
+Restart=on-failure
+RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/usenetsync /var/log/usenetsync
+
+# Resource limits
+LimitNOFILE=65536
+MemoryLimit=2G
+
+[Install]
+WantedBy=multi-user.target

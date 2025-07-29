@@ -1,0 +1,21 @@
+name: Performance Issue
+description: Report a performance problem
+title: "[PERFORMANCE] "
+labels: ["performance", "needs-triage"]
+
+body:
+  - type: textarea
+    id: performance_issue
+    attributes:
+      label: Performance Issue
+      description: Describe the performance problem
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: System specifications, data size, etc.
+    validations:
+      required: true

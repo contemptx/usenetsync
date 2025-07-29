@@ -1,0 +1,22 @@
+{
+  "nntp": {
+    "server": "news.newshosting.com",
+    "port": 563,
+    "ssl": true,
+    "username": "contemptx",
+    "password": "S1983b1986#",
+    "connections": 10
+  },
+  "newsgroup": "alt.binaries.test",
+  "test_mode": true,
+  "upload": {
+    "max_segment_size": 768000,
+    "segments_per_upload": 10,
+    "newsgroup": "alt.binaries.test",
+    "upload_workers": 3
+  },
+  "download": {
+    "temp_dir": "temp",
+    "max_concurrent_downloads": 5
+  }
+}

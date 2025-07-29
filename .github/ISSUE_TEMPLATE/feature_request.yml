@@ -1,0 +1,54 @@
+name: Feature Request
+description: Suggest a new feature for UsenetSync
+title: "[FEATURE] "
+labels: ["enhancement", "needs-triage"]
+
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: What problem does this feature solve?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this affect?
+      options:
+        - Core System
+        - Upload System
+        - Download System
+        - Security System
+        - Database
+        - NNTP Client
+        - Monitoring
+        - CLI Interface
+        - Web Interface
+        - API
+        - Documentation
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low - Nice to have
+        - Medium - Would improve workflow
+        - High - Blocks important use case
+        - Critical - Essential for operation
+    validations:
+      required: true

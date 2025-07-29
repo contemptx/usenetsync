@@ -1,0 +1,23 @@
+{
+  "start_time": "2025-07-25T13:49:51.743059",
+  "tests": {
+    "single_upload_text": true,
+    "single_upload_binary": true,
+    "single_upload_large": true,
+    "batch_upload": true,
+    "duplicate_handling": true,
+    "file_modifications": true,
+    "newsgroup_mapping": true,
+    "performance": true
+  },
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "success_rate": 100.0,
+    "articles_posted": 0,
+    "headers_retrieved": 0
+  },
+  "article_data": [],
+  "end_time": "2025-07-25T13:50:41.714271"
+}

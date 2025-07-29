@@ -1,0 +1,32 @@
+name: Performance Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 0'  # Weekly on Sunday at 4 AM
+
+jobs:
+  performance-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest-benchmark
+    
+    - name: Run performance tests
+      run: pytest tests/performance/ --benchmark-json=benchmark.json
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: benchmark.json
