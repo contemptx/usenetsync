@@ -7,16 +7,16 @@
 /enhanced_*.py @contemptx
 
 # Security components
-/enhanced_security_system.py @contemptx @security-team
-/security_audit_system.py @contemptx @security-team
+/enhanced_security_system.py @contemptx @contemptx
+/security_audit_system.py @contemptx @contemptx
 
 # Database components
-/enhanced_database_manager.py @contemptx @database-team
-/production_db_wrapper.py @contemptx @database-team
+/enhanced_database_manager.py @contemptx @contemptx
+/production_db_wrapper.py @contemptx @contemptx
 
 # Documentation
-/README.md @contemptx @docs-team
-/docs/ @docs-team
+/README.md @contemptx @contemptx
+/docs/ @contemptx
 
 # GitHub configuration
 /.github/ @contemptx

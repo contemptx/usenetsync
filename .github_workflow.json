@@ -1,0 +1,20 @@
+{
+  "repository": {
+    "url": "https://github.com/contemptx/usenetsync.git",
+    "branch": "master",
+    "remote": "origin"
+  },
+  "workflow": {
+    "auto_commit": false,
+    "check_before_commit": true,
+    "run_tests": true,
+    "update_changelog": true,
+    "semantic_commits": true
+  },
+  "ai_integration": {
+    "review_changes": true,
+    "suggest_commit_message": true,
+    "check_security": true,
+    "update_documentation": true
+  }
+}
