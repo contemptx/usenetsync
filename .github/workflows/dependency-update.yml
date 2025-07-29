@@ -22,7 +22,7 @@ jobs:
         pip list --outdated --format=json > outdated.json
     
     - name: Create PR for dependency updates
-      uses: peter-evans/create-pull-request@v5
+      uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: 'deps: Update Python dependencies'
