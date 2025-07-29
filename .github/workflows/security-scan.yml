@@ -35,7 +35,7 @@ jobs:
       run: python security_audit_system.py scan . --format json > security-audit.json
     
     - name: Upload security reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: security-reports
         path: |
