@@ -121,7 +121,7 @@ class ConfigurationManager:
     Supports multiple formats, encryption, validation, and hot-reloading
     """
     
-    DEFAULT_CONFIG_FILENAME = "usenetsync.conf"
+    DEFAULT_CONFIG_FILENAME = "usenetsync.json"
     ENCRYPTED_FIELDS = ["password", "api_key", "secret"]
     
     def __init__(self, config_path: Optional[str] = None, auto_save: bool = True):
@@ -773,7 +773,7 @@ class ConfigurationManager:
                 enabled=True
             )
         ]
-        
+
         # Use dataclass defaults
         self.processing = ProcessingConfig()
         self.network = NetworkConfig()
@@ -782,19 +782,19 @@ class ConfigurationManager:
         self.ui = UIConfig()
         self.logging = LoggingConfig()
         self.custom = {}
-        
+
     def add_observer(self, callback: Callable):
         """Add configuration change observer"""
         with self._lock:
             if callback not in self._observers:
                 self._observers.append(callback)
-                
+
     def remove_observer(self, callback: Callable):
         """Remove configuration change observer"""
         with self._lock:
             if callback in self._observers:
                 self._observers.remove(callback)
-                
+
     def _notify_observers(self, event: str, *args):
         """Notify all observers of configuration change"""
         for observer in self._observers:
@@ -802,7 +802,7 @@ class ConfigurationManager:
                 observer(event, *args)
             except Exception as e:
                 self.logger.error(f"Observer notification failed: {e}")
-                
+
     def get_summary(self) -> Dict[str, Any]:
         """Get configuration summary"""
         with self._lock:

@@ -356,7 +356,7 @@ class UploadQueueManager:
             cursor = conn.execute("""
                 SELECT uq.*, s.*, f.file_path, fo.folder_unique_id
                 FROM segment_upload_queue uq
-                JOIN segments s ON uq.segment_id = s.id
+                JOIN segments s ON uq.id = s.id
                 JOIN files f ON s.file_id = f.id
                 JOIN folders fo ON f.folder_id = fo.id
                 WHERE uq.completed_at IS NULL

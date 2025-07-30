@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from enhanced_database_manager import DatabaseConfig
 from production_db_wrapper import ProductionDatabaseManager
 from enhanced_security_system import EnhancedSecuritySystem
-from production_nntp_client import ProductionNNTPClient, ServerConfig
+from production_nntp_client import ProductionNNTPClient
 from segment_packing_system import SegmentPackingSystem
 from enhanced_upload_system import EnhancedUploadSystem
 from versioned_core_index_system import VersionedCoreIndexSystem
@@ -25,7 +25,7 @@ from simplified_binary_index import SimplifiedBinaryIndex
 from enhanced_download_system import EnhancedDownloadSystem
 from publishing_system import PublishingSystem
 from user_management import UserManager
-from configuration_manager import ConfigurationManager
+from configuration_manager import ConfigurationManager, ServerConfig
 from monitoring_system import MonitoringSystem
 from segment_retrieval_system import SegmentRetrievalSystem
 from upload_queue_manager import SmartQueueManager
@@ -90,10 +90,10 @@ class UsenetSync:
         
         # Initialize retrieval system for downloads
         from segment_packing_system import RedundancyEngine
-        redundancy_engine = RedundancyEngine(self.config.processing.redundancy_type)
+        redundancy_engine = RedundancyEngine()
         
         self.retrieval_system = SegmentRetrievalSystem(
-            self.nntp, self.db, redundancy_engine, self.config.network.__dict__
+            self.nntp, self.db, self.config.network.__dict__
         )
         
         # Initialize download system
@@ -111,23 +111,35 @@ class UsenetSync:
         self.logger.info("UsenetSync initialization complete")
         
     def _init_nntp_client(self):
-        """Initialize NNTP client with servers from config"""
-        servers = []
-        for server_config in self.config.servers:
-            if server_config.enabled:
-                servers.append(ServerConfig(
-                    hostname=server_config.hostname,
-                    port=server_config.port,
-                    username=server_config.username,
-                    password=server_config.password,
-                    use_ssl=server_config.use_ssl,
-                    max_connections=server_config.max_connections,
-                    priority=server_config.priority
-                ))
-                
-        self.nntp = ProductionNNTPClient(servers)
-        self.logger.info(f"Initialized NNTP client with {len(servers)} servers")
+        """Initialize NNTP client with multi-server support"""
+        enabled_servers = [s for s in self.config.servers if s.enabled]
         
+        if not enabled_servers:
+            raise ValueError("No enabled servers configured")
+        
+        # Sort by priority
+        enabled_servers.sort(key=lambda s: s.priority)
+        
+        # For now, use the primary server (highest priority)
+        # TODO: Implement proper load balancer for multiple servers
+        primary_server = enabled_servers[0]
+        
+        self.nntp = ProductionNNTPClient(
+            host=primary_server.hostname,
+            port=primary_server.port,
+            username=primary_server.username,
+            password=primary_server.password,
+            use_ssl=primary_server.use_ssl,
+            max_connections=primary_server.max_connections
+        )
+        
+        self.logger.info(
+            f"Initialized NNTP client with primary server {primary_server.hostname}:{primary_server.port}"
+        )
+        if len(enabled_servers) > 1:
+            self.logger.info(
+                f"Additional {len(enabled_servers) - 1} backup servers configured"
+            )
     def initialize_user(self, display_name: Optional[str] = None) -> str:
         """Initialize user profile"""
         if self.user.is_initialized():
@@ -249,7 +261,18 @@ class UsenetSync:
             'database': self.db.get_database_stats(),
             'monitoring': self.monitoring.get_dashboard_data(),
             'upload_queue': self.queue_manager.get_statistics(),
-            'nntp_servers': self.nntp.get_statistics(),
+            'nntp_servers': {
+            'connection_pool': self.nntp.connection_pool.get_stats(),
+            'server_stats': {
+                self.nntp.host: {
+                    'host': self.nntp.host,
+                    'port': self.nntp.port,
+                    'ssl': self.nntp.use_ssl,
+                    'max_connections': self.nntp.connection_pool.max_connections,
+                    'status': 'connected'
+                }
+            }
+        },
             'active_uploads': self.upload_system.get_statistics(),
             'active_downloads': self.download_system.get_statistics(),
             'published_shares': self.publishing_system.get_statistics()

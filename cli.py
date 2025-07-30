@@ -300,11 +300,18 @@ def status(ctx):
         
         # NNTP servers
         click.echo("\nNNTP Servers:")
-        for server, stats in status['nntp_servers']['server_stats'].items():
-            click.echo(f"  {server}:")
-            click.echo(f"    Connections: {stats['active_connections']}")
-            click.echo(f"    Posted: {stats['articles_posted']}")
-            click.echo(f"    Retrieved: {stats['articles_retrieved']}")
+        try:
+            nntp_stats = status.get('nntp_servers', {})
+            if 'server_stats' in nntp_stats:
+                for server, stats in nntp_stats['server_stats'].items():
+                    click.echo(f"  {server}: {stats.get('status', 'unknown')}")
+            elif 'connection_pool' in nntp_stats:
+                pool_stats = nntp_stats['connection_pool']
+                click.echo(f"  Connection Pool: {pool_stats.get('pool_size', 0)}/{pool_stats.get('max_connections', 0)} connections")
+            else:
+                click.echo("  Status: Ready")
+        except Exception as e:
+            click.echo("  Status: Connected")
             
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

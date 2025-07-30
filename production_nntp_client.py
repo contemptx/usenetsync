@@ -23,9 +23,34 @@ import email.utils
 from typing import Optional, Tuple, Dict, List, Any
 import re
 import getpass
+from dataclasses import dataclass, asdict
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ServerConfig:
+    """Server configuration for NNTP client"""
+    name: str
+    hostname: str
+    port: int
+    username: str
+    password: str
+    posting_group: str = "alt.binaries.test"
+    use_ssl: bool = True
+    max_connections: int = 10
+    priority: int = 1
+    enabled: bool = True
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return asdict(self)
+        
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ServerConfig':
+        """Create from dictionary"""
+        return cls(**data)
 
 
 class ConnectionStats:
@@ -272,12 +297,6 @@ class NNTPConnection:
                         return response.encode('utf-8', errors='replace')
                         
                 return None
-                        
-            except Exception as e:
-                logger.error(f"Failed to retrieve article {message_id}: {e}")
-                return None
-
-
                         
             except Exception as e:
                 logger.error(f"Failed to retrieve article {message_id}: {e}")
