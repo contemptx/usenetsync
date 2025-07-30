@@ -8,6 +8,7 @@ import time
 import functools
 import logging
 import random
+import json
 from typing import Optional, Any, Dict, List
 from datetime import datetime
 from pathlib import Path
@@ -21,9 +22,9 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
     """Enhanced database manager with production features"""
     
     def __init__(self, config: Optional[DatabaseConfig] = None, 
-                 enable_monitoring: bool = True,
+                enable_monitoring: bool = True,
                 enable_retry: bool = True,
-                 log_file: Optional[str] = None):
+                log_file: Optional[str] = None):
         """
         Initialize production database manager
         
@@ -33,7 +34,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
             enable_retry: Enable automatic retry on lock errors
             log_file: Path to log file for errors/warnings
         """
-        super().__init__(config)
+        super(ProductionDatabaseManager, self).__init__(config)
         
         self.enable_monitoring = enable_monitoring
         self.enable_retry = enable_retry
@@ -159,7 +160,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
     # Override critical methods with retry and monitoring
     
     def create_folder(self, folder_unique_id: str, folder_path: str, 
-                     display_name: str, share_type: str = 'private') -> int:
+                    display_name: str, share_type: str = 'private') -> int:
         """Create folder with retry logic"""
         def _create():
             return super(ProductionDatabaseManager, self).create_folder(
@@ -171,19 +172,41 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
             lambda: self._retry_operation(_create)
         )
     
-    def add_file(self, folder_id: int, file_path: str, file_hash: str, 
-                 file_size: int, modified_at: datetime, version: int = 1) -> int:
-        """Add file with retry logic"""
-        def _add():
-            return super(ProductionDatabaseManager, self).add_file(
-                folder_id, file_path, file_hash, file_size, modified_at, version
-            )
+    def add_file(self, folder_id, file_path, file_hash, file_size, modified_at, version=1):
+        """Add file to database with better locking handling"""
+        import sqlite3
+        import time
         
-        return self._monitor_operation(
-            'add_file',
-            lambda: self._retry_operation(_add)
-        )
-    
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.pool.get_connection() as conn:
+                    # Use immediate transaction to reduce lock time
+                    conn.execute("BEGIN IMMEDIATE")
+                    try:
+                        cursor = conn.execute("""
+                            INSERT INTO files 
+                            (folder_id, file_path, file_hash, file_size, modified_at, version, state)
+                            VALUES (?, ?, ?, ?, ?, ?, 'indexed')
+                        """, (folder_id, file_path, file_hash, file_size, modified_at, version))
+                        
+                        file_id = cursor.lastrowid
+                        conn.commit()
+                        return file_id
+                    except Exception:
+                        conn.rollback()
+                        raise
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2 ** attempt)
+                    print(f"Database locked, waiting {wait_time:.2f}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Database error after {attempt + 1} attempts: {e}")
+                    raise e
+        
+        raise sqlite3.OperationalError(f"Failed to add file after {max_retries} attempts")
     def create_folder_version(self, folder_id: int, version: int, 
                             change_summary: Dict) -> int:
         """Create folder version with retry logic"""
@@ -197,21 +220,52 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
             lambda: self._retry_operation(_create)
         )
     
-    def bulk_insert_segments(self, segments: List[Dict]):
-        """Bulk insert segments with retry logic"""
-        def _insert():
-            return super(ProductionDatabaseManager, self).bulk_insert_segments(segments)
+    def bulk_insert_segments(self, segments):
+        """Bulk insert segments with better locking"""
+        import sqlite3
+        import time
         
-        return self._monitor_operation(
-            'bulk_insert_segments',
-            lambda: self._retry_operation(_insert)
-        )
-    
+        if not segments:
+            return True
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.pool.get_connection() as conn:
+                    conn.execute("BEGIN IMMEDIATE")
+                    try:
+                        for segment in segments:
+                            conn.execute("""
+                                INSERT INTO segments 
+                                (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index, state)
+                                VALUES (?, ?, ?, ?, ?, ?, 'pending')
+                            """, (
+                                segment['file_id'],
+                                segment['segment_index'], 
+                                segment['segment_hash'],
+                                segment['segment_size'],
+                                segment['data_offset'],
+                                segment.get('redundancy_index', 0)
+                            ))
+                        conn.commit()
+                        return True
+                    except Exception:
+                        conn.rollback()
+                        raise
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2 ** attempt)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise e
+        
+        return False
     def get_all_folders(self) -> List[Dict]:
         """Get all folders with monitoring (no retry for reads)"""
         return self._monitor_operation(
             'get_all_folders',
-            super().get_all_folders
+            super(ProductionDatabaseManager, self).get_all_folders
         )
     
     def get_monitoring_stats(self) -> Dict:
@@ -259,8 +313,8 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         def _get_pending():
             try:
                 # Call the parent class method directly
-                if hasattr(super(), 'get_pending_uploads'):
-                    return super().get_pending_uploads(limit)
+                if hasattr(super(ProductionDatabaseManager, self), 'get_pending_uploads'):
+                    return super(ProductionDatabaseManager, self).get_pending_uploads(limit)
                 
                 # If not, implement it directly using the connection pool
                 with self.pool.get_connection() as conn:
@@ -292,14 +346,14 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         def _get_shares():
             try:
                 # Call the parent class method directly
-                if hasattr(super(), 'get_all_shares'):
-                    return super().get_all_shares()
+                if hasattr(super(ProductionDatabaseManager, self), 'get_all_shares'):
+                    return super(ProductionDatabaseManager, self).get_all_shares()
                 
                 # If not, implement it directly using the connection pool
                 with self.pool.get_connection() as conn:
                     cursor = conn.execute("""
                         SELECT share_id, folder_id, version, access_string, 
-                               share_type, created_at, index_size
+                                share_type, created_at, index_size
                         FROM publications
                         ORDER BY created_at DESC
                     """)
@@ -324,6 +378,459 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         return self._monitor_operation('get_all_shares', _get_shares)
 
 
+    
+    def update_folder_keys(self, folder_id: int, private_key: bytes, public_key: bytes):
+        """Update folder keys in database"""
+        with self.pool.get_connection() as conn:
+            # Try with keys_updated_at first, fallback without it
+                try:
+                    conn.execute("""
+                        UPDATE folders 
+                        SET private_key = ?, public_key = ?, keys_updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    """, (private_key, public_key, folder_id))
+                except Exception:
+                    # Fallback if keys_updated_at column doesn't exist
+                    conn.execute("""
+                        UPDATE folders 
+                        SET private_key = ?, public_key = ?
+                        WHERE id = ?
+                    """, (private_key, public_key, folder_id))
+                    conn.commit()
+    
+    def get_folder_by_path(self, folder_path: str) -> Optional[Dict]:
+        """Get folder by file system path"""
+        with self.pool.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM folders WHERE folder_path = ?
+            """, (folder_path,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def update_folder_stats(self, folder_id: int):
+        """Update folder statistics"""
+        with self.pool.get_connection() as conn:
+            # Update file count and total size
+            cursor = conn.execute("""
+                UPDATE folders 
+                SET file_count = (
+                    SELECT COUNT(*) FROM files WHERE folder_id = ? AND state != 'deleted'
+                ),
+                total_size = (
+                    SELECT COALESCE(SUM(file_size), 0) FROM files WHERE folder_id = ? AND state != 'deleted'
+                ),
+                /* last_updated removed */
+                WHERE id = ?
+            """, (folder_id, folder_id, folder_id))
+            conn.commit()
+    
+    def get_folder_files(self, folder_id, offset=0, limit=None):
+        """Get files in folder with pagination"""
+        try:
+            folder = self.get_folder(folder_id)
+            if not folder:
+                return []
+            folder_db_id = folder['id']
+            
+            with self.pool.get_connection() as conn:
+                query = "SELECT * FROM files WHERE folder_id = ? ORDER BY file_path"
+                params = [folder_db_id]
+                
+                if limit is not None:
+                    query += " LIMIT ? OFFSET ?"
+                    params.extend([limit, offset])
+                
+                cursor = conn.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception:
+            return []
+
+    
+    def get_file_segments(self, file_id: int) -> List[Dict]:
+        """Get all segments for a file"""
+        with self.pool.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM segments WHERE file_id = ? ORDER BY segment_index
+            """, (file_id,))
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def create_file(self, folder_id: int, file_path: str, file_hash: str, 
+                    file_size: int, version: int = 1) -> int:
+        """Create new file entry"""
+        with self.pool.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO files 
+                (folder_id, file_path, file_hash, file_size, version, state)
+                VALUES (?, ?, ?, ?, ?, 'active')
+            """, (folder_id, file_path, file_hash, file_size, version))
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_file(self, folder_id: int, file_path: str) -> Optional[Dict]:
+        """Get file by folder and path"""
+        with self.pool.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM files WHERE folder_id = ? AND file_path = ?
+            """, (folder_id, file_path))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def update_file_state(self, file_id: int, state: str):
+        """Update file state"""
+        with self.pool.get_connection() as conn:
+            conn.execute("""
+                UPDATE files SET state = ?, modified_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (state, file_id))
+            conn.commit()
+    
+    def create_segment(self, file_id: int, segment_index: int, segment_hash: str,
+                        segment_size: int, data_offset: int, redundancy_index: int = 0) -> int:
+        """Create new segment entry"""
+        with self.pool.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO segments 
+                (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index))
+            conn.commit()
+            return cursor.lastrowid
+    
+    def record_change(self, folder_id: int, file_path: str, change_type: str,
+                    old_version: Optional[int], new_version: Optional[int],
+                    old_hash: Optional[str], new_hash: Optional[str]):
+        """Record change in journal"""
+        with self.pool.get_connection() as conn:
+            conn.execute("""
+                INSERT INTO change_journal 
+                (folder_id, file_path, change_type, old_version, new_version, old_hash, new_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (folder_id, file_path, change_type, old_version, new_version, old_hash, new_hash))
+            conn.commit()
+    
+    def create_folder_version(self, folder_id: int, version: int, change_data: Dict) -> int:
+        """Create folder version entry"""
+        with self.pool.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO folder_versions 
+                (folder_id, version, change_summary)
+                VALUES (?, ?, ?)
+            """, (folder_id, version, json.dumps(change_data)))
+            conn.commit()
+            return cursor.lastrowid
+
+    
+    def get_folder_info(self, folder_id):
+        """Get folder information by ID"""
+        return self.get_folder(folder_id)
+    
+    def get_folder_segments(self, folder_id):
+        """Get all segments for a folder"""
+        try:
+            folder = self.get_folder(folder_id)
+            if not folder:
+                return []
+            folder_db_id = folder['id']
+            
+            with self.pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT s.*, f.file_path, f.file_hash 
+                    FROM segments s
+                    JOIN files f ON s.file_id = f.id
+                    WHERE f.folder_id = ?
+                    ORDER BY f.file_path, s.segment_index
+                """, (folder_db_id,))
+                
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception:
+            return []
+    
+    def remove_folder(self, folder_id):
+        """Remove folder and all associated data"""
+        try:
+            folder = self.get_folder(folder_id)
+            if not folder:
+                return False
+            folder_db_id = folder['id']
+            
+            with self.pool.get_connection() as conn:
+                # Delete files and segments first
+                conn.execute("DELETE FROM segments WHERE file_id IN (SELECT id FROM files WHERE folder_id = ?)", (folder_db_id,))
+                conn.execute("DELETE FROM files WHERE folder_id = ?", (folder_db_id,))
+                conn.execute("DELETE FROM folders WHERE id = ?", (folder_db_id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            raise e
+    
+    def cleanup_old_sessions(self, days=30):
+        """Clean up old sessions"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("DELETE FROM upload_sessions WHERE created_at < datetime('now', '-{} days')".format(days))
+                conn.commit()
+        except Exception:
+            pass
+    
+    def vacuum(self):
+        """Vacuum database"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("VACUUM")
+        except Exception:
+            pass
+    
+    def analyze(self):
+        """Analyze database"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("ANALYZE")
+        except Exception:
+            pass
+
+    
+    def get_folder_authorized_users(self, folder_id):
+        """Get authorized users for a folder"""
+        try:
+            # Convert folder_id to database ID if it's a string
+            if isinstance(folder_id, str):
+                folder = self.get_folder(folder_id)
+                if not folder:
+                    return []
+                folder_db_id = folder['id']
+            else:
+                folder_db_id = folder_id
+            
+            with self.pool.get_connection() as conn:
+                try:
+                    cursor = conn.execute("""
+                        SELECT user_id, access_type, added_at, added_by
+                        FROM access_control_local 
+                        WHERE folder_id = ?
+                        ORDER BY added_at
+                    """, (folder_db_id,))
+                    
+                    users = []
+                    for row in cursor.fetchall():
+                        users.append({
+                            'user_id': row[0],
+                            'access_type': row[1],
+                            'added_at': row[2],
+                            'added_by': row[3]
+                        })
+                    return users
+                except Exception:
+                    return []
+        except Exception:
+            return []
+    
+    def add_folder_authorized_user(self, folder_id, user_id, access_type='read', added_by=None):
+        """Add authorized user to folder"""
+        try:
+            if isinstance(folder_id, str):
+                folder = self.get_folder(folder_id)
+                if not folder:
+                    return False
+                folder_db_id = folder['id']
+            else:
+                folder_db_id = folder_id
+            
+            with self.pool.get_connection() as conn:
+                # Create table if needed
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS access_control_local (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        folder_id INTEGER NOT NULL,
+                        user_id TEXT NOT NULL,
+                        access_type TEXT DEFAULT 'read',
+                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        added_by TEXT,
+                        FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                        UNIQUE(folder_id, user_id)
+                    )
+                """)
+                
+                conn.execute("""
+                    INSERT OR REPLACE INTO access_control_local 
+                    (folder_id, user_id, access_type, added_by)
+                    VALUES (?, ?, ?, ?)
+                """, (folder_db_id, user_id, access_type, added_by))
+                
+                conn.commit()
+                return True
+        except Exception:
+            return False
+    
+    def remove_folder_authorized_user(self, folder_id, user_id):
+        """Remove authorized user from folder"""
+        try:
+            if isinstance(folder_id, str):
+                folder = self.get_folder(folder_id)
+                if not folder:
+                    return False
+                folder_db_id = folder['id']
+            else:
+                folder_db_id = folder_id
+            
+            with self.pool.get_connection() as conn:
+                conn.execute("""
+                    DELETE FROM access_control_local 
+                    WHERE folder_id = ? AND user_id = ?
+                """, (folder_db_id, user_id))
+                conn.commit()
+                return True
+        except Exception:
+            return False
+    
+    def get_upload_progress(self, folder_id):
+        """Get upload progress for folder"""
+        try:
+            if isinstance(folder_id, str):
+                folder = self.get_folder(folder_id)
+                if not folder:
+                    return {'total': 0, 'uploaded': 0, 'failed': 0}
+                folder_db_id = folder['id']
+            else:
+                folder_db_id = folder_id
+            
+            with self.pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE WHEN state = 'uploaded' THEN 1 ELSE 0 END) as uploaded,
+                        SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) as failed
+                    FROM segments s
+                    JOIN files f ON s.file_id = f.id
+                    WHERE f.folder_id = ?
+                """, (folder_db_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        'total': row[0] or 0,
+                        'uploaded': row[1] or 0,
+                        'failed': row[2] or 0
+                    }
+                return {'total': 0, 'uploaded': 0, 'failed': 0}
+        except Exception:
+            return {'total': 0, 'uploaded': 0, 'failed': 0}
+    
+    def update_segment_state(self, segment_id, state):
+        """Update segment upload state"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("""
+                    UPDATE segments SET state = ? WHERE id = ?
+                """, (state, segment_id))
+                conn.commit()
+                return True
+        except Exception:
+            return False
+    
+    def get_folder_share_info(self, folder_id):
+        """Get share information for folder"""
+        try:
+            if isinstance(folder_id, str):
+                folder = self.get_folder(folder_id)
+                if not folder:
+                    return None
+                folder_db_id = folder['id']
+            else:
+                folder_db_id = folder_id
+            
+            with self.pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT share_id, access_string, share_type, created_at
+                    FROM publications 
+                    WHERE folder_id = ? AND is_active = 1
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (folder_db_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        'share_id': row[0],
+                        'access_string': row[1],
+                        'share_type': row[2],
+                        'created_at': row[3]
+                    }
+                return None
+        except Exception:
+            return None
+    
+    def create_upload_session(self, session_id, folder_id, total_segments):
+        """Create upload session record"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS upload_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT UNIQUE NOT NULL,
+                        folder_id TEXT NOT NULL,
+                        total_segments INTEGER DEFAULT 0,
+                        uploaded_segments INTEGER DEFAULT 0,
+                        failed_segments INTEGER DEFAULT 0,
+                        state TEXT DEFAULT 'active',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                conn.execute("""
+                    INSERT OR REPLACE INTO upload_sessions 
+                    (session_id, folder_id, total_segments)
+                    VALUES (?, ?, ?)
+                """, (session_id, folder_id, total_segments))
+                
+                conn.commit()
+                return True
+        except Exception:
+            return False
+    
+    def update_upload_session_state(self, session_id, state):
+        """Update upload session state"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("""
+                    UPDATE upload_sessions 
+                    SET state = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE session_id = ?
+                """, (state, session_id))
+                conn.commit()
+                return True
+        except Exception:
+            return False
+
+    
+    def get_connection(self):
+        """Get database connection with better locking handling"""
+        import sqlite3
+        import time
+        
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                conn = sqlite3.connect(self.config.path, timeout=30.0)
+                conn.row_factory = dict_factory
+                
+                # Enable WAL mode for better concurrency
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL") 
+                conn.execute("PRAGMA cache_size=10000")
+                conn.execute("PRAGMA temp_store=memory")
+                conn.execute("PRAGMA mmap_size=268435456")  # 256MB
+                
+                return conn
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2 ** attempt)  # Exponential backoff
+                    time.sleep(wait_time)
+                    continue
+                raise e
+        
+        raise sqlite3.OperationalError("Could not get database connection after retries")
+
     def close(self):
         """Close database and cleanup logging"""
         # Remove log handler if exists
@@ -331,8 +838,12 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
             logger.removeHandler(self.log_handler)
             self.log_handler.close()
         
-        # Call parent close
-        super().close()
+        # Close connection pool
+        try:
+            if hasattr(self, 'pool') and self.pool:
+                self.pool.close_all()
+        except Exception as e:
+            logger.debug(f"Pool cleanup error (non-critical): {e}")
 
     def get_pending_uploads(self, limit: int = 100) -> list:
         """Get pending upload tasks"""
@@ -388,7 +899,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 with self.pool.get_connection() as conn:
                     cursor = conn.execute("""
                         SELECT share_id, folder_id, version, access_string, 
-                               share_type, created_at, index_size
+                                share_type, created_at, index_size
                         FROM publications
                         ORDER BY created_at DESC
                     """)
@@ -468,7 +979,7 @@ def create_production_db(db_path: str, log_file: Optional[str] = None,
         
         return self._monitor_operation('get_share_by_id', _get_share)
     def record_publication(self, folder_id: int, version: int, share_id: str,
-                          access_string: str, index_size: int, share_type: str) -> bool:
+                            access_string: str, index_size: int, share_type: str) -> bool:
         """Record a folder publication"""
         def _record():
             try:

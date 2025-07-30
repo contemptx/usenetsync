@@ -1,49 +1,4 @@
-    def _show_settings(self):
-        """Show settings dialog"""
-        try:
-            # Create simple settings dialog
-            settings_dialog = tk.Toplevel(self.root)
-            settings_dialog.title("Settings")
-            settings_dialog.geometry("400x300")
-            settings_dialog.transient(self.root)
-            settings_dialog.grab_set()
-            
-            # NNTP server settings
-            server_frame = ttk.LabelFrame(settings_dialog, text="NNTP Server", padding=15)
-            server_frame.pack(fill=tk.X, padx=10, pady=10)
-            
-            ttk.Label(server_frame, text="Current server configuration loaded from config file").pack()
-            ttk.Label(server_frame, text="Edit usenet_sync_config.json to change settings").pack(pady=5)
-            
-            # User settings
-            user_frame = ttk.LabelFrame(settings_dialog, text="User Settings", padding=15)
-            user_frame.pack(fill=tk.X, padx=10, pady=10)
-            
-            if self.app_backend and self.app_backend.user.is_initialized():
-                current_download_path = self.app_backend.user.get_download_path()
-                ttk.Label(user_frame, text=f"Download Path: {current_download_path}").pack(anchor=tk.W)
-            
-            ttk.Button(settings_dialog, text="Close", command=settings_dialog.destroy).pack(pady=10)
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to show settings: {e}")
-        
-    def _show_system_status(self):
-        """Show system status dialog"""
-        try:
-            status_dialog = tk.Toplevel(self.root)
-            status_dialog.title("System Status")
-            status_dialog.geometry("500x400")
-            status_dialog.transient(self.root)
-            status_dialog.grab_set()
-            
-            # Status text
-            status_text = tk.Text(status_dialog, wrap=tk.WORD, font=('Courier', 9))
-            status_scroll = ttk.Scrollbar(status_dialog, orient=tk.VERTICAL, command=status_text.yview)
-            status_text.configure(yscrollcommand=status_scroll.set)
-            
-            status_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
-            status_scroll.pack(side=tk.RIGHT, fill=tk.Y, pady=10)#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 UsenetSync GUI - Main Application Window
 Production-ready GUI for UsenetSync with full integration to backend systems
@@ -55,9 +10,9 @@ import threading
 import logging
 import sys
 import os
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable
-import time
 from datetime import datetime
 
 # Add parent directory to path for backend imports
@@ -292,9 +247,9 @@ class MainApplication:
             # Load initial data
             self._thread_safe_call(self._load_initial_data)
             
-        except Exception as e:
-            logger.error(f"Failed to initialize backend: {e}")
-            self._thread_safe_status_update(f"Initialization failed: {e}", "error")
+        except Exception as error:
+            logger.error(f"Failed to initialize backend: {error}")
+            self._thread_safe_status_update(f"Initialization failed: {error}", "error")
             
     def _thread_safe_call(self, func, *args, **kwargs):
         """Execute function in main thread"""
@@ -334,12 +289,12 @@ class MainApplication:
             # Load folders
             self._refresh_folder_tree()
             
-        except Exception as e:
-            logger.error(f"Failed to load initial data: {e}")
-            self._thread_safe_status_update(f"Data load failed: {e}", "error")
+        except Exception as error:
+            logger.error(f"Failed to load initial data: {error}")
+            self._thread_safe_status_update(f"Data load failed: {error}", "error")
             
     def _refresh_folder_tree(self):
-        """Refresh the folder tree"""
+        """Refresh the folder tree using production database"""
         if not self.app_backend:
             return
             
@@ -348,15 +303,35 @@ class MainApplication:
             for item in self.folder_tree.get_children():
                 self.folder_tree.delete(item)
                 
-            # Get indexed folders from backend
-            folders = self.app_backend.db.get_indexed_folders()
+            # Get indexed folders from production database
+            with self.app_backend.db.pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT folder_unique_id, display_name, folder_path, share_type, 
+                           current_version, state, file_count, total_size
+                    FROM folders
+                    ORDER BY display_name, folder_path
+                """)
+                
+                folders = []
+                for row in cursor.fetchall():
+                    folder_id, display_name, folder_path, share_type, version, state, file_count, total_size = row
+                    folders.append({
+                        'folder_unique_id': folder_id,
+                        'display_name': display_name or os.path.basename(folder_path),
+                        'folder_path': folder_path,
+                        'share_type': share_type or 'public',
+                        'current_version': version or 1,
+                        'state': state or 'unknown',
+                        'file_count': file_count or 0,
+                        'total_size': total_size or 0
+                    })
             
             for folder in folders:
                 folder_id = folder['folder_unique_id']
-                display_name = folder.get('display_name', folder['folder_path'])
+                display_name = folder['display_name']
                 
                 # Create tree item
-                item_text = f"{display_name} [{folder['share_type']}]"
+                item_text = f"{display_name} [{folder['share_type'].upper()}]"
                 status_icon = "✓" if folder['state'] == 'ready' else "⚠"
                 
                 tree_item = self.folder_tree.insert('', tk.END, 
@@ -365,8 +340,10 @@ class MainApplication:
                 
             logger.info(f"Loaded {len(folders)} folders into tree")
             
-        except Exception as e:
-            logger.error(f"Failed to refresh folder tree: {e}")
+        except Exception as error:
+            logger.error(f"Failed to refresh folder tree: {error}")
+            # Insert error indicator
+            self.folder_tree.insert('', tk.END, text="✗ Error loading folders", values=("",))
             
     def _on_folder_select(self, event):
         """Handle folder selection in tree"""
@@ -381,12 +358,12 @@ class MainApplication:
                 folder_id = values[0]
                 self._show_folder_details(folder_id)
                 
-        except Exception as e:
-            logger.error(f"Error selecting folder: {e}")
+        except Exception as error:
+            logger.error(f"Error selecting folder: {error}")
             
     def _show_folder_details(self, folder_id):
         """Show detailed folder view"""
-        if not self.app_backend:
+        if not self.app_backend or not folder_id:
             return
             
         try:
@@ -413,9 +390,9 @@ class MainApplication:
                 
             self.current_folder = folder_id
             
-        except Exception as e:
-            logger.error(f"Error showing folder details: {e}")
-            messagebox.showerror("Error", f"Failed to load folder details: {e}")
+        except Exception as error:
+            logger.error(f"Error showing folder details: {error}")
+            messagebox.showerror("Error", f"Failed to load folder details: {error}")
             
     def _show_user_init(self):
         """Show user initialization dialog"""
@@ -426,9 +403,9 @@ class MainApplication:
             # Refresh status after dialog
             self._load_initial_data()
             
-        except Exception as e:
-            logger.error(f"Error showing user init dialog: {e}")
-            messagebox.showerror("Error", f"Failed to show user dialog: {e}")
+        except Exception as error:
+            logger.error(f"Error showing user init dialog: {error}")
+            messagebox.showerror("Error", f"Failed to show user dialog: {error}")
             
     def _index_folder(self):
         """Index a new folder"""
@@ -464,10 +441,10 @@ class MainApplication:
                 self._thread_safe_status_update(f"Indexing complete: {result['files_indexed']} files", "success")
                 self._thread_safe_call(self._refresh_folder_tree)
                 
-            except Exception as e:
-                logger.error(f"Indexing failed: {e}")
+            except Exception as error:
+                logger.error(f"Indexing failed: {error}")
                 self._thread_safe_call(lambda: self.progress_bar.pack_forget())
-                self._thread_safe_status_update(f"Indexing failed: {e}", "error")
+                self._thread_safe_status_update(f"Indexing failed: {error}", "error")
                 
         threading.Thread(target=index_worker, daemon=True).start()
         
@@ -490,7 +467,7 @@ class MainApplication:
                 try:
                     if share_type:
                         # Public share
-                        access_string = self.app_backend.publish_folder(self.current_folder, 'public')
+                        access_string = self.app_backend.publishing.create_public_share(self.current_folder)
                     else:
                         # Private share - need user IDs
                         users = simpledialog.askstring("Private Share", 
@@ -499,21 +476,22 @@ class MainApplication:
                             return
                             
                         user_list = [uid.strip() for uid in users.split('\n') if uid.strip()]
-                        access_string = self.app_backend.publish_folder(self.current_folder, 'private', user_list)
+                        access_string = self.app_backend.publishing.create_private_share(self.current_folder, user_list)
                         
                     # Show result
                     self._thread_safe_call(lambda: self._show_access_string(access_string))
                     self._thread_safe_status_update("Share published successfully", "success")
                     
-                except Exception as e:
-                    logger.error(f"Publishing failed: {e}")
-                    self._thread_safe_status_update(f"Publishing failed: {e}", "error")
+                except Exception as error:
+                    logger.error(f"Publishing failed: {error}")
+                    self._thread_safe_status_update(f"Publishing failed: {error}", "error")
+                    self._thread_safe_call(lambda: messagebox.showerror("Publishing Failed", str(e)))
                     
             threading.Thread(target=publish_worker, daemon=True).start()
             
-        except Exception as e:
-            logger.error(f"Error in publish: {e}")
-            messagebox.showerror("Error", f"Failed to publish: {e}")
+        except Exception as error:
+            logger.error(f"Error in publish: {error}")
+            messagebox.showerror("Error", f"Failed to publish: {error}")
             
     def _show_access_string(self, access_string):
         """Show access string dialog"""
@@ -567,9 +545,9 @@ class MainApplication:
             dialog = DownloadDialog(self.root, self.app_backend)
             self.root.wait_window(dialog.dialog)
             
-        except Exception as e:
-            logger.error(f"Error showing download dialog: {e}")
-            messagebox.showerror("Error", f"Failed to show download dialog: {e}")
+        except Exception as error:
+            logger.error(f"Error showing download dialog: {error}")
+            messagebox.showerror("Error", f"Failed to show download dialog: {error}")
             
     def _refresh_all(self):
         """Refresh all data"""
@@ -581,9 +559,9 @@ class MainApplication:
                 if self.current_folder:
                     self._thread_safe_call(lambda: self._show_folder_details(self.current_folder))
                 self._thread_safe_status_update("Refresh complete", "success")
-            except Exception as e:
-                logger.error(f"Refresh failed: {e}")
-                self._thread_safe_status_update(f"Refresh failed: {e}", "error")
+            except Exception as error:
+                logger.error(f"Refresh failed: {error}")
+                self._thread_safe_status_update(f"Refresh failed: {error}", "error")
                 
         threading.Thread(target=refresh_worker, daemon=True).start()
         
@@ -596,7 +574,7 @@ class MainApplication:
                     self.connection_status.config(text="Connected", style='Success.TLabel')
                 else:
                     self.connection_status.config(text="Disconnected", style='Error.TLabel')
-            except:
+            except Exception as error:
                 self.connection_status.config(text="Error", style='Error.TLabel')
                 
             # Schedule next update
@@ -608,7 +586,7 @@ class MainApplication:
         """Show context menu for tree"""
         try:
             self.tree_context_menu.post(event.x_root, event.y_root)
-        except:
+        except Exception as error:
             pass
             
     def _refresh_selected_folder(self):
@@ -661,17 +639,17 @@ class MainApplication:
                         self._thread_safe_status_update(f"Re-indexing complete: {result.get('files_updated', 0)} files updated", "success")
                         self._thread_safe_call(self._refresh_folder_tree)
                         
-                    except Exception as e:
-                        logger.error(f"Re-indexing failed: {e}")
+                    except Exception as error:
+                        logger.error(f"Re-indexing failed: {error}")
                         self._thread_safe_call(lambda: self.progress_bar.pack_forget())
-                        self._thread_safe_status_update(f"Re-indexing failed: {e}", "error")
+                        self._thread_safe_status_update(f"Re-indexing failed: {error}", "error")
                         self._thread_safe_call(lambda: messagebox.showerror("Re-indexing Failed", str(e)))
                         
                 threading.Thread(target=reindex_worker, daemon=True).start()
                 
-        except Exception as e:
-            logger.error(f"Error in re-index: {e}")
-            messagebox.showerror("Error", f"Failed to re-index: {e}")
+        except Exception as error:
+            logger.error(f"Error in re-index: {error}")
+            messagebox.showerror("Error", f"Failed to re-index: {error}")
         
     def _remove_selected_folder(self):
         """Remove selected folder using production database"""
@@ -724,18 +702,16 @@ class MainApplication:
                         # Clear details panel
                         self._thread_safe_call(lambda: self._show_folder_details(None))
                         
-                    except Exception as e:
-                        logger.error(f"Failed to remove folder: {e}")
-                        self._thread_safe_call(lambda: messagebox.showerror("Error", f"Failed to remove folder: {e}"))
+                    except Exception as error:
+                        logger.error(f"Failed to remove folder: {str(error)}")
+                        self._thread_safe_call(lambda: messagebox.showerror("Error", f"Failed to remove folder: {str(error)}"))
                         
                 threading.Thread(target=remove_worker, daemon=True).start()
                 
-        except Exception as e:
-            logger.error(f"Error removing folder: {e}")
-            messagebox.showerror("Error", f"Failed to remove folder: {e}")
+        except Exception as error:
+            logger.error(f"Error removing folder: {error}")
+            messagebox.showerror("Error", f"Failed to remove folder: {str(error)}")
         
-    def _show_settings(self):
-        """Show settings dialog"""
     def _show_settings(self):
         """Show settings dialog"""
         try:
@@ -763,8 +739,8 @@ class MainApplication:
             
             ttk.Button(settings_dialog, text="Close", command=settings_dialog.destroy).pack(pady=10)
             
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to show settings: {e}")
+        except Exception as error:
+            messagebox.showerror("Error", f"Failed to show settings: {error}")
         
     def _show_system_status(self):
         """Show system status dialog using production monitoring"""
@@ -799,8 +775,8 @@ class MainApplication:
                     status_info += f"Database: Connected\n"
                     status_info += f"Folders: {folder_count}\n"
                     status_info += f"Files: {file_count:,}\n\n"
-                except Exception as e:
-                    status_info += f"Database: Error - {e}\n\n"
+                except Exception as error:
+                    status_info += f"Database: Error - {error}\n\n"
                 
                 # NNTP status
                 try:
@@ -811,8 +787,8 @@ class MainApplication:
                         status_info += f"Posts Failed: {pool_stats.get('posts_failed', 0)}\n\n"
                     else:
                         status_info += "NNTP: Not connected\n\n"
-                except Exception as e:
-                    status_info += f"NNTP: Error - {e}\n\n"
+                except Exception as error:
+                    status_info += f"NNTP: Error - {error}\n\n"
                 
                 # User status
                 try:
@@ -824,14 +800,17 @@ class MainApplication:
                         status_info += f"Display Name: {display_name}\n\n"
                     else:
                         status_info += "User: Not initialized\n\n"
-                except Exception as e:
-                    status_info += f"User: Error - {e}\n\n"
+                except Exception as error:
+                    status_info += f"User: Error - {error}\n\n"
                 
                 # Memory usage
-                import psutil
-                process = psutil.Process()
-                memory_mb = process.memory_info().rss / 1024 / 1024
-                status_info += f"Memory Usage: {memory_mb:.1f} MB\n"
+                try:
+                    import psutil
+                    process = psutil.Process()
+                    memory_mb = process.memory_info().rss / 1024 / 1024
+                    status_info += f"Memory Usage: {memory_mb:.1f} MB\n"
+                except Exception as error:
+                    status_info += "Memory Usage: Unknown\n"
                 
             else:
                 status_info += "Backend: Not initialized\n"
@@ -841,8 +820,8 @@ class MainApplication:
             
             ttk.Button(status_dialog, text="Close", command=status_dialog.destroy).pack(pady=10)
             
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to show system status: {e}")
+        except Exception as error:
+            messagebox.showerror("Error", f"Failed to show system status: {error}")
         
     def _test_connection(self):
         """Test NNTP connection using production client"""
@@ -866,16 +845,16 @@ class MainApplication:
                         self._thread_safe_call(lambda: messagebox.showerror(
                             "Connection Test", "NNTP client not initialized"))
                         
-                except Exception as e:
+                except Exception as error:
                     self._thread_safe_call(lambda: messagebox.showerror(
-                        "Connection Test", f"NNTP connection failed:\n{e}"))
+                        "Connection Test", f"NNTP connection failed:\n{error}"))
             
             # Show progress during test
             self._thread_safe_status_update("Testing NNTP connection...", "info")
             threading.Thread(target=test_worker, daemon=True).start()
             
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to test connection: {e}")
+        except Exception as error:
+            messagebox.showerror("Error", f"Failed to test connection: {error}")
         
     def _cleanup(self):
         """Cleanup temporary files using production system"""
@@ -909,13 +888,13 @@ class MainApplication:
                     
                     self._thread_safe_call(lambda: messagebox.showinfo("Success", "Cleanup completed successfully"))
                     
-                except Exception as e:
-                    self._thread_safe_call(lambda: messagebox.showerror("Error", f"Cleanup failed: {e}"))
+                except Exception as error:
+                    self._thread_safe_call(lambda: messagebox.showerror("Error", f"Cleanup failed: {error}"))
             
             threading.Thread(target=cleanup_worker, daemon=True).start()
             
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to start cleanup: {e}")
+        except Exception as error:
+            messagebox.showerror("Error", f"Failed to start cleanup: {error}")
             
     def _show_help(self):
         """Show help dialog"""
@@ -972,8 +951,8 @@ Copyright 2025 - UsenetSync Team"""
                 
             self.root.destroy()
             
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
+        except Exception as error:
+            logger.error(f"Error during shutdown: {error}")
             self.root.destroy()
             
     def run(self):
@@ -989,9 +968,9 @@ def main():
     try:
         app = MainApplication()
         app.run()
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        messagebox.showerror("Fatal Error", f"Application failed to start: {e}")
+    except Exception as error:
+        logger.error(f"Fatal error: {error}")
+        messagebox.showerror("Fatal Error", f"Application failed to start: {error}")
         sys.exit(1)
 
 

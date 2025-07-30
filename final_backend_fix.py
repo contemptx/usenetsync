@@ -285,21 +285,11 @@ class UsenetSync:
         try:
             # Close NNTP connections
             if hasattr(self, 'nntp') and self.nntp:
-                try:
-                    if hasattr(self.nntp.connection_pool, 'shutdown'):
-                        self.nntp.connection_pool.shutdown()
-                    elif hasattr(self.nntp.connection_pool, 'close_all'):
-                        self.nntp.connection_pool.close_all()
-                    else:
-                        # Fallback for older versions
-                        if hasattr(self.nntp, 'close'):
-                            self.nntp.connection_pool.close_all()
-                except Exception as e:
-                    self.logger.debug(f"NNTP cleanup error (non-critical): {e}")
+                self.nntp.connection_pool.close()
             
             # Cleanup monitoring
             if hasattr(self, 'monitoring'):
-                self.monitoring.shutdown()
+                self.monitoring.cleanup()
             
             # Cleanup database connections
             if hasattr(self, 'db'):

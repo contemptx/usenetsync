@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
 """
+Script to fix the corrupted main.py file
+This will overwrite the corrupted main.py with a clean working version
+"""
+
+import os
+import shutil
+from pathlib import Path
+
+def create_clean_main_py():
+    """Create a clean, working main.py file"""
+    
+    clean_main_content = '''#!/usr/bin/env python3
+"""
 Main UsenetSync application entry point
 Integrates all components into a cohesive system
 """
@@ -43,19 +56,9 @@ class UsenetSync:
         # Create directories
         self.config.create_directories()
         
-        # Ensure database directory exists and path is valid
-        db_path = self.config.storage.database_path
-        if not db_path or db_path.strip() == "":
-            db_path = "data/usenetsync.db"
-            self.config.storage.database_path = db_path
-        
-        # Create database directory
-        db_dir = Path(db_path).parent
-        db_dir.mkdir(parents=True, exist_ok=True)
-        
         # Initialize database with production wrapper
         db_config = DatabaseConfig(
-            path=db_path,
+            path=self.config.storage.database_path,
             pool_size=self.config.get('database.pool_size', 10)
         )
         self.db = ProductionDatabaseManager(
@@ -80,40 +83,20 @@ class UsenetSync:
         # Initialize NNTP client
         self._init_nntp_client()
         
-        # Create config dictionary for components that need it
-        component_config = {
-            'worker_threads': 8,
-            'segment_size': 768000,
-            'batch_size': 100,
-            'buffer_size': 65536,
-            'upload_workers': 3,
-            'max_retries': 3,
-            'retry_delay': 5,
-            'max_connections': 4
-        }
-        
-        # Initialize core systems with proper configuration
-        # SegmentPackingSystem(db_manager, config)
-        self.segment_packing = SegmentPackingSystem(self.db, component_config)
-        
-        # EnhancedUploadSystem(db_manager, nntp_client, security_system, config)
-        self.upload_system = EnhancedUploadSystem(
-            self.db, self.nntp, self.security, component_config
-        )
-        
-        # EnhancedDownloadSystem(db_manager, nntp_client, security_system, config)
-        self.download_system = EnhancedDownloadSystem(
-            self.db, self.nntp, self.security, component_config
-        )
-        
-        # VersionedCoreIndexSystem(db_manager, security_system, config)
+        # Initialize core systems
+        self.segment_packing = SegmentPackingSystem(self.db)
         self.index_system = VersionedCoreIndexSystem(
-            self.db, self.security, component_config
+            self.db, self.security, self.segment_packing
         )
         
-        # SmartQueueManager(db_manager, config)
-        self.queue_manager = SmartQueueManager(
-            self.db, component_config
+        # Initialize upload system
+        self.upload_system = EnhancedUploadSystem(
+            self.nntp, self.db, self.monitoring
+        )
+        
+        # Initialize download system
+        self.download_system = EnhancedDownloadSystem(
+            self.nntp, self.db, self.security, self.monitoring
         )
         
         # Initialize publishing system
@@ -121,6 +104,11 @@ class UsenetSync:
             self.db, self.security, self.upload_system,
             self.nntp, self.index_system, SimplifiedBinaryIndex,
             self.config.__dict__
+        )
+        
+        # Initialize queue manager
+        self.queue_manager = SmartQueueManager(
+            self.db, self.upload_system, self.monitoring
         )
         
         self.logger.info("UsenetSync initialization complete")
@@ -177,18 +165,14 @@ class UsenetSync:
                 folder_id = hashlib.sha256(folder_path.encode()).hexdigest()
                 
             # Check if folder exists in DB
-            try:
-                existing_folder = self.db.get_folder_by_path(folder_path)
-                if existing_folder and not reindex:
-                    self.logger.info(f"Folder already indexed: {folder_path}")
-                    return {
-                        'folder_id': existing_folder['folder_unique_id'],
-                        'files_indexed': existing_folder.get('file_count', 0),
-                        'status': 'already_indexed'
-                    }
-            except:
-                # Ignore errors in checking existing folder
-                pass
+            existing_folder = self.db.get_folder_by_path(folder_path)
+            if existing_folder and not reindex:
+                self.logger.info(f"Folder already indexed: {folder_path}")
+                return {
+                    'folder_id': existing_folder['folder_unique_id'],
+                    'files_indexed': existing_folder.get('file_count', 0),
+                    'status': 'already_indexed'
+                }
             
             # Perform indexing
             result = self.index_system.index_folder(
@@ -234,34 +218,23 @@ class UsenetSync:
         }
         
         # User status
-        try:
-            if self.user.is_initialized():
-                user_id = self.user.get_user_id()
-                
-                # Get folders safely
-                try:
-                    folders = self.db.get_indexed_folders()
-                except:
-                    folders = []
-                
-                total_files = sum(f.get('file_count', 0) for f in folders)
-                total_size = sum(f.get('total_size', 0) for f in folders)
-                
-                status['user'] = {
-                    'user_id': user_id,
-                    'display_name': self.user.get_display_name(),
-                    'folders': len(folders),
-                    'files': total_files,
-                    'total_size': total_size
-                }
-        except Exception as e:
-            self.logger.warning(f"Error getting user status: {e}")
+        if self.user.is_initialized():
+            user_id = self.user.get_user_id()
+            folders = self.db.get_indexed_folders()
+            
+            total_files = sum(f.get('file_count', 0) for f in folders)
+            total_size = sum(f.get('total_size', 0) for f in folders)
+            
+            status['user'] = {
+                'user_id': user_id,
+                'display_name': self.user.get_display_name(),
+                'folders': len(folders),
+                'files': total_files,
+                'total_size': total_size
+            }
         
         # Folders
-        try:
-            status['folders'] = self.db.get_indexed_folders()
-        except:
-            status['folders'] = []
+        status['folders'] = self.db.get_indexed_folders()
         
         # Upload queue
         try:
@@ -285,21 +258,11 @@ class UsenetSync:
         try:
             # Close NNTP connections
             if hasattr(self, 'nntp') and self.nntp:
-                try:
-                    if hasattr(self.nntp.connection_pool, 'shutdown'):
-                        self.nntp.connection_pool.shutdown()
-                    elif hasattr(self.nntp.connection_pool, 'close_all'):
-                        self.nntp.connection_pool.close_all()
-                    else:
-                        # Fallback for older versions
-                        if hasattr(self.nntp, 'close'):
-                            self.nntp.connection_pool.close_all()
-                except Exception as e:
-                    self.logger.debug(f"NNTP cleanup error (non-critical): {e}")
+                self.nntp.connection_pool.close()
             
             # Cleanup monitoring
             if hasattr(self, 'monitoring'):
-                self.monitoring.shutdown()
+                self.monitoring.cleanup()
             
             # Cleanup database connections
             if hasattr(self, 'db'):
@@ -341,7 +304,7 @@ def main():
         app.cleanup()
         
     except KeyboardInterrupt:
-        print("\nShutdown requested")
+        print("\\nShutdown requested")
     except Exception as e:
         print(f"Error: {e}")
         import traceback
@@ -353,3 +316,78 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+'''
+    
+    return clean_main_content
+
+def main():
+    """Fix the corrupted main.py file"""
+    current_dir = Path.cwd()
+    main_file = current_dir / "main.py"
+    backup_file = current_dir / "main.py.backup"
+    
+    print("=" * 50)
+    print("    Fixing Corrupted main.py File")
+    print("=" * 50)
+    print()
+    
+    # Check if main.py exists
+    if not main_file.exists():
+        print("ERROR: main.py not found in current directory")
+        print(f"Current directory: {current_dir}")
+        input("Press Enter to exit...")
+        return 1
+    
+    # Create backup of existing file
+    try:
+        shutil.copy2(main_file, backup_file)
+        print(f"✓ Created backup: {backup_file.name}")
+    except Exception as e:
+        print(f"WARNING: Could not create backup: {e}")
+    
+    # Write clean content
+    try:
+        clean_content = create_clean_main_py()
+        with open(main_file, 'w', encoding='utf-8') as f:
+            f.write(clean_content)
+        print(f"✓ Wrote clean main.py ({len(clean_content)} characters)")
+    except Exception as e:
+        print(f"ERROR: Could not write main.py: {e}")
+        input("Press Enter to exit...")
+        return 1
+    
+    # Verify the fix by attempting to compile
+    try:
+        import py_compile
+        py_compile.compile(str(main_file), doraise=True)
+        print("✓ Syntax check passed")
+    except py_compile.PyCompileError as e:
+        print(f"ERROR: Syntax check failed: {e}")
+        
+        # Restore backup if available
+        if backup_file.exists():
+            try:
+                shutil.copy2(backup_file, main_file)
+                print("✓ Restored backup file")
+            except:
+                pass
+        
+        input("Press Enter to exit...")
+        return 1
+    
+    print()
+    print("✅ main.py has been fixed successfully!")
+    print()
+    print("You can now run:")
+    print("  python production_launcher.py")
+    print("  python run_gui.py")
+    print("  launch_gui.bat")
+    print()
+    
+    return 0
+
+if __name__ == "__main__":
+    exit_code = main()
+    if exit_code != 0:
+        input("Press Enter to exit...")
+    exit(exit_code)

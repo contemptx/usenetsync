@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
 """
+Fix Backend Issues for UsenetSync
+Addresses the specific issues found in the diagnostic
+"""
+
+import os
+import sys
+import shutil
+from pathlib import Path
+
+def fix_main_py():
+    """Fix the main.py initialization issues"""
+    
+    print("Fixing main.py initialization...")
+    
+    fixed_main_content = '''#!/usr/bin/env python3
+"""
 Main UsenetSync application entry point
 Integrates all components into a cohesive system
 """
@@ -80,40 +96,20 @@ class UsenetSync:
         # Initialize NNTP client
         self._init_nntp_client()
         
-        # Create config dictionary for components that need it
-        component_config = {
-            'worker_threads': 8,
-            'segment_size': 768000,
-            'batch_size': 100,
-            'buffer_size': 65536,
-            'upload_workers': 3,
-            'max_retries': 3,
-            'retry_delay': 5,
-            'max_connections': 4
-        }
-        
-        # Initialize core systems with proper configuration
-        # SegmentPackingSystem(db_manager, config)
-        self.segment_packing = SegmentPackingSystem(self.db, component_config)
-        
-        # EnhancedUploadSystem(db_manager, nntp_client, security_system, config)
-        self.upload_system = EnhancedUploadSystem(
-            self.db, self.nntp, self.security, component_config
-        )
-        
-        # EnhancedDownloadSystem(db_manager, nntp_client, security_system, config)
-        self.download_system = EnhancedDownloadSystem(
-            self.db, self.nntp, self.security, component_config
-        )
-        
-        # VersionedCoreIndexSystem(db_manager, security_system, config)
+        # Initialize core systems with proper parameters
+        self.segment_packing = SegmentPackingSystem(self.db, self.config)
         self.index_system = VersionedCoreIndexSystem(
-            self.db, self.security, component_config
+            self.db, self.security, self.segment_packing
         )
         
-        # SmartQueueManager(db_manager, config)
-        self.queue_manager = SmartQueueManager(
-            self.db, component_config
+        # Initialize upload system
+        self.upload_system = EnhancedUploadSystem(
+            self.nntp, self.db, self.monitoring
+        )
+        
+        # Initialize download system
+        self.download_system = EnhancedDownloadSystem(
+            self.nntp, self.db, self.security, self.monitoring
         )
         
         # Initialize publishing system
@@ -121,6 +117,11 @@ class UsenetSync:
             self.db, self.security, self.upload_system,
             self.nntp, self.index_system, SimplifiedBinaryIndex,
             self.config.__dict__
+        )
+        
+        # Initialize queue manager
+        self.queue_manager = SmartQueueManager(
+            self.db, self.upload_system, self.monitoring
         )
         
         self.logger.info("UsenetSync initialization complete")
@@ -285,21 +286,11 @@ class UsenetSync:
         try:
             # Close NNTP connections
             if hasattr(self, 'nntp') and self.nntp:
-                try:
-                    if hasattr(self.nntp.connection_pool, 'shutdown'):
-                        self.nntp.connection_pool.shutdown()
-                    elif hasattr(self.nntp.connection_pool, 'close_all'):
-                        self.nntp.connection_pool.close_all()
-                    else:
-                        # Fallback for older versions
-                        if hasattr(self.nntp, 'close'):
-                            self.nntp.connection_pool.close_all()
-                except Exception as e:
-                    self.logger.debug(f"NNTP cleanup error (non-critical): {e}")
+                self.nntp.connection_pool.close()
             
             # Cleanup monitoring
             if hasattr(self, 'monitoring'):
-                self.monitoring.shutdown()
+                self.monitoring.cleanup()
             
             # Cleanup database connections
             if hasattr(self, 'db'):
@@ -341,7 +332,7 @@ def main():
         app.cleanup()
         
     except KeyboardInterrupt:
-        print("\nShutdown requested")
+        print("\\nShutdown requested")
     except Exception as e:
         print(f"Error: {e}")
         import traceback
@@ -353,3 +344,91 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+'''
+    
+    return fixed_main_content
+
+def main():
+    """Fix the backend issues"""
+    print("=" * 60)
+    print("    Fixing UsenetSync Backend Issues")
+    print("=" * 60)
+    print()
+    
+    current_dir = Path.cwd()
+    main_file = current_dir / "main.py"
+    backup_file = current_dir / "main.py.backup2"
+    
+    # Create backup
+    try:
+        if main_file.exists():
+            shutil.copy2(main_file, backup_file)
+            print(f"✓ Created backup: {backup_file.name}")
+    except Exception as e:
+        print(f"WARNING: Could not create backup: {e}")
+    
+    # Fix main.py
+    try:
+        fixed_content = fix_main_py()
+        with open(main_file, 'w', encoding='utf-8') as f:
+            f.write(fixed_content)
+        print(f"✓ Fixed main.py ({len(fixed_content)} characters)")
+    except Exception as e:
+        print(f"ERROR: Could not fix main.py: {e}")
+        return 1
+    
+    # Test the fix
+    try:
+        import py_compile
+        py_compile.compile(str(main_file), doraise=True)
+        print("✓ Syntax check passed")
+    except py_compile.PyCompileError as e:
+        print(f"ERROR: Syntax check failed: {e}")
+        return 1
+    
+    # Test backend creation
+    print()
+    print("Testing backend creation...")
+    
+    try:
+        # Import and test
+        sys.path.insert(0, str(current_dir))
+        from main import UsenetSync
+        
+        print("Creating UsenetSync instance...")
+        app = UsenetSync()
+        print("✓ Backend created successfully!")
+        
+        # Test user initialization capability
+        print("Testing user initialization capability...")
+        if hasattr(app, 'user') and hasattr(app.user, 'initialize'):
+            print("✓ User initialization available")
+        else:
+            print("⚠ User initialization may not work")
+        
+        # Cleanup
+        app.cleanup()
+        
+    except Exception as e:
+        print(f"✗ Backend creation still failing: {e}")
+        print("\nDetailed error:")
+        import traceback
+        traceback.print_exc()
+        return 1
+    
+    print()
+    print("✅ Backend issues fixed successfully!")
+    print()
+    print("You can now run:")
+    print("  python production_launcher.py")
+    print("  python launch_gui.bat")
+    print()
+    print("The user initialization should now work properly.")
+    
+    return 0
+
+if __name__ == "__main__":
+    exit_code = main()
+    if exit_code != 0:
+        input("Press Enter to exit...")
+    exit(exit_code)

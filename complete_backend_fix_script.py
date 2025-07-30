@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
 """
+Complete Backend Fix Script for UsenetSync
+Fixes all constructor parameter issues identified in the backend
+"""
+
+import os
+import sys
+import shutil
+from pathlib import Path
+
+def fix_main_py():
+    """Fix the main.py file with correct component initialization"""
+    
+    fixed_main_content = '''#!/usr/bin/env python3
+"""
 Main UsenetSync application entry point
 Integrates all components into a cohesive system
 """
@@ -285,21 +299,11 @@ class UsenetSync:
         try:
             # Close NNTP connections
             if hasattr(self, 'nntp') and self.nntp:
-                try:
-                    if hasattr(self.nntp.connection_pool, 'shutdown'):
-                        self.nntp.connection_pool.shutdown()
-                    elif hasattr(self.nntp.connection_pool, 'close_all'):
-                        self.nntp.connection_pool.close_all()
-                    else:
-                        # Fallback for older versions
-                        if hasattr(self.nntp, 'close'):
-                            self.nntp.connection_pool.close_all()
-                except Exception as e:
-                    self.logger.debug(f"NNTP cleanup error (non-critical): {e}")
+                self.nntp.connection_pool.close()
             
             # Cleanup monitoring
             if hasattr(self, 'monitoring'):
-                self.monitoring.shutdown()
+                self.monitoring.cleanup()
             
             # Cleanup database connections
             if hasattr(self, 'db'):
@@ -341,7 +345,7 @@ def main():
         app.cleanup()
         
     except KeyboardInterrupt:
-        print("\nShutdown requested")
+        print("\\nShutdown requested")
     except Exception as e:
         print(f"Error: {e}")
         import traceback
@@ -353,3 +357,107 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+'''
+    
+    return fixed_main_content
+
+def main():
+    """Complete backend fix"""
+    print("=" * 60)
+    print("    Complete UsenetSync Backend Fix")
+    print("=" * 60)
+    print()
+    
+    current_dir = Path.cwd()
+    main_file = current_dir / "main.py"
+    backup_file = current_dir / "main.py.backup_final"
+    
+    # Create backup
+    try:
+        if main_file.exists():
+            shutil.copy2(main_file, backup_file)
+            print(f"✓ Created backup: {backup_file.name}")
+    except Exception as e:
+        print(f"WARNING: Could not create backup: {e}")
+    
+    # Fix main.py
+    try:
+        fixed_content = fix_main_py()
+        with open(main_file, 'w', encoding='utf-8') as f:
+            f.write(fixed_content)
+        print(f"✓ Fixed main.py ({len(fixed_content)} characters)")
+    except Exception as e:
+        print(f"ERROR: Could not fix main.py: {e}")
+        return 1
+    
+    # Test syntax
+    try:
+        import py_compile
+        py_compile.compile(str(main_file), doraise=True)
+        print("✓ Syntax check passed")
+    except py_compile.PyCompileError as e:
+        print(f"ERROR: Syntax check failed: {e}")
+        return 1
+    
+    # Test backend creation
+    print()
+    print("Testing backend creation...")
+    
+    try:
+        # Import and test
+        sys.path.insert(0, str(current_dir))
+        
+        # Clear any cached imports
+        if 'main' in sys.modules:
+            del sys.modules['main']
+        
+        from main import UsenetSync
+        
+        print("Creating UsenetSync instance...")
+        app = UsenetSync()
+        print("✓ Backend created successfully!")
+        
+        # Test user functionality
+        print("Testing user functionality...")
+        if hasattr(app, 'user') and hasattr(app.user, 'initialize'):
+            print("✓ User initialization available")
+            
+            # Test status without errors
+            status = app.get_status()
+            print(f"✓ Status retrieval working (user: {'initialized' if status.get('user') else 'not initialized'})")
+        else:
+            print("⚠ User initialization may not work")
+        
+        # Cleanup
+        app.cleanup()
+        print("✓ Cleanup successful")
+        
+    except Exception as e:
+        print(f"✗ Backend creation still failing: {e}")
+        print("\\nDetailed error:")
+        import traceback
+        traceback.print_exc()
+        return 1
+    
+    print()
+    print("✅ Complete backend fix successful!")
+    print()
+    print("✅ The backend is now working correctly with:")
+    print("  - Proper component initialization")
+    print("  - Correct constructor parameters")
+    print("  - Safe error handling") 
+    print("  - User initialization capability")
+    print()
+    print("You can now run:")
+    print("  python production_launcher.py")
+    print("  python run_gui.py")
+    print("  launch_gui.bat")
+    print()
+    
+    return 0
+
+if __name__ == "__main__":
+    exit_code = main()
+    if exit_code != 0:
+        input("Press Enter to exit...")
+    exit(exit_code)
