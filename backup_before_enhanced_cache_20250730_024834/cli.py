@@ -5,13 +5,6 @@ Complete implementation with all commands
 """
 
 import click
-
-# Enhanced cache commands
-try:
-    from cache_integration import add_cache_commands
-except ImportError:
-    add_cache_commands = None
-
 import json
 import sys
 import os
@@ -34,14 +27,6 @@ def setup_logging(verbose: bool):
     )
 
 @click.group()
-
-# Add enhanced cache commands if available
-if add_cache_commands:
-    try:
-        cli = add_cache_commands(cli)
-    except Exception as e:
-        pass
-
 @click.option('-c', '--config', type=click.Path(), help='Configuration file path')
 @click.option('-v', '--verbose', is_flag=True, help='Verbose output')
 @click.pass_context

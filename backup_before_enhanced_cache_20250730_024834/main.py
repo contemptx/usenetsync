@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-
-# Enhanced cache integration
-try:
-    from cache_integration import integrate_cache_into_download_system
-except ImportError:
-    integrate_cache_into_download_system = None
-
 """
 Main UsenetSync application entry point
 Integrates all components into a cohesive system
@@ -30,19 +23,6 @@ from enhanced_upload_system import EnhancedUploadSystem
 from versioned_core_index_system import VersionedCoreIndexSystem
 from simplified_binary_index import SimplifiedBinaryIndex
 from enhanced_download_system import EnhancedDownloadSystem
-
-        # Enhanced encrypted index cache integration
-        if integrate_cache_into_download_system:
-            try:
-                integrate_cache_into_download_system(self)
-                self.logger.info('Enhanced encrypted index cache enabled')
-                self.logger.info(f'Memory cache: {self.index_cache.max_memory_entries} entries max')
-                self.logger.info('Features: Memory LRU + SQLite + Performance monitoring')
-            except Exception as e:
-                self.logger.warning(f'Failed to enable enhanced cache: {e}')
-        else:
-            self.logger.warning('Enhanced cache integration not available')
-
 from publishing_system import PublishingSystem
 from user_management import UserManager
 from configuration_manager import ConfigurationManager, ServerConfig
