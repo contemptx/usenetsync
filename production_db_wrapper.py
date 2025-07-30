@@ -14,6 +14,11 @@ from datetime import datetime
 from pathlib import Path
 
 from enhanced_database_manager import EnhancedDatabaseManager, DatabaseConfig
+def dict_factory(cursor, row):
+    """Convert sqlite row to dictionary"""
+    return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -53,6 +58,8 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 'start_time': time.time()
             }
     
+        # Setup WAL mode for better concurrency
+        self.setup_wal_mode()
     def _setup_file_logging(self, log_file: str):
         """Set up file logging for errors and warnings"""
         Path(log_file).parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +180,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         )
     
     def add_file(self, folder_id, file_path, file_hash, file_size, modified_at, version=1):
-        """Add file to database with better locking handling"""
+        """Add file to database with proper error handling"""
         import sqlite3
         import time
         
@@ -181,21 +188,15 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         for attempt in range(max_retries):
             try:
                 with self.pool.get_connection() as conn:
-                    # Use immediate transaction to reduce lock time
-                    conn.execute("BEGIN IMMEDIATE")
-                    try:
-                        cursor = conn.execute("""
-                            INSERT INTO files 
-                            (folder_id, file_path, file_hash, file_size, modified_at, version, state)
-                            VALUES (?, ?, ?, ?, ?, ?, 'indexed')
-                        """, (folder_id, file_path, file_hash, file_size, modified_at, version))
-                        
-                        file_id = cursor.lastrowid
-                        conn.commit()
-                        return file_id
-                    except Exception:
-                        conn.rollback()
-                        raise
+                    cursor = conn.execute("""
+                        INSERT INTO files 
+                        (folder_id, file_path, file_hash, file_size, modified_at, version, state)
+                        VALUES (?, ?, ?, ?, ?, ?, 'indexed')
+                    """, (folder_id, file_path, file_hash, file_size, modified_at, version))
+                    
+                    file_id = cursor.lastrowid
+                    return file_id
+                    
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e) and attempt < max_retries - 1:
                     wait_time = 0.1 * (2 ** attempt)
@@ -205,6 +206,12 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 else:
                     print(f"Database error after {attempt + 1} attempts: {e}")
                     raise e
+            except Exception as e:
+                print(f"Error adding file: {e}")
+                if attempt == max_retries - 1:
+                    raise e
+                time.sleep(0.1)
+                continue
         
         raise sqlite3.OperationalError(f"Failed to add file after {max_retries} attempts")
     def create_folder_version(self, folder_id: int, version: int, 
@@ -221,7 +228,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         )
     
     def bulk_insert_segments(self, segments):
-        """Bulk insert segments with better locking"""
+        """Bulk insert segments with proper transaction handling"""
         import sqlite3
         import time
         
@@ -232,26 +239,21 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         for attempt in range(max_retries):
             try:
                 with self.pool.get_connection() as conn:
-                    conn.execute("BEGIN IMMEDIATE")
-                    try:
-                        for segment in segments:
-                            conn.execute("""
-                                INSERT INTO segments 
-                                (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index, state)
-                                VALUES (?, ?, ?, ?, ?, ?, 'pending')
-                            """, (
-                                segment['file_id'],
-                                segment['segment_index'], 
-                                segment['segment_hash'],
-                                segment['segment_size'],
-                                segment['data_offset'],
-                                segment.get('redundancy_index', 0)
-                            ))
-                        conn.commit()
-                        return True
-                    except Exception:
-                        conn.rollback()
-                        raise
+                    for segment in segments:
+                        conn.execute("""
+                            INSERT INTO segments 
+                            (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index, state)
+                            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+                        """, (
+                            segment['file_id'],
+                            segment['segment_index'], 
+                            segment['segment_hash'],
+                            segment['segment_size'],
+                            segment['data_offset'],
+                            segment.get('redundancy_index', 0)
+                        ))
+                    return True
+                    
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e) and attempt < max_retries - 1:
                     wait_time = 0.1 * (2 ** attempt)
@@ -259,6 +261,12 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                     continue
                 else:
                     raise e
+            except Exception as e:
+                print(f"Error bulk inserting segments: {e}")
+                if attempt == max_retries - 1:
+                    raise e
+                time.sleep(0.1)
+                continue
         
         return False
     def get_all_folders(self) -> List[Dict]:
@@ -380,24 +388,76 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
 
     
     def update_folder_keys(self, folder_id: int, private_key: bytes, public_key: bytes):
-        """Update folder keys in database"""
-        with self.pool.get_connection() as conn:
-            # Try with keys_updated_at first, fallback without it
+        """Update folder keys in database with explicit transaction handling"""
+        import sqlite3
+        import time
+        
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                # Use a direct connection to ensure transaction control
+                conn = sqlite3.connect(self.config.path, timeout=60.0)
+                
                 try:
-                    conn.execute("""
+                    # Enable WAL mode for better concurrency
+                    conn.execute("PRAGMA journal_mode=WAL")
+                    conn.execute("PRAGMA busy_timeout=60000")
+                    
+                    # Begin explicit transaction
+                    conn.execute("BEGIN IMMEDIATE")
+                    
+                    # Update with explicit commit
+                    cursor = conn.execute("""
                         UPDATE folders 
                         SET private_key = ?, public_key = ?, keys_updated_at = CURRENT_TIMESTAMP 
-                        WHERE id = ?
+                        WHERE rowid = ?
                     """, (private_key, public_key, folder_id))
-                except Exception:
-                    # Fallback if keys_updated_at column doesn't exist
-                    conn.execute("""
-                        UPDATE folders 
-                        SET private_key = ?, public_key = ?
-                        WHERE id = ?
-                    """, (private_key, public_key, folder_id))
+                    
+                    if cursor.rowcount == 0:
+                        # Try with id field instead of rowid
+                        cursor = conn.execute("""
+                            UPDATE folders 
+                            SET private_key = ?, public_key = ?, keys_updated_at = CURRENT_TIMESTAMP 
+                            WHERE id = ?
+                        """, (private_key, public_key, folder_id))
+                    
+                    # Explicit commit
                     conn.commit()
-    
+                    
+                    # Verify the update worked
+                    cursor = conn.execute("SELECT private_key IS NOT NULL, public_key IS NOT NULL FROM folders WHERE rowid = ?", (folder_id,))
+                    result = cursor.fetchone()
+                    
+                    if result and result[0] and result[1]:
+                        print(f"SUCCESS: Keys saved to folder {folder_id} - verified in database")
+                        conn.close()
+                        return
+                    else:
+                        print(f"WARNING: Keys not verified in database for folder {folder_id}")
+                        
+                except Exception as e:
+                    conn.rollback()
+                    raise e
+                finally:
+                    conn.close()
+                    
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2 ** attempt)
+                    print(f"Database locked during key save, waiting {wait_time:.2f}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Database error during key save after {attempt + 1} attempts: {e}")
+                    raise e
+            except Exception as e:
+                print(f"Error saving keys: {e}")
+                if attempt == max_retries - 1:
+                    raise e
+                time.sleep(0.1)
+                continue
+                
+        raise sqlite3.OperationalError(f"Failed to save keys after {max_retries} attempts")
     def get_folder_by_path(self, folder_path: str) -> Optional[Dict]:
         """Get folder by file system path"""
         with self.pool.get_connection() as conn:
@@ -418,12 +478,10 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 ),
                 total_size = (
                     SELECT COALESCE(SUM(file_size), 0) FROM files WHERE folder_id = ? AND state != 'deleted'
-                ),
-                /* last_updated removed */
+                )
                 WHERE id = ?
             """, (folder_id, folder_id, folder_id))
-            conn.commit()
-    
+                        # Commit handled by connection pool
     def get_folder_files(self, folder_id, offset=0, limit=None):
         """Get files in folder with pagination"""
         try:
@@ -463,7 +521,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 (folder_id, file_path, file_hash, file_size, version, state)
                 VALUES (?, ?, ?, ?, ?, 'active')
             """, (folder_id, file_path, file_hash, file_size, version))
-            conn.commit()
+                        # Commit handled by connection pool
             return cursor.lastrowid
     
     def get_file(self, folder_id: int, file_path: str) -> Optional[Dict]:
@@ -482,8 +540,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 UPDATE files SET state = ?, modified_at = CURRENT_TIMESTAMP 
                 WHERE id = ?
             """, (state, file_id))
-            conn.commit()
-    
+                        # Commit handled by connection pool
     def create_segment(self, file_id: int, segment_index: int, segment_hash: str,
                         segment_size: int, data_offset: int, redundancy_index: int = 0) -> int:
         """Create new segment entry"""
@@ -493,7 +550,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index))
-            conn.commit()
+                        # Commit handled by connection pool
             return cursor.lastrowid
     
     def record_change(self, folder_id: int, file_path: str, change_type: str,
@@ -506,8 +563,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 (folder_id, file_path, change_type, old_version, new_version, old_hash, new_hash)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (folder_id, file_path, change_type, old_version, new_version, old_hash, new_hash))
-            conn.commit()
-    
+                        # Commit handled by connection pool
     def create_folder_version(self, folder_id: int, version: int, change_data: Dict) -> int:
         """Create folder version entry"""
         with self.pool.get_connection() as conn:
@@ -516,7 +572,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 (folder_id, version, change_summary)
                 VALUES (?, ?, ?)
             """, (folder_id, version, json.dumps(change_data)))
-            conn.commit()
+                        # Commit handled by connection pool
             return cursor.lastrowid
 
     
@@ -558,7 +614,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 conn.execute("DELETE FROM segments WHERE file_id IN (SELECT id FROM files WHERE folder_id = ?)", (folder_db_id,))
                 conn.execute("DELETE FROM files WHERE folder_id = ?", (folder_db_id,))
                 conn.execute("DELETE FROM folders WHERE id = ?", (folder_db_id,))
-                conn.commit()
+                        # Commit handled by connection pool
                 return True
         except Exception as e:
             raise e
@@ -568,7 +624,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         try:
             with self.pool.get_connection() as conn:
                 conn.execute("DELETE FROM upload_sessions WHERE created_at < datetime('now', '-{} days')".format(days))
-                conn.commit()
+                        # Commit handled by connection pool
         except Exception:
             pass
     
@@ -655,8 +711,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                     (folder_id, user_id, access_type, added_by)
                     VALUES (?, ?, ?, ?)
                 """, (folder_db_id, user_id, access_type, added_by))
-                
-                conn.commit()
+                        # Commit handled by connection pool
                 return True
         except Exception:
             return False
@@ -677,7 +732,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                     DELETE FROM access_control_local 
                     WHERE folder_id = ? AND user_id = ?
                 """, (folder_db_id, user_id))
-                conn.commit()
+                        # Commit handled by connection pool
                 return True
         except Exception:
             return False
@@ -722,7 +777,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                 conn.execute("""
                     UPDATE segments SET state = ? WHERE id = ?
                 """, (state, segment_id))
-                conn.commit()
+                        # Commit handled by connection pool
                 return True
         except Exception:
             return False
@@ -782,8 +837,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                     (session_id, folder_id, total_segments)
                     VALUES (?, ?, ?)
                 """, (session_id, folder_id, total_segments))
-                
-                conn.commit()
+                        # Commit handled by connection pool
                 return True
         except Exception:
             return False
@@ -797,7 +851,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                     SET state = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE session_id = ?
                 """, (state, session_id))
-                conn.commit()
+                        # Commit handled by connection pool
                 return True
         except Exception:
             return False
@@ -811,25 +865,228 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                conn = sqlite3.connect(self.config.path, timeout=30.0)
+                conn = sqlite3.connect(self.config.path, timeout=60.0)
                 conn.row_factory = dict_factory
                 
-                # Enable WAL mode for better concurrency
+                # Configure for better concurrent access
+                conn.execute("PRAGMA busy_timeout=60000")
                 conn.execute("PRAGMA journal_mode=WAL")
-                conn.execute("PRAGMA synchronous=NORMAL") 
+                conn.execute("PRAGMA synchronous=NORMAL")
                 conn.execute("PRAGMA cache_size=10000")
                 conn.execute("PRAGMA temp_store=memory")
-                conn.execute("PRAGMA mmap_size=268435456")  # 256MB
+                conn.execute("PRAGMA mmap_size=268435456")
                 
                 return conn
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e) and attempt < max_retries - 1:
-                    wait_time = 0.1 * (2 ** attempt)  # Exponential backoff
+                    wait_time = 0.1 * (2 ** attempt)
                     time.sleep(wait_time)
                     continue
                 raise e
         
         raise sqlite3.OperationalError("Could not get database connection after retries")
+
+    
+    def get_folder_robust(self, folder_identifier):
+        """Get folder by any identifier - unique_id, path, or database_id"""
+        try:
+            # First try the normal get_folder method
+            folder = self.get_folder(folder_identifier)
+            if folder:
+                return folder
+            
+            # If that fails, try direct database lookup
+            with self.pool.get_connection() as conn:
+                # Try by database ID if it's a number
+                if str(folder_identifier).isdigit():
+                    cursor = conn.execute("SELECT * FROM folders WHERE id = ?", (int(folder_identifier),))
+                    row = cursor.fetchone()
+                    if row:
+                        return dict(row)
+                
+                # Try by folder_path containing the identifier
+                cursor = conn.execute("SELECT * FROM folders WHERE folder_path LIKE ?", (f"%{folder_identifier}%",))
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+                
+                # Last resort: get the most recent folder with keys
+                cursor = conn.execute("""
+                    SELECT * FROM folders 
+                    WHERE private_key IS NOT NULL 
+                    ORDER BY id DESC 
+                    LIMIT 1
+                """)
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error in get_folder_robust: {e}")
+            return None
+
+    
+    def setup_wal_mode(self):
+        """Setup WAL mode for better concurrency"""
+        try:
+            with self.pool.get_connection() as conn:
+                # Enable WAL mode
+                conn.execute("PRAGMA journal_mode=WAL")
+                
+                # Optimize for concurrent access
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA cache_size=10000")
+                conn.execute("PRAGMA busy_timeout=60000")
+                conn.execute("PRAGMA wal_autocheckpoint=1000")
+                
+                # Check that WAL mode is active
+                result = conn.execute("PRAGMA journal_mode").fetchone()
+                if result and result[0] == 'wal':
+                    logger.info("WAL mode enabled successfully")
+                else:
+                    logger.warning("Failed to enable WAL mode")
+                    
+        except Exception as e:
+            logger.error(f"Failed to setup WAL mode: {e}")
+
+    
+    def add_segment(self, file_id, segment_index, segment_hash, segment_size, subject_hash, newsgroup, redundancy_index=0, **kwargs):
+        """Add segment to database with improved concurrency handling"""
+        import sqlite3
+        import time
+        import random
+        
+        # Extract data_offset from kwargs or use 0
+        data_offset = kwargs.get('data_offset', 0)
+        
+        max_retries = 10  # Increased retries
+        base_delay = 0.05  # Shorter base delay
+        
+        for attempt in range(max_retries):
+            try:
+                # Use a fresh connection for each attempt to avoid lock inheritance
+                conn = sqlite3.connect(self.config.path, timeout=120.0)
+                
+                # Configure connection for concurrent access
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=120000")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                
+                try:
+                    # Use immediate transaction for faster execution
+                    conn.execute("BEGIN IMMEDIATE")
+                    
+                    cursor = conn.execute("""
+                        INSERT INTO segments 
+                        (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index, state, subject_hash, newsgroup)
+                        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                    """, (file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index, subject_hash, newsgroup))
+                    
+                    segment_id = cursor.lastrowid
+                    conn.commit()
+                    conn.close()
+                    
+                    print(f"DEBUG: Added segment {segment_index} for file {file_id}, segment_id: {segment_id}")
+                    return segment_id
+                    
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    conn.close()
+                    
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) or "busy" in str(e):
+                    if attempt < max_retries - 1:
+                        # Exponential backoff with jitter
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
+                        delay = min(delay, 2.0)  # Cap at 2 seconds
+                        print(f"Database busy, waiting {delay:.2f}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        print(f"Database error after {max_retries} attempts: {e}")
+                        raise e
+                else:
+                    # Non-recoverable database error
+                    print(f"Database error: {e}")
+                    raise e
+            except Exception as e:
+                print(f"Error adding segment: {e}")
+                if attempt == max_retries - 1:
+                    raise e
+                time.sleep(0.1)
+                continue
+        
+        raise sqlite3.OperationalError(f"Failed to add segment after {max_retries} attempts")
+    def create_segment(self, file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index=0):
+        """Create segment entry (alias for add_segment)"""
+        return self.add_segment(file_id, segment_index, segment_hash, segment_size, data_offset, redundancy_index)
+    
+    def get_file_segments(self, file_id):
+        """Get all segments for a file"""
+        try:
+            with self.pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT * FROM segments WHERE file_id = ? ORDER BY segment_index
+                """, (file_id,))
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception:
+            return []
+    
+    def update_file_state(self, file_id, state):
+        """Update file state"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("""
+                    UPDATE files SET state = ?, modified_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                """, (state, file_id))
+                return True
+        except Exception:
+            return False
+    
+    def update_segment_state(self, segment_id, state):
+        """Update segment state"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("""
+                    UPDATE segments SET state = ? WHERE id = ?
+                """, (state, segment_id))
+                return True
+        except Exception:
+            return False
+
+    
+    def set_segment_offset(self, segment_id, offset):
+        """Set segment offset"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("UPDATE segments SET data_offset = ? WHERE id = ?", (offset, segment_id))
+                return True
+        except Exception:
+            return False
+    
+    def update_file_segment_count(self, file_id, segment_count):
+        """Update file segment count"""
+        try:
+            with self.pool.get_connection() as conn:
+                conn.execute("UPDATE files SET segment_count = ? WHERE id = ?", (segment_count, file_id))
+                return True
+        except Exception:
+            return False
+    
+    def get_segment_by_id(self, segment_id):
+        """Get segment by ID"""
+        try:
+            with self.pool.get_connection() as conn:
+                cursor = conn.execute("SELECT * FROM segments WHERE id = ?", (segment_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except Exception:
+            return None
 
     def close(self):
         """Close database and cleanup logging"""
@@ -989,7 +1246,7 @@ def create_production_db(db_path: str, log_file: Optional[str] = None,
                         (share_id, folder_id, version, access_string, share_type, index_size)
                         VALUES (?, ?, ?, ?, ?, ?)
                     """, (share_id, folder_id, version, access_string, share_type, index_size))
-                    conn.commit()
+                        # Commit handled by connection pool
                     return True
             except Exception as e:
                 logger.warning(f"Error recording publication: {e}")

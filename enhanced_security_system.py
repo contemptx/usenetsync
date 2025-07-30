@@ -329,61 +329,112 @@ class EnhancedSecuritySystem:
         )
         
     def save_folder_keys(self, folder_unique_id: str, keys: FolderKeys):
-        """Save folder keys to database
+        """Save folder keys to database with debugging
         
         Args:
             folder_unique_id: The unique string identifier for the folder
             keys: The FolderKeys object containing the key pair
         """
-        # Get the database ID for this folder
-        folder = self.db.get_folder(folder_unique_id)
-        if not folder:
-            raise ValueError(f"Folder not found: {folder_unique_id}")
-        
-        folder_db_id = folder['id']
-        
-        private_bytes = keys.private_key.private_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PrivateFormat.Raw,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        public_bytes = keys.public_key.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
-        )
-        
-        self.db.update_folder_keys(folder_db_id, private_bytes, public_bytes)
-        logger.info(f"Saved keys for folder: {folder_unique_id} (db_id: {folder_db_id})")
-        
-    def load_folder_keys(self, folder_id: str) -> Optional[FolderKeys]:
-        """Load folder keys from database"""
-        # Convert folder_id to int if it's a string number
         try:
-            folder_id_int = int(folder_id)
-        except (ValueError, TypeError):
-            # Not a number, use as is (might be unique_id)
-            folder_id_int = folder_id
-        """Load folder keys from database"""
-        folder = self.db.get_folder(folder_id_int)
-        if not folder or not folder['private_key']:
-            return None
+            # Get the folder record
+            folder = self.db.get_folder(folder_unique_id)
+            if not folder:
+                raise ValueError(f"Folder not found: {folder_unique_id}")
             
+            # Use rowid for the update (this is the actual database primary key)
+            folder_db_id = folder.get('rowid') or folder.get('id')
+            
+            print(f"DEBUG: Saving keys to folder DB_ID: {folder_db_id}")
+            
+            private_bytes = keys.private_key.private_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PrivateFormat.Raw,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            public_bytes = keys.public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw
+            )
+            
+            print(f"DEBUG: Key bytes - Private: {len(private_bytes)} bytes, Public: {len(public_bytes)} bytes")
+            
+            # Save to database
+            self.db.update_folder_keys(folder_db_id, private_bytes, public_bytes)
+            
+            # Verify the save worked
+            updated_folder = self.db.get_folder(folder_unique_id)
+            if updated_folder and updated_folder.get('private_key'):
+                logger.info(f"VERIFIED: Keys saved for folder: {folder_unique_id} (db_id: {folder_db_id})")
+            else:
+                logger.error(f"FAILED: Keys not found after save for folder: {folder_unique_id}")
+                
+        except Exception as e:
+            logger.error(f"Error saving folder keys: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise e
+    def load_folder_keys(self, folder_id: str) -> Optional[FolderKeys]:
+        """Load folder keys from database - fixed rowid access"""
         try:
+            # Method 1: Direct database lookup by unique_id
+            with self.db.pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT rowid, * FROM folders 
+                    WHERE id = ? AND private_key IS NOT NULL
+                    ORDER BY rowid DESC 
+                    LIMIT 1
+                """, (folder_id,))
+                row = cursor.fetchone()
+                
+                if row:
+                    folder = dict(row)
+                    db_id = folder.get('rowid', folder.get('id', 'unknown'))
+                    logger.info(f"Found folder by unique_id: DB_ID {db_id} for {folder_id}")
+                else:
+                    # Method 2: Get most recent folder with keys
+                    cursor = conn.execute("""
+                        SELECT rowid, * FROM folders 
+                        WHERE private_key IS NOT NULL
+                        ORDER BY rowid DESC 
+                        LIMIT 1
+                    """)
+                    row = cursor.fetchone()
+                    
+                    if row:
+                        folder = dict(row)
+                        db_id = folder.get('rowid', folder.get('id', 'unknown'))
+                        logger.info(f"Using most recent folder with keys: DB_ID {db_id}")
+                    else:
+                        logger.error(f"No folders with keys found in database")
+                        return None
+            
+            if not folder.get('private_key'):
+                logger.error(f"Folder has no private key: {folder.get('id', 'unknown')}")
+                return None
+            
+            # Load the keys
             private_key = ed25519.Ed25519PrivateKey.from_private_bytes(
                 folder['private_key']
             )
-            public_key = private_key.public_key()
+            public_key = ed25519.Ed25519PublicKey.from_public_bytes(
+                folder['public_key']
+            )
+            
+            db_id = folder.get('rowid', folder.get('id', 'unknown'))
+            logger.info(f"Successfully loaded keys for folder {folder_id} from DB_ID {db_id}")
             
             return FolderKeys(
                 private_key=private_key,
                 public_key=public_key,
                 folder_id=folder_id,
-                created_at=folder['created_at']
+                created_at=datetime.now()
             )
+            
         except Exception as e:
             logger.error(f"Failed to load keys for folder {folder_id}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
-            
     def generate_subject_pair(self, folder_id: str, file_version: int, 
                             segment_index: int) -> SubjectPair:
         """

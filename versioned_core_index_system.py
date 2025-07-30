@@ -177,6 +177,11 @@ class FileSegmentProcessor:
             logger.error(f"Error verifying segment {segment_index} of {file_path}: {e}")
             return False
 
+
+# Global lock to prevent duplicate folder processing
+_folder_processing_lock = threading.Lock()
+_processing_folders = set()
+
 class VersionedCoreIndexSystem:
     """
     Production core indexing system with complete implementation
@@ -221,66 +226,77 @@ class VersionedCoreIndexSystem:
                     progress_callback=None) -> Dict[str, Any]:
         """
         Initial folder indexing - processes all files with actual data
+        Now with duplicate processing protection
         """
-        start_time = time.time()
-        self.logger.info(f"Starting initial index of folder: {folder_path}")
+        # Prevent duplicate processing
+        global _folder_processing_lock, _processing_folders
         
-        # Reset stats
-        self.processing_stats = self._reset_stats()
-        
-        # Validate folder exists
-        if not os.path.exists(folder_path):
-            raise ValueError(f"Folder does not exist: {folder_path}")
+        with _folder_processing_lock:
+            if folder_id in _processing_folders:
+                self.logger.warning(f"Folder {folder_id} is already being processed, skipping duplicate request")
+                return {
+                    'success': False,
+                    'folder_id': folder_id,
+                    'error': 'Folder already being processed',
+                    'files_processed': 0,
+                    'segments_created': 0
+                }
             
-        # Create folder entry if needed
-        folder_record = self._ensure_folder_exists(folder_id, folder_path)
-        folder_db_id = folder_record['id']
+            _processing_folders.add(folder_id)
+            self.logger.info(f"LOCK: Added folder {folder_id} to processing set")
         
-        # Generate folder keys if not exist
-        if not folder_record.get('private_key'):
-            keys = self.security.generate_folder_keys(folder_id)
-            self.security.save_folder_keys(folder_db_id, keys)
-        
-        # Scan folder for files
-        all_files = self._scan_folder_full(folder_path, progress_callback)
-        self.logger.info(f"Found {len(all_files)} files to index")
-        
-        # Process files in parallel with actual segment creation
-        indexed_files = []
-        failed_files = []
-        
-        with ThreadPoolExecutor(max_workers=self.worker_threads) as executor:
-            # Submit tasks
-            future_to_file = {}
+        try:
+            start_time = time.time()
+            self.logger.info(f"Starting initial index of folder: {folder_path}")
             
-            for file_path, file_info in all_files.items():
-                future = executor.submit(
-                    self._index_file_complete,
-                    folder_db_id,
-                    folder_id,
-                    folder_path,
-                    file_path,
-                    file_info,
-                    version=1
-                )
-                future_to_file[future] = file_path
+            # Reset stats
+            self.processing_stats = self._reset_stats()
+            
+            # Validate folder exists
+            if not os.path.exists(folder_path):
+                raise ValueError(f"Folder does not exist: {folder_path}")
                 
-            # Process results
-            for i, future in enumerate(as_completed(future_to_file)):
-                file_path = future_to_file[future]
-                
+            # Create folder entry if needed
+            folder_record = self._ensure_folder_exists(folder_id, folder_path)
+            folder_db_id = folder_record['id']
+            
+            # Generate folder keys if not exist
+            if not folder_record.get('private_key'):
+                keys = self.security.generate_folder_keys(folder_id)
+                self.security.save_folder_keys(folder_id, keys)
+            
+            # Scan folder for files
+            all_files = self._scan_folder_full(folder_path, progress_callback)
+            self.logger.info(f"Found {len(all_files)} files to index")
+            
+            # Process files sequentially to avoid database conflicts
+            indexed_files = []
+            failed_files = []
+            
+            for i, (file_path, file_info) in enumerate(all_files.items()):
                 try:
-                    result = future.result()
+                    result = self._index_file_complete(
+                        folder_db_id,
+                        folder_id,
+                        folder_path,
+                        file_path,
+                        file_info,
+                        version=1
+                    )
+                    
                     if result:
                         indexed_files.append(result)
                         
-                    if progress_callback and (i + 1) % 10 == 0:
+                    if progress_callback and (i + 1) % 5 == 0:
                         progress_callback({
                             'current': i + 1,
                             'total': len(all_files),
                             'file': file_path,
                             'phase': 'indexing'
                         })
+                        
+                    # Small delay to allow GUI to update
+                    time.sleep(0.01)
                         
                 except Exception as e:
                     self.logger.error(f"Error indexing {file_path}: {e}")
@@ -292,36 +308,41 @@ class VersionedCoreIndexSystem:
                             'traceback': traceback.format_exc()
                         })
                     
-        # Log indexing summary
-        files_processed = self.processing_stats["files_processed"]
-        segments_created = self.processing_stats["segments_created"]
-        logger.info(f"FOLDER_DEBUG: Indexing complete - {files_processed} files, {segments_created} segments")
-        
-        # Update folder stats
-        self._update_folder_stats(folder_db_id)
-        
-        # Create initial version
-        version_id = self._create_folder_version(folder_db_id, 1, "Initial index")
-        
-        elapsed = time.time() - start_time
-        
-        result = {
-            'success': len(failed_files) == 0,
-            'folder_id': folder_id,
-            'version': 1,
-            'files_processed': self.processing_stats['files_processed'],
-            'bytes_processed': self.processing_stats['bytes_processed'],
-            'segments_created': self.processing_stats['segments_created'],
-            'files_failed': len(failed_files),
-            'errors': self.processing_stats['errors'],
-            'elapsed_time': elapsed,
-            'files_per_second': self.processing_stats['files_processed'] / elapsed if elapsed > 0 else 0,
-            'mb_per_second': (self.processing_stats['bytes_processed'] / 1024 / 1024) / elapsed if elapsed > 0 else 0
-        }
-        
-        self.logger.info(f"Initial indexing complete: {result}")
-        return result
-        
+            # Log indexing summary
+            files_processed = self.processing_stats["files_processed"]
+            segments_created = self.processing_stats["segments_created"]
+            logger.info(f"FOLDER_DEBUG: Indexing complete - {files_processed} files, {segments_created} segments")
+            
+            # Update folder stats
+            self._update_folder_stats(folder_db_id)
+            
+            # Create initial version
+            version_id = self._create_folder_version(folder_db_id, 1, "Initial index")
+            
+            elapsed = time.time() - start_time
+            
+            result = {
+                'success': len(failed_files) == 0,
+                'folder_id': folder_id,
+                'version': 1,
+                'files_processed': self.processing_stats['files_processed'],
+                'bytes_processed': self.processing_stats['bytes_processed'],
+                'segments_created': self.processing_stats['segments_created'],
+                'files_failed': len(failed_files),
+                'errors': self.processing_stats['errors'],
+                'elapsed_time': elapsed,
+                'files_per_second': self.processing_stats['files_processed'] / elapsed if elapsed > 0 else 0,
+                'mb_per_second': (self.processing_stats['bytes_processed'] / 1024 / 1024) / elapsed if elapsed > 0 else 0
+            }
+            
+            self.logger.info(f"Initial indexing complete: {result}")
+            return result
+            
+        finally:
+            # Always remove from processing set
+            with _folder_processing_lock:
+                _processing_folders.discard(folder_id)
+                self.logger.info(f"LOCK: Removed folder {folder_id} from processing set")
     def _scan_folder_full(self, folder_path: str, progress_callback=None) -> Dict[str, Dict]:
         """
         Scan folder and calculate actual file hashes
