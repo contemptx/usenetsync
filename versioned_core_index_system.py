@@ -188,6 +188,83 @@ class VersionedCoreIndexSystem:
     All file operations use actual data, no shortcuts
     """
     
+    
+    
+    def _cleanup_existing_segments(self, folder_db_id, version=None):
+        """Clean up existing segments before re-indexing"""
+        try:
+            with self.db.pool.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                if version:
+                    # Clean up specific version
+                    cursor.execute("""
+                        DELETE FROM segments WHERE file_id IN (
+                            SELECT id FROM files WHERE folder_id = ? AND version = ?
+                        )
+                    """, (folder_db_id, version))
+                else:
+                    # Clean up all segments for this folder
+                    cursor.execute("""
+                        DELETE FROM segments WHERE file_id IN (
+                            SELECT id FROM files WHERE folder_id = ?
+                        )
+                    """, (folder_db_id,))
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+                
+                if deleted_count > 0:
+                    self.logger.info(f"Cleaned up {deleted_count} existing segments")
+                    
+        except Exception as e:
+            self.logger.error(f"Error cleaning up segments: {e}")
+
+    def _insert_segment_safe(self, cursor, file_id, segment_index, segment_data, redundancy_index=0):
+        """Safely insert segment with duplicate handling"""
+        try:
+            # Try to insert new segment
+            cursor.execute("""
+                INSERT INTO segments (
+                    file_id, segment_index, redundancy_index, 
+                    size, hash, compressed_size, message_id, 
+                    upload_status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            """, (
+                file_id, segment_index, redundancy_index,
+                segment_data['size'], segment_data['hash'], segment_data.get('compressed_size', segment_data['size']),
+                segment_data.get('message_id', ''), 'pending'
+            ))
+            return cursor.lastrowid
+            
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e):
+                # Check if this is a re-indexing scenario
+                cursor.execute("""
+                    SELECT id FROM segments 
+                    WHERE file_id = ? AND segment_index = ? AND redundancy_index = ?
+                """, (file_id, segment_index, redundancy_index))
+                
+                existing = cursor.fetchone()
+                if existing:
+                    # Update existing segment instead
+                    cursor.execute("""
+                        UPDATE segments SET
+                            size = ?, hash = ?, compressed_size = ?,
+                            message_id = ?, upload_status = 'pending',
+                            created_at = datetime('now')
+                        WHERE file_id = ? AND segment_index = ? AND redundancy_index = ?
+                    """, (
+                        segment_data['size'], segment_data['hash'], segment_data.get('compressed_size', segment_data['size']),
+                        segment_data.get('message_id', ''), file_id, segment_index, redundancy_index
+                    ))
+                    return existing[0]
+                else:
+                    # Re-raise if it's a different constraint issue
+                    raise
+            else:
+                raise
+
     def __init__(self, db_manager, security_system, config):
         self.db = db_manager
         self.security = security_system
@@ -269,6 +346,21 @@ class VersionedCoreIndexSystem:
             all_files = self._scan_folder_full(folder_path, progress_callback)
             self.logger.info(f"Found {len(all_files)} files to index")
             
+            # Initial progress callback
+            if progress_callback:
+                progress_callback({
+                    'current': 0,
+                    'total': len(all_files),
+                    'file': 'Starting indexing...',
+                    'phase': 'initializing'
+                })
+            
+            # Clean up existing segments if this is a re-index
+            existing_files = self._get_indexed_files(folder_db_id)
+            if existing_files:
+                self.logger.info(f"Found {len(existing_files)} existing files, cleaning up segments...")
+                self._cleanup_existing_segments(folder_db_id)
+            
             # Process files sequentially to avoid database conflicts
             indexed_files = []
             failed_files = []
@@ -287,13 +379,16 @@ class VersionedCoreIndexSystem:
                     if result:
                         indexed_files.append(result)
                         
-                    if progress_callback and (i + 1) % 5 == 0:
-                        progress_callback({
-                            'current': i + 1,
-                            'total': len(all_files),
-                            'file': file_path,
-                            'phase': 'indexing'
-                        })
+                    # Progress callback for every file (or every few files for large sets)
+                    if progress_callback:
+                        callback_frequency = max(1, len(all_files) // 20)  # At least 20 updates
+                        if (i + 1) % callback_frequency == 0 or i == len(all_files) - 1:
+                            progress_callback({
+                                'current': i + 1,
+                                'total': len(all_files),
+                                'file': file_path,
+                                'phase': 'indexing'
+                            })
                         
                     # Small delay to allow GUI to update
                     time.sleep(0.01)
