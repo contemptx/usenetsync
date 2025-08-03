@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UsenetSync GUI - Main Application Window - CLEAN VERSION
+UsenetSync GUI - Main Application Window
 Production-ready GUI for UsenetSync with full integration to backend systems
 """
 

@@ -1,0 +1,10 @@
+{
+  "default": {
+    "name": "Windows Default",
+    "style": "clam"
+  },
+  "dark": {
+    "name": "Dark Theme",
+    "style": "clam"
+  }
+}
