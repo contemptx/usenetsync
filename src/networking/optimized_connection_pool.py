@@ -393,7 +393,7 @@ if __name__ == "__main__":
         host='news.newshosting.com',
         port=563,
         username='contemptx',
-        password='S1983b1986#',
+        password='Kia211101#',
         use_ssl=True,
         max_connections=60,
         initial_connections=1  # Start with just 1 connection
