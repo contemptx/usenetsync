@@ -58,6 +58,7 @@ class RealUsenetSyncTest:
         
         # Track real Usenet data
         self.posted_messages = []  # Real message IDs from Usenet
+        self.used_message_ids = set()  # Track all used message IDs to ensure uniqueness
         self.share_data = {}  # Real share information
         self.test_results = []
         
@@ -375,10 +376,26 @@ class RealUsenetSyncTest:
                                 f.seek(segment['offset'])
                                 segment_data = f.read(segment['size'])
                             
-                            # Create proper NNTP message with yEnc encoding
+                            # Create UNIQUE message ID - ALWAYS unique even for duplicate content
                             import uuid
-                            unique_id = str(uuid.uuid4())[:8]
-                            generated_msg_id = f"<{unique_id}-{int(time.time())}-{segment['segment_index']}@usenetsync.test>"
+                            import random
+                            
+                            # Combine multiple sources of uniqueness:
+                            # 1. UUID for guaranteed uniqueness
+                            # 2. High-precision timestamp (microseconds)
+                            # 3. Random component
+                            # 4. File hash
+                            # 5. Segment index
+                            
+                            unique_uuid = str(uuid.uuid4())
+                            timestamp_micro = int(time.time() * 1000000)  # Microsecond precision
+                            random_part = random.randint(1000, 9999)
+                            file_hash_part = hashlib.sha256(file['filename'].encode()).hexdigest()[:6]
+                            
+                            # Build a guaranteed unique message ID
+                            generated_msg_id = f"<{unique_uuid}-{timestamp_micro}-{random_part}-{file_hash_part}-seg{segment['segment_index']}@usenetsync.test>"
+                            
+                            print(f"       📝 Generated unique Message-ID: {generated_msg_id}")
                             
                             # Proper headers for binary posts
                             headers = [
