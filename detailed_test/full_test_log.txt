@@ -1,0 +1,606 @@
+[2025-08-17T15:36:23.967523] 
+================================================================================
+[2025-08-17T15:36:23.967546] TEST 1: CONFIGURATION LOADING
+[2025-08-17T15:36:23.967552] ================================================================================
+[2025-08-17T15:36:23.967556] Loading configuration from: /workspace/usenet_sync_config.json
+[2025-08-17T15:36:23.967619] FULL CONFIGURATION:
+DATA: {
+  "servers": [
+    {
+      "name": "NewsHosting",
+      "hostname": "news.newshosting.com",
+      "port": 563,
+      "username": "contemptx",
+      "password": "Kia211101#",
+      "use_ssl": true,
+      "max_connections": 30,
+      "enabled": true,
+      "priority": 1,
+      "posting_group": "alt.binaries.test"
+    }
+  ],
+  "storage": {
+    "database_path": "data/usenetsync.db",
+    "temp_directory": "temp",
+    "log_directory": "logs"
+  },
+  "security": {
+    "encryption_algorithm": "AES-256-GCM",
+    "key_derivation": "PBKDF2",
+    "iterations": 100000,
+    "message_id_domain": null,
+    "obfuscate_headers": true
+  },
+  "performance": {
+    "max_upload_threads": 4,
+    "max_download_threads": 4,
+    "segment_size": 768000,
+    "compression_enabled": true
+  },
+  "logging": {
+    "level": "INFO",
+    "max_log_size": 10485760,
+    "backup_count": 5
+  }
+}
+[2025-08-17T15:36:23.967664] SERVER DETAILS:
+DATA: {
+  "hostname": "news.newshosting.com",
+  "port": 563,
+  "username": "contemptx",
+  "password": "Kia***",
+  "use_ssl": true,
+  "max_connections": 30
+}
+[2025-08-17T15:36:23.967679] SECURITY SETTINGS:
+DATA: {
+  "encryption_algorithm": "AES-256-GCM",
+  "key_derivation": "PBKDF2",
+  "iterations": 100000,
+  "message_id_domain": null,
+  "obfuscate_headers": true
+}
+[2025-08-17T15:36:23.967688] PERFORMANCE SETTINGS:
+DATA: {
+  "max_upload_threads": 4,
+  "max_download_threads": 4,
+  "segment_size": 768000,
+  "compression_enabled": true
+}
+[2025-08-17T15:36:23.967697] 
+================================================================================
+[2025-08-17T15:36:23.967700] TEST 2: POSTGRESQL DATABASE SETUP
+[2025-08-17T15:36:23.967702] ================================================================================
+[2025-08-17T15:36:23.967704] Connecting to PostgreSQL as postgres user...
+[2025-08-17T15:36:23.975788] EXISTING DATABASES:
+DATA: [
+  "postgres",
+  "usenet_test",
+  "usenet_demo",
+  "version_test",
+  "complete_test"
+]
+[2025-08-17T15:36:23.976050] Creating database: detailed_test_db
+[2025-08-17T15:36:24.031748] Granting permissions to usenet user...
+[2025-08-17T15:36:24.033567] Connecting to detailed_test_db as usenet...
+[2025-08-17T15:36:24.040847] Creating database schema...
+[2025-08-17T15:36:24.049502] CREATED TABLES:
+DATA: [
+  "folders",
+  "files",
+  "segments",
+  "shares"
+]
+[2025-08-17T15:36:24.049562] 
+================================================================================
+[2025-08-17T15:36:24.049567] TEST 3: FILE CREATION WITH FULL DATA
+[2025-08-17T15:36:24.049570] ================================================================================
+[2025-08-17T15:36:24.051948] Creating folder with ID: bb24ff1e-a218-4003-bdef-700217e68961
+[2025-08-17T15:36:24.052719] FOLDER CREATED:
+DATA: {
+  "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+  "name": "test_files",
+  "path": "/workspace/detailed_test/test_files",
+  "created_at": "2025-08-17 15:36:24.046734+00:00"
+}
+[2025-08-17T15:36:24.052951] 
+Creating file: readme.txt
+[2025-08-17T15:36:24.052960] FILE DETAILS:
+DATA: {
+  "file_id": "0299a84b-77cc-4208-ba1e-7aeee8053f4c",
+  "filename": "readme.txt",
+  "size": 68,
+  "hash": "9a619c7c02c09d247ab981176b4988d52ebeab185731fe0fe66d48a5438e25b2",
+  "preview": "This is a test readme file.\nIt contains multiple lines.\nVersion 1.0\n"
+}
+[2025-08-17T15:36:24.053530] 
+Creating file: data.json
+[2025-08-17T15:36:24.053537] FILE DETAILS:
+DATA: {
+  "file_id": "7a366656-b4f9-4501-ae18-ef2792e25ed4",
+  "filename": "data.json",
+  "size": 74,
+  "hash": "9600a50b004f2956e62abf05a69c7945718c68e8be49b68ab75fbeacca67970f",
+  "preview": "{\n  \"test\": \"data\",\n  \"version\": 1,\n  \"items\": [\n    1,\n    2,\n    3\n  ]\n}"
+}
+[2025-08-17T15:36:24.053871] 
+Creating file: binary.dat
+[2025-08-17T15:36:24.053877] FILE DETAILS:
+DATA: {
+  "file_id": "24c638eb-78e3-442d-9b5c-ffb58b05257a",
+  "filename": "binary.dat",
+  "size": 1024,
+  "hash": "499882dcacea383f577f4520964525518a7246e9b7784a6450f73ddf47fc2b91",
+  "preview": "Binary file: 1024 bytes"
+}
+[2025-08-17T15:36:24.055129] 
+Creating file: large.bin
+[2025-08-17T15:36:24.055143] FILE DETAILS:
+DATA: {
+  "file_id": "173ddece-1017-4d96-bba7-d46decc271ca",
+  "filename": "large.bin",
+  "size": 1048576,
+  "hash": "9918ddcc47f8d755d668c0ebf54ee3c78859e02284397aad69a6ed6ff3a6dbfd",
+  "preview": "Binary file: 1048576 bytes"
+}
+[2025-08-17T15:36:24.056050] 
+FOLDER UPDATED:
+DATA: {
+  "total_size": 1049742,
+  "file_count": 4
+}
+[2025-08-17T15:36:24.056459] 
+FILES CREATED SUMMARY:
+DATA: [
+  {
+    "file_id": "0299a84b-77cc-4208-ba1e-7aeee8053f4c",
+    "filename": "readme.txt",
+    "size": 68,
+    "hash": "9a619c7c02c09d247ab981176b4988d52ebeab185731fe0fe66d48a5438e25b2",
+    "preview": "This is a test readme file.\nIt contains multiple l"
+  },
+  {
+    "file_id": "7a366656-b4f9-4501-ae18-ef2792e25ed4",
+    "filename": "data.json",
+    "size": 74,
+    "hash": "9600a50b004f2956e62abf05a69c7945718c68e8be49b68ab75fbeacca67970f",
+    "preview": "{\n  \"test\": \"data\",\n  \"version\": 1,\n  \"items\": [\n "
+  },
+  {
+    "file_id": "24c638eb-78e3-442d-9b5c-ffb58b05257a",
+    "filename": "binary.dat",
+    "size": 1024,
+    "hash": "499882dcacea383f577f4520964525518a7246e9b7784a6450f73ddf47fc2b91",
+    "preview": "Binary file: 1024 bytes"
+  },
+  {
+    "file_id": "173ddece-1017-4d96-bba7-d46decc271ca",
+    "filename": "large.bin",
+    "size": 1048576,
+    "hash": "9918ddcc47f8d755d668c0ebf54ee3c78859e02284397aad69a6ed6ff3a6dbfd",
+    "preview": "Binary file: 1048576 bytes"
+  }
+]
+[2025-08-17T15:36:24.056531] 
+================================================================================
+[2025-08-17T15:36:24.056538] TEST 4: FILE SEGMENTATION WITH FULL DATA
+[2025-08-17T15:36:24.056541] ================================================================================
+[2025-08-17T15:36:24.056558] 
+Segmenting file: readme.txt
+[2025-08-17T15:36:24.056563] File size: 68 bytes
+[2025-08-17T15:36:24.056567] Segments needed: 1
+[2025-08-17T15:36:24.056672]   Segment 1/1:
+DATA: {
+  "segment_id": "fd6f457b-0b84-4a2e-9f3c-f4fe23f87760",
+  "file_id": "0299a84b-77cc-4208-ba1e-7aeee8053f4c",
+  "segment_index": 0,
+  "size": 68,
+  "hash": "557e0a95b86e0b88014f5565daab33993ee86101b7b9662d105e427a68189244",
+  "message_id": "<0a2108937839dfa53620a8ca7297475c@newsreader.com>",
+  "subject": "FCIBAZOCLXZSEEDA",
+  "internal_subject": "readme.txt.part001of001",
+  "data_preview": "UqYsHupXvmytc2JATwRIzo4cUJqnPNxPi6VRCw4VlhZtIRr9Ci..."
+}
+[2025-08-17T15:36:24.057170]   Created 1 segments for readme.txt
+[2025-08-17T15:36:24.057180] 
+Segmenting file: data.json
+[2025-08-17T15:36:24.057184] File size: 74 bytes
+[2025-08-17T15:36:24.057187] Segments needed: 1
+[2025-08-17T15:36:24.057218]   Segment 1/1:
+DATA: {
+  "segment_id": "74272896-b6b3-442a-8a9d-f93df8ee67ac",
+  "file_id": "7a366656-b4f9-4501-ae18-ef2792e25ed4",
+  "segment_index": 0,
+  "size": 74,
+  "hash": "e13bc2aa05948f0bbf5582c2eb245f1b78ee963e317677e6e7a1419d9b9daedc",
+  "message_id": "<5406ac79112d1922ea33faff62a479ee@yenc.org>",
+  "subject": "JYH6CEU4RBQUUTBJ",
+  "internal_subject": "data.json.part001of001",
+  "data_preview": "1rHiAjFvijQkU/qec9m17wo32RjIyo/nAPI1SO3FPGzFm+k6he..."
+}
+[2025-08-17T15:36:24.057395]   Created 1 segments for data.json
+[2025-08-17T15:36:24.057402] 
+Segmenting file: binary.dat
+[2025-08-17T15:36:24.057406] File size: 1,024 bytes
+[2025-08-17T15:36:24.057409] Segments needed: 1
+[2025-08-17T15:36:24.057431]   Segment 1/1:
+DATA: {
+  "segment_id": "59a87e9f-6d5a-4685-8921-868aa13ddbff",
+  "file_id": "24c638eb-78e3-442d-9b5c-ffb58b05257a",
+  "segment_index": 0,
+  "size": 1024,
+  "hash": "cee27d59287b966c7286e5289dbf0becbeec52eadb397bcc15ecaf0127c8dbf7",
+  "message_id": "<83515562fd79689bcf9e7a70ddf3f2cd@yenc.org>",
+  "subject": "7CA2J66RLHGM7WML",
+  "internal_subject": "binary.dat.part001of001",
+  "data_preview": "qkXzrdy0ak+Ge4TeN3b8xMY4vQqDgOlGew+kKaIR01zAulWfB9..."
+}
+[2025-08-17T15:36:24.057896]   Created 1 segments for binary.dat
+[2025-08-17T15:36:24.057921] 
+Segmenting file: large.bin
+[2025-08-17T15:36:24.057928] File size: 1,048,576 bytes
+[2025-08-17T15:36:24.057932] Segments needed: 2
+[2025-08-17T15:36:24.057996]   Segment 1/2:
+DATA: {
+  "segment_id": "c0a67a97-302a-4956-aa9d-6197a6610013",
+  "file_id": "173ddece-1017-4d96-bba7-d46decc271ca",
+  "segment_index": 0,
+  "size": 768000,
+  "hash": "e101f4547d8fe099f0e61a42e66bcb1f4116aa4866e499d7a9d79978804223b3",
+  "message_id": "<1c04e9ee3c80a8f9ddf7d3816b8db134@newsreader.com>",
+  "subject": "PAN5ZENGGF4L2URI",
+  "internal_subject": "large.bin.part001of002",
+  "data_preview": "pS1vtS5ToPpnDHSt8sqI4ZcdkVGF5wEkGPsOGsbT6Xa778uqLj..."
+}
+[2025-08-17T15:36:24.058716]   Segment 2/2:
+DATA: {
+  "segment_id": "b5fafaec-d508-4406-b377-f769f4f190dd",
+  "file_id": "173ddece-1017-4d96-bba7-d46decc271ca",
+  "segment_index": 1,
+  "size": 280576,
+  "hash": "01e73e36983bdd47b8b499f2a7e2c3ab04be0f680be8345618ef97f9cd0cc305",
+  "message_id": "<758b3f1e358f901561188b552f792b29@ngPost.com>",
+  "subject": "DLIABOUKXM2ZOZWQ",
+  "internal_subject": "large.bin.part002of002",
+  "data_preview": "Kcx1vgGAMMjYK50VEJKfu1g3veY4W8vf1dQYiJ0ux+qcd1liYo..."
+}
+[2025-08-17T15:36:24.059374]   Created 2 segments for large.bin
+[2025-08-17T15:36:24.060358] 
+TOTAL SEGMENTS CREATED: 5
+[2025-08-17T15:36:24.060392] 
+================================================================================
+[2025-08-17T15:36:24.060397] TEST 5: SHARE CREATION WITH FULL DETAILS
+[2025-08-17T15:36:24.060399] ================================================================================
+[2025-08-17T15:36:24.060423] 
+Creating public share:
+[2025-08-17T15:36:24.060476] SHARE DETAILS:
+DATA: {
+  "share_id": "MRFE3BX25XTF5CH6FPP2PXDL",
+  "share_type": "public",
+  "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+  "metadata": {
+    "type": "public",
+    "created_by": "test_user",
+    "version": 1
+  }
+}
+[2025-08-17T15:36:24.060507] SHARE ID ANALYSIS:
+DATA: {
+  "length": 24,
+  "has_underscore": false,
+  "has_dash": false,
+  "starts_with_type": false,
+  "is_alphanumeric": true,
+  "character_set": "{'X', '5', 'M', 'F', '2', '6', 'D', 'L', 'H', 'B', 'P', 'E', '3', 'T', 'C', 'R'}"
+}
+[2025-08-17T15:36:24.060529] VALIDATION RESULT:
+DATA: {
+  "is_valid": true,
+  "detected_type": null,
+  "type_detectable": false
+}
+[2025-08-17T15:36:24.061314] 
+Creating private share:
+[2025-08-17T15:36:24.061346] SHARE DETAILS:
+DATA: {
+  "share_id": "UJPPJZ7EA77BPNJA5XWN3RDJ",
+  "share_type": "private",
+  "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+  "metadata": {
+    "type": "private",
+    "created_by": "test_user",
+    "version": 1,
+    "authorized_users": [
+      "user1",
+      "user2",
+      "user3"
+    ],
+    "access_level": "read-only"
+  }
+}
+[2025-08-17T15:36:24.061362] SHARE ID ANALYSIS:
+DATA: {
+  "length": 24,
+  "has_underscore": false,
+  "has_dash": false,
+  "starts_with_type": false,
+  "is_alphanumeric": true,
+  "character_set": "{'X', '5', 'W', 'Z', 'D', 'J', '7', 'P', 'A', 'B', 'E', 'U', '3', 'N', 'R'}"
+}
+[2025-08-17T15:36:24.061377] VALIDATION RESULT:
+DATA: {
+  "is_valid": true,
+  "detected_type": null,
+  "type_detectable": false
+}
+[2025-08-17T15:36:24.061548] 
+Creating protected share:
+[2025-08-17T15:36:24.061566] SHARE DETAILS:
+DATA: {
+  "share_id": "SPOZJVPF57S2XQVMDQ2YC3VT",
+  "share_type": "protected",
+  "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+  "metadata": {
+    "type": "protected",
+    "created_by": "test_user",
+    "version": 1,
+    "password_required": true,
+    "password_hint": "test password",
+    "expiry_days": 30
+  }
+}
+[2025-08-17T15:36:24.061578] SHARE ID ANALYSIS:
+DATA: {
+  "length": 24,
+  "has_underscore": false,
+  "has_dash": false,
+  "starts_with_type": false,
+  "is_alphanumeric": true,
+  "character_set": "{'X', '5', '2', 'F', 'Z', 'V', 'S', 'J', '7', 'Q', 'D', 'P', 'Y', 'O', '3', 'T', 'C', 'M'}"
+}
+[2025-08-17T15:36:24.061590] VALIDATION RESULT:
+DATA: {
+  "is_valid": true,
+  "detected_type": null,
+  "type_detectable": false
+}
+[2025-08-17T15:36:24.062037] 
+ALL SHARES CREATED:
+DATA: [
+  {
+    "share_id": "MRFE3BX25XTF5CH6FPP2PXDL",
+    "share_type": "public",
+    "metadata": {
+      "type": "public",
+      "version": 1,
+      "created_by": "test_user"
+    },
+    "created_at": "2025-08-17 15:36:24.060721+00:00"
+  },
+  {
+    "share_id": "UJPPJZ7EA77BPNJA5XWN3RDJ",
+    "share_type": "private",
+    "metadata": {
+      "type": "private",
+      "version": 1,
+      "created_by": "test_user",
+      "access_level": "read-only",
+      "authorized_users": [
+        "user1",
+        "user2",
+        "user3"
+      ]
+    },
+    "created_at": "2025-08-17 15:36:24.060721+00:00"
+  },
+  {
+    "share_id": "SPOZJVPF57S2XQVMDQ2YC3VT",
+    "share_type": "protected",
+    "metadata": {
+      "type": "protected",
+      "version": 1,
+      "created_by": "test_user",
+      "expiry_days": 30,
+      "password_hint": "test password",
+      "password_required": true
+    },
+    "created_at": "2025-08-17 15:36:24.060721+00:00"
+  }
+]
+[2025-08-17T15:36:24.062058] 
+================================================================================
+[2025-08-17T15:36:24.062061] TEST 6: USENET CONNECTION TEST
+[2025-08-17T15:36:24.062064] ================================================================================
+[2025-08-17T15:36:24.062068] CONNECTING TO USENET:
+DATA: {
+  "server": "news.newshosting.com",
+  "port": 563,
+  "username": "contemptx",
+  "ssl": true
+}
+[2025-08-17T15:36:24.062076] 
+Testing raw socket connection...
+[2025-08-17T15:36:24.087008] Socket connected successfully
+[2025-08-17T15:36:24.089887] SERVER GREETING:
+DATA: "200 NNTP unlimited.newshosting.com Service Ready - support@newshosting.com\r\n"
+[2025-08-17T15:36:24.092594] AUTHINFO USER RESPONSE:
+DATA: "381 PASS required\r\n"
+[2025-08-17T15:36:24.098271] AUTHINFO PASS RESPONSE:
+DATA: "281 Welcome to NH bro! (Posting Allowed)\r\n"
+[2025-08-17T15:36:24.100439] CAPABILITIES:
+DATA: "101 Capabilities list:\r\nVERSION 1\r\nMODE-READER\r\nREADER\r\nLIST COUNTS OVERVIEW.FMT ACTIVE ACTIVE.TIMES NEWSGROUPS\r\nXHDR\r\nXOVER\r\nXZVER\r\nXZHDR\r\nXFEATURE-COMPRESS GZIP TERMINATOR\r\nPOST\r\n.\r\n"
+[2025-08-17T15:36:24.289335] LIST RESPONSE (first 500 chars):
+DATA: "215 NewsGroups Follow\r\n"
+[2025-08-17T15:36:24.289945] 
+================================================================================
+[2025-08-17T15:36:24.290115] TEST 7: DATA VERIFICATION
+[2025-08-17T15:36:24.290119] ================================================================================
+[2025-08-17T15:36:24.291011] FOLDERS IN DATABASE:
+DATA: [
+  {
+    "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+    "name": "test_files",
+    "path": "/workspace/detailed_test/test_files",
+    "total_size": 1049742,
+    "file_count": 4,
+    "created_at": "2025-08-17 15:36:24.046734+00:00"
+  }
+]
+[2025-08-17T15:36:24.291782] FILE STATISTICS:
+DATA: {
+  "count": 4,
+  "total_size": "1049742"
+}
+[2025-08-17T15:36:24.292313] ALL FILES:
+DATA: [
+  {
+    "file_id": "0299a84b-77cc-4208-ba1e-7aeee8053f4c",
+    "filename": "readme.txt",
+    "size": 68,
+    "hash": "9a619c7c02c09d247ab981176b4988d52ebeab185731fe0fe66d48a5438e25b2"
+  },
+  {
+    "file_id": "7a366656-b4f9-4501-ae18-ef2792e25ed4",
+    "filename": "data.json",
+    "size": 74,
+    "hash": "9600a50b004f2956e62abf05a69c7945718c68e8be49b68ab75fbeacca67970f"
+  },
+  {
+    "file_id": "24c638eb-78e3-442d-9b5c-ffb58b05257a",
+    "filename": "binary.dat",
+    "size": 1024,
+    "hash": "499882dcacea383f577f4520964525518a7246e9b7784a6450f73ddf47fc2b91"
+  },
+  {
+    "file_id": "173ddece-1017-4d96-bba7-d46decc271ca",
+    "filename": "large.bin",
+    "size": 1048576,
+    "hash": "9918ddcc47f8d755d668c0ebf54ee3c78859e02284397aad69a6ed6ff3a6dbfd"
+  }
+]
+[2025-08-17T15:36:24.292750] SEGMENT STATISTICS:
+DATA: {
+  "count": 5,
+  "total_size": "1049742"
+}
+[2025-08-17T15:36:24.293502] SEGMENTS BY FILE:
+DATA: [
+  {
+    "filename": "data.json",
+    "segment_count": 1,
+    "total_size": "74"
+  },
+  {
+    "filename": "readme.txt",
+    "segment_count": 1,
+    "total_size": "68"
+  },
+  {
+    "filename": "binary.dat",
+    "segment_count": 1,
+    "total_size": "1024"
+  },
+  {
+    "filename": "large.bin",
+    "segment_count": 2,
+    "total_size": "1048576"
+  }
+]
+[2025-08-17T15:36:24.294221] ALL SHARES:
+DATA: [
+  {
+    "share_id": "MRFE3BX25XTF5CH6FPP2PXDL",
+    "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+    "share_type": "public",
+    "metadata": {
+      "type": "public",
+      "version": 1,
+      "created_by": "test_user"
+    },
+    "created_at": "2025-08-17 15:36:24.060721+00:00"
+  },
+  {
+    "share_id": "UJPPJZ7EA77BPNJA5XWN3RDJ",
+    "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+    "share_type": "private",
+    "metadata": {
+      "type": "private",
+      "version": 1,
+      "created_by": "test_user",
+      "access_level": "read-only",
+      "authorized_users": [
+        "user1",
+        "user2",
+        "user3"
+      ]
+    },
+    "created_at": "2025-08-17 15:36:24.060721+00:00"
+  },
+  {
+    "share_id": "SPOZJVPF57S2XQVMDQ2YC3VT",
+    "folder_id": "bb24ff1e-a218-4003-bdef-700217e68961",
+    "share_type": "protected",
+    "metadata": {
+      "type": "protected",
+      "version": 1,
+      "created_by": "test_user",
+      "expiry_days": 30,
+      "password_hint": "test password",
+      "password_required": true
+    },
+    "created_at": "2025-08-17 15:36:24.060721+00:00"
+  }
+]
+[2025-08-17T15:36:24.294980] SAMPLE SEGMENTS (first 10):
+DATA: [
+  {
+    "segment_index": 0,
+    "message_id": "<83515562fd79689bcf9e7a70ddf3f2cd@yenc.org>",
+    "subject": "7CA2J66RLHGM7WML",
+    "internal_subject": "binary.dat.part001of001",
+    "filename": "binary.dat"
+  },
+  {
+    "segment_index": 0,
+    "message_id": "<5406ac79112d1922ea33faff62a479ee@yenc.org>",
+    "subject": "JYH6CEU4RBQUUTBJ",
+    "internal_subject": "data.json.part001of001",
+    "filename": "data.json"
+  },
+  {
+    "segment_index": 0,
+    "message_id": "<1c04e9ee3c80a8f9ddf7d3816b8db134@newsreader.com>",
+    "subject": "PAN5ZENGGF4L2URI",
+    "internal_subject": "large.bin.part001of002",
+    "filename": "large.bin"
+  },
+  {
+    "segment_index": 1,
+    "message_id": "<758b3f1e358f901561188b552f792b29@ngPost.com>",
+    "subject": "DLIABOUKXM2ZOZWQ",
+    "internal_subject": "large.bin.part002of002",
+    "filename": "large.bin"
+  },
+  {
+    "segment_index": 0,
+    "message_id": "<0a2108937839dfa53620a8ca7297475c@newsreader.com>",
+    "subject": "FCIBAZOCLXZSEEDA",
+    "internal_subject": "readme.txt.part001of001",
+    "filename": "readme.txt"
+  }
+]
+[2025-08-17T15:36:24.295122] 
+================================================================================
+[2025-08-17T15:36:24.295131] FINAL COMPREHENSIVE REPORT
+[2025-08-17T15:36:24.295134] ================================================================================
+[2025-08-17T15:36:24.295388] 
+ALL TEST DATA SAVED TO:
+DATA: "/workspace/detailed_test/test_data.json"
+[2025-08-17T15:36:24.295405] FULL LOG SAVED TO:
+DATA: "/workspace/detailed_test/full_test_log.txt"
+[2025-08-17T15:36:24.295410] 
+TEST SUMMARY:
+[2025-08-17T15:36:24.295414]   Files created: 4
+[2025-08-17T15:36:24.295420]   Total segments: 5
+[2025-08-17T15:36:24.295422]   Shares created: 3
+[2025-08-17T15:36:24.295425]   Total responses captured: 0

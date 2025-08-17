@@ -1,0 +1,189 @@
+{
+  "test_start": "2025-08-17T15:36:23.967453",
+  "configuration": {
+    "servers": [
+      {
+        "name": "NewsHosting",
+        "hostname": "news.newshosting.com",
+        "port": 563,
+        "username": "contemptx",
+        "password": "Kia211101#",
+        "use_ssl": true,
+        "max_connections": 30,
+        "enabled": true,
+        "priority": 1,
+        "posting_group": "alt.binaries.test"
+      }
+    ],
+    "storage": {
+      "database_path": "data/usenetsync.db",
+      "temp_directory": "temp",
+      "log_directory": "logs"
+    },
+    "security": {
+      "encryption_algorithm": "AES-256-GCM",
+      "key_derivation": "PBKDF2",
+      "iterations": 100000,
+      "message_id_domain": null,
+      "obfuscate_headers": true
+    },
+    "performance": {
+      "max_upload_threads": 4,
+      "max_download_threads": 4,
+      "segment_size": 768000,
+      "compression_enabled": true
+    },
+    "logging": {
+      "level": "INFO",
+      "max_log_size": 10485760,
+      "backup_count": 5
+    }
+  },
+  "database": {
+    "name": "detailed_test_db",
+    "host": "localhost",
+    "port": 5432,
+    "user": "usenet",
+    "tables": [
+      "folders",
+      "files",
+      "segments",
+      "shares"
+    ]
+  },
+  "files": {
+    "readme.txt": {
+      "file_id": "0299a84b-77cc-4208-ba1e-7aeee8053f4c",
+      "size": 68,
+      "hash": "9a619c7c02c09d247ab981176b4988d52ebeab185731fe0fe66d48a5438e25b2",
+      "content_sample": "This is a test readme file.\nIt contains multiple lines.\nVersion 1.0\n"
+    },
+    "data.json": {
+      "file_id": "7a366656-b4f9-4501-ae18-ef2792e25ed4",
+      "size": 74,
+      "hash": "9600a50b004f2956e62abf05a69c7945718c68e8be49b68ab75fbeacca67970f",
+      "content_sample": "{\n  \"test\": \"data\",\n  \"version\": 1,\n  \"items\": [\n    1,\n    2,\n    3\n  ]\n}"
+    },
+    "binary.dat": {
+      "file_id": "24c638eb-78e3-442d-9b5c-ffb58b05257a",
+      "size": 1024,
+      "hash": "499882dcacea383f577f4520964525518a7246e9b7784a6450f73ddf47fc2b91",
+      "content_sample": "Binary file: 1024 bytes"
+    },
+    "large.bin": {
+      "file_id": "173ddece-1017-4d96-bba7-d46decc271ca",
+      "size": 1048576,
+      "hash": "9918ddcc47f8d755d668c0ebf54ee3c78859e02284397aad69a6ed6ff3a6dbfd",
+      "content_sample": "Binary file: 1048576 bytes"
+    }
+  },
+  "segments": {
+    "readme.txt": {
+      "num_segments": 1,
+      "segments": [
+        {
+          "index": 0,
+          "size": 68,
+          "message_id": "<0a2108937839dfa53620a8ca7297475c@newsreader.com>",
+          "subject": "FCIBAZOCLXZSEEDA"
+        }
+      ]
+    },
+    "data.json": {
+      "num_segments": 1,
+      "segments": [
+        {
+          "index": 0,
+          "size": 74,
+          "message_id": "<5406ac79112d1922ea33faff62a479ee@yenc.org>",
+          "subject": "JYH6CEU4RBQUUTBJ"
+        }
+      ]
+    },
+    "binary.dat": {
+      "num_segments": 1,
+      "segments": [
+        {
+          "index": 0,
+          "size": 1024,
+          "message_id": "<83515562fd79689bcf9e7a70ddf3f2cd@yenc.org>",
+          "subject": "7CA2J66RLHGM7WML"
+        }
+      ]
+    },
+    "large.bin": {
+      "num_segments": 2,
+      "segments": [
+        {
+          "index": 0,
+          "size": 768000,
+          "message_id": "<1c04e9ee3c80a8f9ddf7d3816b8db134@newsreader.com>",
+          "subject": "PAN5ZENGGF4L2URI"
+        },
+        {
+          "index": 1,
+          "size": 280576,
+          "message_id": "<758b3f1e358f901561188b552f792b29@ngPost.com>",
+          "subject": "DLIABOUKXM2ZOZWQ"
+        }
+      ]
+    }
+  },
+  "shares": {
+    "public": {
+      "share_id": "MRFE3BX25XTF5CH6FPP2PXDL",
+      "metadata": {
+        "type": "public",
+        "created_by": "test_user",
+        "version": 1
+      },
+      "analysis": {
+        "has_patterns": false,
+        "length": 24
+      }
+    },
+    "private": {
+      "share_id": "UJPPJZ7EA77BPNJA5XWN3RDJ",
+      "metadata": {
+        "type": "private",
+        "created_by": "test_user",
+        "version": 1,
+        "authorized_users": [
+          "user1",
+          "user2",
+          "user3"
+        ],
+        "access_level": "read-only"
+      },
+      "analysis": {
+        "has_patterns": false,
+        "length": 24
+      }
+    },
+    "protected": {
+      "share_id": "SPOZJVPF57S2XQVMDQ2YC3VT",
+      "metadata": {
+        "type": "protected",
+        "created_by": "test_user",
+        "version": 1,
+        "password_required": true,
+        "password_hint": "test password",
+        "expiry_days": 30
+      },
+      "analysis": {
+        "has_patterns": false,
+        "length": 24
+      }
+    }
+  },
+  "uploads": {
+    "connection_test": {
+      "status": "success",
+      "greeting": "200 NNTP unlimited.newshosting.com Service Ready - support@newshosting.com\r\n",
+      "authenticated": true
+    }
+  },
+  "downloads": {},
+  "responses": [],
+  "test_end": "2025-08-17T15:36:24.295137"
+}
