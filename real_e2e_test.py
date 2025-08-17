@@ -117,13 +117,28 @@ class RealUsenetSyncTest:
                 use_ssl=server['use_ssl']
             )
             
-            # Test connection
+            # Test connection with proper unique message ID
             with self.nntp.connection_pool.get_connection() as conn:
+                # Generate unique message ID using the system
+                unique_msg_id = self.nntp._generate_message_id(prefix="test-conn")
+                
                 # Post a test message to verify connection
-                test_msg = f"TEST-CONNECTION-{int(time.time())}"
-                test_data = f"Subject: {test_msg}\r\nFrom: test@usenetsync.com\r\nNewsgroups: alt.binaries.test\r\n\r\nConnection test at {datetime.now()}".encode()
+                test_subject = f"TEST-CONNECTION-{int(time.time())}"
+                test_headers = [
+                    f"Subject: {test_subject}",
+                    f"From: test@usenetsync.com",
+                    f"Message-ID: {unique_msg_id}",
+                    f"Newsgroups: alt.binaries.test",
+                    "",
+                    f"Connection test at {datetime.now()}"
+                ]
+                test_data = "\r\n".join(test_headers).encode()
+                
                 message_id = conn.post(test_data)
                 print(f"   ✅ Connected! Test message ID: {message_id}")
+                print(f"   📝 Generated Message-ID: {unique_msg_id}")
+                
+                # Store as simple message for compatibility
                 self.posted_messages.append(message_id)
             
             # 7. Initialize indexing system
@@ -385,10 +400,11 @@ class RealUsenetSyncTest:
                             generated_msg_id = self.nntp._generate_message_id(prefix=f"seg{segment['segment_index']}")
                             
                             # Generate unique subject using the security system
+                            # The signature is: folder_id, file_version, segment_index
                             subject_pair = self.security.generate_subject_pair(
                                 self.test_folder_id,
-                                version=1,
-                                segment_index=segment['segment_index']
+                                1,  # file_version
+                                segment['segment_index']
                             )
                             
                             # Use the obfuscated subject for Usenet
@@ -593,45 +609,35 @@ class RealUsenetSyncTest:
             
             retrieved_count = 0
             
-            # Test retrieving some of the posted messages
-            for i, message_id in enumerate(self.posted_messages[:5]):  # Test first 5
-                print(f"\n{i+1}. Retrieving message: {message_id}")
-                
-                try:
-                    with self.nntp.connection_pool.get_connection() as conn:
-                        # Extract the actual message ID from tuple if needed
-                        actual_msg_id = message_id[1] if isinstance(message_id, tuple) else message_id
+            # Use the REAL retrieval system to test retrieving messages
+            for i, msg_info in enumerate(self.posted_messages[:5]):  # Test first 5
+                if isinstance(msg_info, dict):
+                    # We have detailed info from our upload
+                    print(f"\n{i+1}. Retrieving segment:")
+                    print(f"   File: {msg_info['file']}")
+                    print(f"   Message ID: {msg_info['actual_id']}")
+                    print(f"   Subject: {msg_info['usenet_subject']}")
+                    
+                    try:
+                        # Use the REAL retrieval system's method
+                        segment_data = self.retrieval_system.retrieve_by_message_id(
+                            msg_info['actual_id'],
+                            expected_size=msg_info['size']
+                        )
                         
-                        # NNTP article retrieval
-                        try:
-                            # Use the underlying NNTP connection
-                            response = conn.connection.article(actual_msg_id)
-                        except:
-                            # Try alternative method
-                            response = None
-                        
-                        if response:
-                            print(f"   ✅ Retrieved successfully")
-                            print(f"   Response type: {type(response)}")
-                            
-                            # Parse response based on type
-                            if hasattr(response, 'lines'):
-                                # It's an article info object
-                                lines = response.lines
-                                print(f"   Lines: {len(lines)}")
-                            elif isinstance(response, tuple) and len(response) >= 3:
-                                # It's a tuple (response, info, lines)
-                                lines = response[2] if len(response) > 2 else []
-                                print(f"   Lines: {len(lines)}")
-                            else:
-                                print(f"   Raw response: {str(response)[:100]}...")
-                            
+                        if segment_data:
+                            print(f"   ✅ Retrieved successfully using retrieval system")
+                            print(f"   Data size: {len(segment_data)} bytes")
                             retrieved_count += 1
                         else:
-                            print(f"   ❌ Failed to retrieve")
+                            print(f"   ❌ Failed to retrieve using retrieval system")
                             
-                except Exception as e:
-                    print(f"   ❌ Error: {e}")
+                    except Exception as e:
+                        print(f"   ❌ Retrieval error: {e}")
+                else:
+                    # Fallback for simple message IDs
+                    print(f"\n{i+1}. Message ID: {msg_info}")
+                    print(f"   ⚠️  No detailed info available")
                 
                 time.sleep(0.2)  # Rate limiting
             
