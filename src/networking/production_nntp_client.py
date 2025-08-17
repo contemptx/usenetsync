@@ -2,11 +2,10 @@
 """
 Production-ready NNTP client with connection pooling, retry logic, and robust error handling.
 Supports posting millions of files with high performance and reliability.
-Uses pynntp (imported as 'nntp') for Python 3.13+ compatibility.
 """
 
-# pynntp installs as 'nntp' module with NNTPClient class
-from nntp import NNTPClient
+# Use standard library nntplib
+import nntplib
 import time
 import logging
 import threading
