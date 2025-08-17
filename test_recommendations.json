@@ -1,16 +1,16 @@
 [
   {
     "category": "indexing",
-    "issue": "Failed to index folder: no such column: keys_updated_at",
+    "issue": "Failed to index folder: no such column: folder_id",
     "suggestion": "Review indexing error handling and file validation",
     "priority": "medium",
-    "timestamp": "2025-08-17T11:25:26.632273"
+    "timestamp": "2025-08-17T11:31:06.083037"
   },
   {
     "category": "system",
     "issue": "Test execution failed: no such column: file_id",
     "suggestion": "Review error handling and system resilience",
     "priority": "high",
-    "timestamp": "2025-08-17T11:25:26.633056"
+    "timestamp": "2025-08-17T11:31:06.084281"
   }
 ]

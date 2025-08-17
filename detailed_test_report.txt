@@ -1,0 +1,162 @@
+====================================================================================================
+COMPREHENSIVE DATA TRACKING REPORT - COMPLETE DETAILS
+====================================================================================================
+
+📊 TEST METADATA
+--------------------------------------------------
+  start_time: 2025-08-17T11:36:38.201341
+  test_id: 7067d134439d733d
+
+📁 ORIGINAL FILES - COMPLETE DETAILS
+--------------------------------------------------
+  File: document.txt
+    Full Path: /tmp/usenet_test_ctmicuy4/test_data/document.txt
+    Size: 4027 bytes
+    SHA256 Hash: 3f8972458887f0ff2acc3d6e5fd15c05f3e56cb8a39a37b387cb9116774b0cdc
+    File Type: text/plain
+    Encoding: utf-8
+    Created: 2025-08-17T11:36:39.484519
+    Content Preview (hex): 546869732069732061207465737420646f63756d656e7420666f72205573656e657453796e632e0a54686973206973206120...
+
+  File: image.jpg
+    Full Path: /tmp/usenet_test_ctmicuy4/test_data/image.jpg
+    Size: 75000 bytes
+    SHA256 Hash: a182975691581579a3acbbefe5a8cf947b3f78b8edf1426cb8dccc7cb3a7f49a
+    File Type: image/jpeg
+    Encoding: binary
+    Created: 2025-08-17T11:36:39.484893
+    Content Preview (hex): 73d83c33084997c92592d86a94ee98cae3ecf996c1d11806235fa5261dbebf05bdf856c71a633a6519293de9d9111e6eec5b...
+
+  File: data.json
+    Full Path: /tmp/usenet_test_ctmicuy4/test_data/data.json
+    Size: 2776 bytes
+    SHA256 Hash: d6e5309b487691f46ed73ff44e1a458e204ca99e898b2d1517c9f8118dd00006
+    File Type: application/json
+    Encoding: utf-8
+    Created: 2025-08-17T11:36:39.485108
+    Content Preview (hex): 7b0a202022746573745f6964223a202237303637643133343433396437333364222c0a20202274696d657374616d70223a20...
+
+🗂️  INDEXED DATA - COMPLETE DETAILS
+--------------------------------------------------
+  Database Record:
+    File ID: 1
+    Folder ID: 1
+    Filename: document.txt
+    Path: /tmp/usenet_test_ctmicuy4/test_data/document.txt
+    Size: 4027 bytes
+    Hash: 3f8972458887f0ff2acc3d6e5fd15c05f3e56cb8a39a37b387cb9116774b0cdc
+    Indexed At: 2025-08-17T11:36:39.488664
+
+  Database Record:
+    File ID: 2
+    Folder ID: 1
+    Filename: image.jpg
+    Path: /tmp/usenet_test_ctmicuy4/test_data/image.jpg
+    Size: 75000 bytes
+    Hash: a182975691581579a3acbbefe5a8cf947b3f78b8edf1426cb8dccc7cb3a7f49a
+    Indexed At: 2025-08-17T11:36:39.489751
+
+  Database Record:
+    File ID: 3
+    Folder ID: 1
+    Filename: data.json
+    Path: /tmp/usenet_test_ctmicuy4/test_data/data.json
+    Size: 2776 bytes
+    Hash: d6e5309b487691f46ed73ff44e1a458e204ca99e898b2d1517c9f8118dd00006
+    Indexed At: 2025-08-17T11:36:39.491179
+
+📦 PACKED SEGMENTS - COMPLETE DETAILS
+--------------------------------------------------
+  Total Segments Created: 10
+
+  File ID 1: 1 segments
+    Segment 0:
+      Size: 4027 bytes
+      Hash: 3f8972458887f0ff2acc3d6e5fd15c05f3e56cb8a39a37b387cb9116774b0cdc
+      Compression: none
+      Packed At: 2025-08-17T11:36:39.491495
+
+  File ID 2: 8 segments
+    Segment 0:
+      Size: 10240 bytes
+      Hash: f2abfeb3d1f5d262fa197305308152081ff9cb19a55bef69856b22ec046779bb
+      Compression: none
+      Packed At: 2025-08-17T11:36:39.491548
+    Segment 1:
+      Size: 10240 bytes
+      Hash: ffec9d5e382cb37b962dd0386a3da15a9d38b068869606261a55627ca73c0253
+      Compression: none
+      Packed At: 2025-08-17T11:36:39.491558
+    Segment 2:
+      Size: 10240 bytes
+      Hash: b65a5660b3feccdb4af93cdf7ea659dc244cad2efa8a2af294559265bf3e7ea9
+      Compression: none
+      Packed At: 2025-08-17T11:36:39.491566
+    Segment 3:
+      Size: 10240 bytes
+      Hash: 9612e377091105c08e60f5f84f730af3886111d4d81567d67abfe6c977038006
+      Compression: none
+      Packed At: 2025-08-17T11:36:39.491574
+    Segment 4:
+      Size: 10240 bytes
+      Hash: 38692509e5ece2ddb2002ccc71035a6ee247313d6f4aea836fa33622a7a40d24
+      Compression: none
+      Packed At: 2025-08-17T11:36:39.491581
+    ... and 3 more segments
+
+  File ID 3: 1 segments
+    Segment 0:
+      Size: 2776 bytes
+      Hash: d6e5309b487691f46ed73ff44e1a458e204ca99e898b2d1517c9f8118dd00006
+      Compression: none
+      Packed At: 2025-08-17T11:36:39.491627
+
+📤 UPLOADED TO USENET - COMPLETE DETAILS
+--------------------------------------------------
+  Total Articles Uploaded: 1
+
+  Article:
+    Message-ID: <usync-20250817113639-pdvyykvc@news-newshosting-com>
+    Subject: test_seg_1_0
+    File: document.txt
+    Segment Index: 0
+    Segment Size: 4027 bytes
+    Server Response: (240, '<usync-20250817113639-pdvyykvc@news-newshosting-com>')
+    Uploaded At: 2025-08-17T11:36:40.173478
+
+🔗 PUBLISHED SHARES - COMPLETE DETAILS
+--------------------------------------------------
+📥 RETRIEVED FROM USENET - COMPLETE DETAILS
+--------------------------------------------------
+  Total Segments Retrieved: 0
+
+💾 DOWNLOADED FILES - COMPLETE DETAILS
+--------------------------------------------------
+✅ DATA INTEGRITY VERIFICATION - COMPLETE DETAILS
+--------------------------------------------------
+  Overall Status: ✅ PASSED
+  Files Verified: 1
+
+  ✅ Verification Passed:
+    Test: File Indexing
+    Status: PASSED
+    Details: All 3 files indexed
+
+⚡ PERFORMANCE METRICS
+--------------------------------------------------
+  indexing_time: 3 files indexed
+  packing: 10 segments created
+  upload: 1 segments uploaded
+
+⚠️  ERROR LOG
+--------------------------------------------------
+  [2025-08-17T11:36:44.186394] Upload: 502 (max number of simultaneous IP addresses reached: 2)
+  [2025-08-17T11:36:46.199557] Upload: 502 (max number of simultaneous IP addresses reached: 2)
+  [2025-08-17T11:36:48.210705] Upload: 502 (max number of simultaneous IP addresses reached: 2)
+  [2025-08-17T11:36:50.229608] Upload: 502 (max number of simultaneous IP addresses reached: 2)
+
+====================================================================================================
+END OF DETAILED REPORT
+Test ID: 7067d134439d733d
+Report Generated: 2025-08-17T11:36:50.229754
+====================================================================================================
