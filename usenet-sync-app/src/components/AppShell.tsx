@@ -13,7 +13,8 @@ import {
   Sun,
   User,
   FileText,
-  Bell
+  Bell,
+  FlaskConical
 } from 'lucide-react';
 import clsx from 'clsx';
 import { StatusBar } from './StatusBar';
@@ -31,6 +32,7 @@ export const AppShell: React.FC = () => {
     { icon: Share2, label: 'Shares', path: '/shares' },
     { icon: FileText, label: 'Logs', path: '/logs' },
     { icon: Settings, label: 'Settings', path: '/settings' },
+    { icon: FlaskConical, label: 'Test Runner', path: '/test' },
   ];
 
   return (
