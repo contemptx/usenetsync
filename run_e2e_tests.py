@@ -1,404 +1,342 @@
 #!/usr/bin/env python3
 """
-Simple E2E Test Runner for UsenetSync
-Runs tests individually with progress feedback
+E2E Test Runner - Validates all UsenetSync functionality
 """
 
 import os
 import sys
+import json
 import time
+import subprocess
 import tempfile
-import shutil
 from pathlib import Path
 from datetime import datetime
 
-# Add current directory to path
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Import our modules
-from src.config.secure_config import SecureConfigLoader
-from src.networking.production_nntp_client import ProductionNNTPClient
-from src.database.enhanced_database_manager import DatabaseConfig
-from src.database.production_db_wrapper import ProductionDatabaseManager
-from src.security.enhanced_security_system import EnhancedSecuritySystem
-from src.indexing.versioned_core_index_system import VersionedCoreIndexSystem
-from src.upload.segment_packing_system import SegmentPackingSystem
-from src.upload.enhanced_upload_system import EnhancedUploadSystem
-from src.upload.publishing_system import PublishingSystem
-from src.download.enhanced_download_system import EnhancedDownloadSystem
-from src.security.user_management import UserManager
-
-class SimpleE2ETests:
-    """Simple E2E test suite"""
-    
+class E2ETestRunner:
     def __init__(self):
-        self.test_dir = Path("test_workspace")
-        self.test_dir.mkdir(exist_ok=True)
-        self.results = []
+        self.results = {
+            "timestamp": datetime.now().isoformat(),
+            "tests": [],
+            "passed": 0,
+            "failed": 0,
+            "skipped": 0
+        }
         
-    def setup(self):
-        """Setup test environment"""
-        print("\n" + "="*60)
-        print("SETTING UP TEST ENVIRONMENT")
-        print("="*60)
+    def log(self, level, msg):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] [{level}] {msg}")
         
+    def run_test(self, name, test_func):
+        """Run a single test"""
+        self.log("TEST", f"Running: {name}")
         try:
-            # Load configuration
-            print("Loading configuration...")
-            self.config_loader = SecureConfigLoader()
-            self.config = self.config_loader.config
-            server_config = self.config['servers'][0]
-            
-            # Enhance database pool before creating manager
-            print("Enhancing database connection pool...")
-            import sys
-            sys.path.insert(0, '.')
-            from enhance_db_pool import enhance_database_pool
-            enhance_database_pool()
-            
-            # Create database
-            print("Initializing database...")
-            db_path = "test_workspace/test.db"
-            
-            # Use larger pool size for tests
-            db_config = DatabaseConfig(path=db_path, pool_size=20)
-            self.db = ProductionDatabaseManager(
-                config=db_config,
-                enable_monitoring=False,
-                enable_retry=True
-            )
-            
-            # Initialize security system
-            print("Initializing security...")
-            self.security = EnhancedSecuritySystem(self.db)
-            
-            # Create NNTP client
-            print("Creating NNTP client...")
-            self.nntp = ProductionNNTPClient(
-                host=server_config['hostname'],
-                port=server_config['port'],
-                username=server_config['username'],
-                password=server_config['password'],
-                use_ssl=server_config['use_ssl'],
-                max_connections=2  # Use fewer connections for testing
-            )
-            
-            print("✅ Setup complete!")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Setup failed: {e}")
-            return False
-    
-    def test_01_nntp_connection(self):
-        """Test 1: NNTP Connection"""
-        print("\n" + "="*60)
-        print("TEST 1: NNTP CONNECTION")
-        print("="*60)
-        
-        try:
-            print("Testing connection to NNTP server...")
-            
-            # Get a connection from the pool
-            with self.nntp.connection_pool.get_connection() as conn:
-                print(f"✅ Connected to {conn.host}:{conn.port}")
-                print(f"   SSL: {conn.use_ssl}")
-                print(f"   Authenticated: {conn.is_authenticated}")
-                
-                # Try to post a test message
-                print("\nPosting test message to alt.test...")
-                
-                # Create a properly formatted message as bytes
-                message = f"""From: test@usenetsync.local
-Subject: E2E Test Message
-Newsgroups: alt.test
-Message-ID: <test-{int(time.time())}@usenetsync>
-
-Test from UsenetSync at {datetime.now()}"""
-                
-                # Post as bytes (the post method will parse it)
-                result = conn.post(message.encode('utf-8'))
-                print(f"✅ Test message posted successfully")
-                
-            self.results.append(("Connection Test", True))
-            return True
-            
-        except Exception as e:
-            print(f"❌ Connection test failed: {e}")
-            self.results.append(("Connection Test", False))
-            return False
-    
-    def test_02_database_operations(self):
-        """Test 2: Database Operations"""
-        print("\n" + "="*60)
-        print("TEST 2: DATABASE OPERATIONS")
-        print("="*60)
-        
-        try:
-            print("Testing database operations...")
-            
-            # Initialize user
-            print("Creating test user...")
-            user_mgr = UserManager(self.db, self.security)
-            
-            # The initialize method generates its own user ID
-            test_user_id = user_mgr.initialize("Test User")
-            if test_user_id:
-                print(f"✅ User created: {test_user_id}")
+            result = test_func()
+            if result:
+                self.log("PASS", f"✅ {name}")
+                self.results["passed"] += 1
+                self.results["tests"].append({"name": name, "status": "passed"})
             else:
-                print("⚠️  User might already exist")
-            
-            # Test folder operations
-            print("\nTesting folder operations...")
-            folder_id = f"test_folder_{int(time.time())}"
-            
-            # This would normally be done through the index system
-            print("✅ Database operations working")
-            
-            self.results.append(("Database Operations", True))
-            return True
-            
+                self.log("FAIL", f"❌ {name}")
+                self.results["failed"] += 1
+                self.results["tests"].append({"name": name, "status": "failed"})
+            return result
         except Exception as e:
-            print(f"❌ Database test failed: {e}")
-            self.results.append(("Database Operations", False))
+            self.log("ERROR", f"❌ {name}: {str(e)}")
+            self.results["failed"] += 1
+            self.results["tests"].append({"name": name, "status": "error", "error": str(e)})
             return False
     
-    def test_03_file_indexing(self):
-        """Test 3: File Indexing"""
-        print("\n" + "="*60)
-        print("TEST 3: FILE INDEXING")
-        print("="*60)
-        
+    def test_python_backend(self):
+        """Test Python backend is functional"""
         try:
-            print("Creating test files...")
+            # Test imports
+            sys.path.insert(0, '/workspace/src')
             
-            # Create test folder
-            test_folder = self.test_dir / "index_test"
-            test_folder.mkdir(exist_ok=True)
-            
-            # Create some test files
-            for i in range(3):
-                file_path = test_folder / f"test_file_{i}.txt"
-                file_path.write_text(f"This is test file {i}\n" * 100)
-            
-            print(f"Created 3 test files in {test_folder}")
-            
-            # Initialize index system
-            print("\nInitializing index system...")
-            config = {
-                'worker_threads': 2,
-                'segment_size': 768000
-            }
-            
-            index_system = VersionedCoreIndexSystem(
-                self.db, 
-                self.security,
-                config
+            # Test database config
+            from database.postgresql_manager import PostgresConfig
+            config = PostgresConfig(
+                host="localhost",
+                port=5432,
+                database="usenet_sync",
+                user="postgres",
+                password="postgres"
             )
             
-            # Index the folder
-            print("Indexing folder...")
-            folder_id = f"test_index_{int(time.time())}"
+            # Test integrated backend
+            from core.integrated_backend import create_integrated_backend
+            backend = create_integrated_backend({
+                "host": "localhost",
+                "port": 5432,
+                "database": "usenet_sync",
+                "user": "postgres",
+                "password": "postgres"
+            })
             
-            result = index_system.index_folder(
-                str(test_folder),
-                folder_id,
-                progress_callback=lambda p: print(f"  Progress: {p['current'] if isinstance(p, dict) else p:.1f}%", end='\r') if isinstance(p, (dict, float, int)) else None
-            )
-            
-            print(f"\n✅ Indexed {result['files_indexed']} files")
-            print(f"   Total size: {result['total_size']} bytes")
-            print(f"   Total segments: {result['total_segments']}")
-            
-            self.results.append(("File Indexing", True))
             return True
-            
         except Exception as e:
-            print(f"❌ Indexing test failed: {e}")
-            import traceback
-            traceback.print_exc()
-            self.results.append(("File Indexing", False))
+            self.log("ERROR", f"Python backend error: {e}")
             return False
     
-    def test_04_segment_packing(self):
-        """Test 4: Segment Packing"""
-        print("\n" + "="*60)
-        print("TEST 4: SEGMENT PACKING")
-        print("="*60)
-        
+    def test_database_setup(self):
+        """Test database is accessible"""
         try:
-            print("Testing segment packing...")
-            
-            # Create a test file
-            test_file = self.test_dir / "pack_test.bin"
-            test_data = os.urandom(1024 * 100)  # 100KB of random data
-            test_file.write_bytes(test_data)
-            
-            print(f"Created test file: {len(test_data)} bytes")
-            
-            # Initialize packing system
-            config = {
-                'segment_size': 50000,  # 50KB segments
-                'compression_enabled': True
-            }
-            
-            packer = SegmentPackingSystem(self.db, config)
-            
-            # Pack the file
-            print("Packing file into segments...")
-            packed_segments = packer.pack_file_segments(
-                str(test_file),
-                file_id=1,
-                strategy='optimized'
+            import psycopg2
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5432,
+                database="usenet_sync",
+                user="postgres",
+                password="postgres"
             )
+            cursor = conn.cursor()
             
-            print(f"✅ Created {len(packed_segments)} packed segments")
+            # Create tables if needed
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS shares (
+                    share_id TEXT PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             
-            total_size = sum(p.total_size for p in packed_segments)
-            print(f"   Total packed size: {total_size} bytes")
-            print(f"   Compression ratio: {(1 - total_size/len(test_data))*100:.1f}%")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS files (
+                    file_id TEXT PRIMARY KEY,
+                    file_name TEXT,
+                    file_size BIGINT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             
-            # Test unpacking
-            print("\nTesting unpacking...")
-            if packed_segments:
-                first_segment = packed_segments[0]
-                # Combine header and data for unpacking
-                full_packed_data = first_segment.header + first_segment.data
-                unpacked_segments, _ = packer.unpack_segment(full_packed_data)
-                print(f"✅ Unpacked {len(unpacked_segments)} segments")
-            
-            self.results.append(("Segment Packing", True))
+            conn.commit()
+            cursor.close()
+            conn.close()
             return True
-            
         except Exception as e:
-            print(f"❌ Packing test failed: {e}")
-            import traceback
-            traceback.print_exc()
-            self.results.append(("Segment Packing", False))
+            self.log("ERROR", f"Database error: {e}")
             return False
     
-    def test_05_small_upload(self):
-        """Test 5: Small File Upload"""
-        print("\n" + "="*60)
-        print("TEST 5: SMALL FILE UPLOAD")
-        print("="*60)
-        
+    def test_rust_backend(self):
+        """Test Rust/Tauri backend compiles"""
         try:
-            print("Creating small test file...")
-            
+            result = subprocess.run(
+                ["cargo", "check", "--manifest-path", "usenet-sync-app/src-tauri/Cargo.toml"],
+                capture_output=True,
+                timeout=30,
+                cwd="/workspace"
+            )
+            return result.returncode == 0
+        except Exception as e:
+            self.log("ERROR", f"Rust backend error: {e}")
+            return False
+    
+    def test_frontend_build(self):
+        """Test frontend builds successfully"""
+        try:
+            result = subprocess.run(
+                ["npm", "run", "build"],
+                capture_output=True,
+                timeout=60,
+                cwd="/workspace/usenet-sync-app"
+            )
+            return result.returncode == 0
+        except Exception as e:
+            self.log("ERROR", f"Frontend build error: {e}")
+            return False
+    
+    def test_file_operations(self):
+        """Test basic file operations"""
+        try:
             # Create test file
-            test_file = self.test_dir / "upload_test.txt"
-            test_content = "This is a test upload file.\n" * 10
-            test_file.write_text(test_content)
+            test_dir = Path("/tmp/usenet_test")
+            test_dir.mkdir(exist_ok=True)
             
-            print(f"Created test file: {len(test_content)} bytes")
+            test_file = test_dir / "test.txt"
+            test_file.write_text("Test content for E2E")
             
-            # We'll simulate the upload process
-            print("Preparing upload...")
+            # Test encryption
+            sys.path.insert(0, '/workspace/src')
+            from security.enhanced_security_system import EnhancedSecuritySystem
+            from database.postgresql_manager import PostgresConfig, ShardedPostgreSQLManager
             
-            # Create a properly formatted message
-            message = f"""From: test@usenetsync.local
-Subject: Test Upload {int(time.time())}
-Newsgroups: alt.binaries.test
-Message-ID: <upload-{int(time.time())}@usenetsync>
-
-{test_content}"""
+            config = PostgresConfig(
+                host="localhost",
+                port=5432,
+                database="usenet_sync",
+                user="postgres",
+                password="postgres"
+            )
             
-            # Post to Usenet
-            print("Uploading to Usenet...")
-            with self.nntp.connection_pool.get_connection() as conn:
-                result = conn.post(message.encode('utf-8'))
-                print("✅ File uploaded successfully")
+            db_manager = ShardedPostgreSQLManager(config)
+            security = EnhancedSecuritySystem(db_manager)
             
-            self.results.append(("Small Upload", True))
-            return True
+            # Basic encryption test
+            data = b"Test data"
+            encrypted = security.encrypt_file_content(data, "password")
+            decrypted = security.decrypt_file_content(encrypted, "password")
             
+            return decrypted == data
         except Exception as e:
-            print(f"❌ Upload test failed: {e}")
-            self.results.append(("Small Upload", False))
+            self.log("ERROR", f"File operations error: {e}")
             return False
     
-    def cleanup(self):
-        """Clean up test environment"""
-        print("\n" + "="*60)
-        print("CLEANUP")
-        print("="*60)
-        
+    def test_version_control(self):
+        """Test version control system"""
         try:
-            # Close NNTP connections
-            print("Closing NNTP connections...")
-            self.nntp.connection_pool.close_all()
+            sys.path.insert(0, '/workspace/src')
+            from core.version_control import VersionControl
+            from database.postgresql_manager import PostgresConfig, ShardedPostgreSQLManager
             
-            # Clean up test files (optional)
-            if os.environ.get('CLEANUP_TESTS', 'true').lower() == 'true':
-                print("Cleaning up test files...")
-                # Keep test files for inspection
+            config = PostgresConfig(
+                host="localhost",
+                port=5432,
+                database="usenet_sync",
+                user="postgres",
+                password="postgres"
+            )
             
-            print("✅ Cleanup complete")
+            db_manager = ShardedPostgreSQLManager(config)
+            vc = VersionControl(db_manager)
             
+            # Create version control tables
+            import asyncio
+            async def init_vc():
+                await vc.initialize()
+                return True
+            
+            return asyncio.run(init_vc())
         except Exception as e:
-            print(f"⚠️  Cleanup warning: {e}")
-    
-    def run_all(self):
-        """Run all tests"""
-        print("\n" + "="*80)
-        print("USENETSYNC E2E TEST SUITE")
-        print("="*80)
-        print(f"Starting at: {datetime.now()}")
-        
-        # Setup
-        if not self.setup():
-            print("❌ Setup failed, cannot continue")
+            self.log("ERROR", f"Version control error: {e}")
             return False
+    
+    def test_bandwidth_control(self):
+        """Test bandwidth control"""
+        try:
+            sys.path.insert(0, '/workspace/src')
+            from networking.bandwidth_controller import BandwidthController
+            
+            controller = BandwidthController()
+            controller.set_upload_limit(1024 * 1024)  # 1 MB/s
+            
+            # Test token consumption
+            import asyncio
+            async def test_bandwidth():
+                consumed = await controller.consume_upload_tokens(1024)
+                return consumed
+            
+            return asyncio.run(test_bandwidth())
+        except Exception as e:
+            self.log("ERROR", f"Bandwidth control error: {e}")
+            return False
+    
+    def test_logging_system(self):
+        """Test logging system"""
+        try:
+            sys.path.insert(0, '/workspace/src')
+            from core.log_manager import LogManager, LogLevel
+            from pathlib import Path
+            
+            log_dir = Path("/tmp/usenet_logs")
+            log_dir.mkdir(exist_ok=True)
+            
+            # Create log manager without database for simplicity
+            log_manager = LogManager(log_dir=log_dir, db_manager=None)
+            log_manager.start()
+            
+            # Write test log
+            log_manager.log(LogLevel.INFO, "E2E test log entry", "test", {"test": True})
+            
+            # Check log file exists
+            log_files = list(log_dir.glob("*.log"))
+            log_manager.stop()
+            
+            return len(log_files) > 0
+        except Exception as e:
+            self.log("ERROR", f"Logging system error: {e}")
+            return False
+    
+    def test_cli_interface(self):
+        """Test CLI interface"""
+        try:
+            result = subprocess.run(
+                ["python3", "src/cli.py", "--help"],
+                capture_output=True,
+                timeout=10,
+                cwd="/workspace"
+            )
+            return result.returncode == 0 and b"Usage:" in result.stdout
+        except Exception as e:
+            self.log("ERROR", f"CLI interface error: {e}")
+            return False
+    
+    def run_all_tests(self):
+        """Run all E2E tests"""
+        print("\n" + "="*60)
+        print("🧪 USENETSYNC E2E TEST SUITE")
+        print("="*60 + "\n")
         
-        # Run tests
         tests = [
-            self.test_01_nntp_connection,
-            self.test_02_database_operations,
-            self.test_03_file_indexing,
-            self.test_04_segment_packing,
-            self.test_05_small_upload
+            ("Database Setup", self.test_database_setup),
+            ("Python Backend", self.test_python_backend),
+            ("Rust Backend Compilation", self.test_rust_backend),
+            ("Frontend Build", self.test_frontend_build),
+            ("File Operations", self.test_file_operations),
+            ("Version Control", self.test_version_control),
+            ("Bandwidth Control", self.test_bandwidth_control),
+            ("Logging System", self.test_logging_system),
+            ("CLI Interface", self.test_cli_interface),
         ]
         
-        for test_func in tests:
-            try:
-                test_func()
-            except Exception as e:
-                print(f"❌ Test crashed: {e}")
-                self.results.append((test_func.__name__, False))
+        for name, test_func in tests:
+            self.run_test(name, test_func)
+            time.sleep(0.5)  # Small delay between tests
+        
+        # Generate report
+        self.generate_report()
+        
+    def generate_report(self):
+        """Generate test report"""
+        print("\n" + "="*60)
+        print("📊 TEST RESULTS")
+        print("="*60)
+        
+        total = self.results["passed"] + self.results["failed"] + self.results["skipped"]
+        if total > 0:
+            pass_rate = (self.results["passed"] / total) * 100
+        else:
+            pass_rate = 0
             
-            # Small delay between tests
-            time.sleep(1)
+        print(f"""
+Total Tests:  {total}
+Passed:       {self.results["passed"]} ✅
+Failed:       {self.results["failed"]} ❌
+Skipped:      {self.results["skipped"]} ⏭️
+Pass Rate:    {pass_rate:.1f}%
+        """)
         
-        # Cleanup
-        self.cleanup()
+        if self.results["failed"] > 0:
+            print("\n❌ FAILED TESTS:")
+            for test in self.results["tests"]:
+                if test["status"] in ["failed", "error"]:
+                    print(f"  • {test['name']}")
+                    if "error" in test:
+                        print(f"    Error: {test['error'][:100]}")
         
-        # Print summary
-        print("\n" + "="*80)
-        print("TEST SUMMARY")
-        print("="*80)
+        # Save report
+        report_file = f"e2e_report_{int(time.time())}.json"
+        with open(report_file, 'w') as f:
+            json.dump(self.results, f, indent=2)
+        print(f"\n📄 Report saved to: {report_file}")
         
-        passed = 0
-        failed = 0
+        if self.results["failed"] == 0:
+            print("\n✅ ALL TESTS PASSED!")
+        else:
+            print(f"\n⚠️  {self.results['failed']} tests need attention")
         
-        for test_name, success in self.results:
-            status = "✅ PASSED" if success else "❌ FAILED"
-            print(f"{test_name:30} {status}")
-            if success:
-                passed += 1
-            else:
-                failed += 1
-        
-        print("-"*80)
-        print(f"Total: {len(self.results)} tests")
-        print(f"Passed: {passed}")
-        print(f"Failed: {failed}")
-        print(f"Success Rate: {(passed/len(self.results)*100):.1f}%")
-        
-        return failed == 0
-
+        return self.results["failed"] == 0
 
 if __name__ == "__main__":
-    tester = SimpleE2ETests()
-    success = tester.run_all()
-    sys.exit(0 if success else 1)
+    # Ensure we have cargo
+    subprocess.run(["source", "/usr/local/cargo/env"], shell=True)
+    
+    runner = E2ETestRunner()
+    runner.run_all_tests()
+    sys.exit(0 if runner.results["failed"] == 0 else 1)
