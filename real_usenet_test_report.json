@@ -1,0 +1,228 @@
+{
+  "test_time": "2025-08-17T17:55:54.588265",
+  "server": "news.newshosting.com",
+  "posted_articles": [],
+  "large_file_segments": [],
+  "results": [
+    {
+      "timestamp": "2025-08-17T17:53:24.390869",
+      "level": "INFO",
+      "message": "============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.390891",
+      "level": "INFO",
+      "message": "CONNECTING TO REAL USENET SERVER"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.390894",
+      "level": "INFO",
+      "message": "============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.390898",
+      "level": "INFO",
+      "message": "Connecting to news.newshosting.com:563 (SSL: True)"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.425883",
+      "level": "SUCCESS",
+      "message": "Server capabilities: <generator object NNTPClient.capabilities at 0x7f7d63d9b010>"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.441896",
+      "level": "SUCCESS",
+      "message": "Selected group: alt.binaries.test"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.441909",
+      "level": "INFO",
+      "message": "\n============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.441910",
+      "level": "INFO",
+      "message": "TESTING REAL ARTICLE POSTING"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.441912",
+      "level": "INFO",
+      "message": "============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.443137",
+      "level": "INFO",
+      "message": "\nPosting article for test1.txt:"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.443144",
+      "level": "INFO",
+      "message": "  Message-ID: <112866042d260c174f26111f9295bb39@ngPost.com>"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.443146",
+      "level": "INFO",
+      "message": "  Subject: 7UWR46J3UOQKYY7K"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.443147",
+      "level": "INFO",
+      "message": "  Size: 130 bytes"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.445409",
+      "level": "ERROR",
+      "message": "  Posting failed: 'str' object has no attribute 'items'"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.445472",
+      "level": "INFO",
+      "message": "\nPosting article for test2.txt:"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.445475",
+      "level": "INFO",
+      "message": "  Message-ID: <8319fb577c1881155f49391e441a94bd@ngPost.com>"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.445477",
+      "level": "INFO",
+      "message": "  Subject: TBQXQIA2U5WFTNHF"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:24.445478",
+      "level": "INFO",
+      "message": "  Size: 230 bytes"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:54.475621",
+      "level": "ERROR",
+      "message": "  Posting failed: The read operation timed out"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:54.475748",
+      "level": "INFO",
+      "message": "\nPosting article for test3.bin:"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:54.475753",
+      "level": "INFO",
+      "message": "  Message-ID: <d8351e7889e1d6231fe90e34d1bb532d@ngPost.com>"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:54.475755",
+      "level": "INFO",
+      "message": "  Subject: CZXH4HSV3STO6WEO"
+    },
+    {
+      "timestamp": "2025-08-17T17:53:54.475758",
+      "level": "INFO",
+      "message": "  Size: 1024 bytes"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506003",
+      "level": "ERROR",
+      "message": "  Posting failed: The read operation timed out"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506065",
+      "level": "SUCCESS",
+      "message": "\nTotal articles posted: 0"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506084",
+      "level": "INFO",
+      "message": "\n============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506089",
+      "level": "INFO",
+      "message": "TESTING REAL ARTICLE RETRIEVAL"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506103",
+      "level": "INFO",
+      "message": "============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506105",
+      "level": "WARNING",
+      "message": "No articles to retrieve (posting may have failed)"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506111",
+      "level": "INFO",
+      "message": "\n============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506113",
+      "level": "INFO",
+      "message": "TESTING LARGE FILE SEGMENTATION AND POSTING"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.506114",
+      "level": "INFO",
+      "message": "============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.511984",
+      "level": "INFO",
+      "message": "Created 2MB test file, hash: c80ed15789d57faf..."
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.513334",
+      "level": "INFO",
+      "message": "Split into 3 segments"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:24.515735",
+      "level": "INFO",
+      "message": "  Posting segment 1/3: <0ecf08c2dab053d71aa2ac199dc677d7@ngPost.com>"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:54.523457",
+      "level": "ERROR",
+      "message": "    Failed: The read operation timed out"
+    },
+    {
+      "timestamp": "2025-08-17T17:54:54.526171",
+      "level": "INFO",
+      "message": "  Posting segment 2/3: <dc1ab1e03cd1fe37464e104d0897080b@ngPost.com>"
+    },
+    {
+      "timestamp": "2025-08-17T17:55:24.556448",
+      "level": "ERROR",
+      "message": "    Failed: The read operation timed out"
+    },
+    {
+      "timestamp": "2025-08-17T17:55:24.557762",
+      "level": "INFO",
+      "message": "  Posting segment 3/3: <682bfba56f2dce1ba34cd9842275e2ba@ngPost.com>"
+    },
+    {
+      "timestamp": "2025-08-17T17:55:54.587977",
+      "level": "ERROR",
+      "message": "    Failed: The read operation timed out"
+    },
+    {
+      "timestamp": "2025-08-17T17:55:54.588014",
+      "level": "WARNING",
+      "message": "\nPosted 0/3 segments successfully"
+    },
+    {
+      "timestamp": "2025-08-17T17:55:54.588251",
+      "level": "INFO",
+      "message": "\n============================================================"
+    },
+    {
+      "timestamp": "2025-08-17T17:55:54.588261",
+      "level": "INFO",
+      "message": "REAL USENET TEST REPORT"
+    },
+    {
+      "timestamp": "2025-08-17T17:55:54.588264",
+      "level": "INFO",
+      "message": "============================================================"
+    }
+  ]
+}
