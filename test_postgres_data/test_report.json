@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "Database Operations",
+      "status": "FAILED",
+      "error": "connection to server at \"localhost\" (::1), port 5432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?\nconnection to server at \"localhost\" (127.0.0.1), port 5432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?\n"
+    },
+    {
+      "name": "Parallel Indexing",
+      "status": "PASSED",
+      "files": 500,
+      "rate": "17047 files/second"
+    },
+    {
+      "name": "Persistent Queue",
+      "status": "FAILED",
+      "error": "non-default argument 'file_id' follows default argument 'progress'"
+    }
+  ],
+  "passed": 1,
+  "failed": 2,
+  "data": {}
+}

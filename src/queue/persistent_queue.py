@@ -39,7 +39,7 @@ class QueueTask:
     status: TaskStatus
     retry_count: int = 0
     max_retries: int = 3
-    data: Dict = None
+    data: Optional[Dict] = None
     error: Optional[str] = None
     progress: Optional[Dict] = None
     
@@ -51,14 +51,14 @@ class QueueTask:
 @dataclass
 class UploadTask(QueueTask):
     """Upload task with progress tracking"""
-    file_id: str
-    folder_id: str
-    file_path: str
+    file_id: str = ""
+    folder_id: str = ""
+    file_path: str = ""
     segments_total: int = 0
     segments_completed: int = 0
     bytes_uploaded: int = 0
-    message_ids: List[str] = None
-    
+    message_ids: Optional[List[str]] = None
+
     def __post_init__(self):
         if self.message_ids is None:
             self.message_ids = []
@@ -67,13 +67,13 @@ class UploadTask(QueueTask):
 @dataclass
 class DownloadTask(QueueTask):
     """Download task with progress tracking"""
-    share_id: str
-    destination_path: str
+    share_id: str = ""
+    destination_path: str = ""
     segments_total: int = 0
     segments_completed: int = 0
     bytes_downloaded: int = 0
-    message_ids: List[str] = None
-    
+    message_ids: Optional[List[str]] = None
+
     def __post_init__(self):
         if self.message_ids is None:
             self.message_ids = []
@@ -226,8 +226,8 @@ class PersistentQueue:
             if len(self.tasks) % 100 == 0:
                 self._save_tasks()
                 
-        return task.task_id
-        
+                return task.task_id
+
     def get_task(self, timeout: float = None) -> Optional[QueueTask]:
         """Get next task from queue"""
         task_id = None
@@ -329,7 +329,36 @@ class PersistentQueue:
                 self._save_tasks()
                 
             return len(to_remove)
-            
+    
+    def update_task_status(self, task_id: str, status: TaskStatus):
+        """Update task status"""
+        with self._lock:
+            if task_id in self.tasks:
+                self.tasks[task_id].status = status
+                
+                # Save periodically
+                if len(self.tasks) % 10 == 0:
+                    self._save_tasks()
+    
+    def update_task_progress(self, task_id: str, progress: Dict):
+        """Update task progress"""
+        with self._lock:
+            if task_id in self.tasks:
+                task = self.tasks[task_id]
+                if task.progress is None:
+                    task.progress = {}
+                task.progress.update(progress)
+                
+                # Update specific fields for upload/download tasks
+                if isinstance(task, UploadTask):
+                    for key, value in progress.items():
+                        if hasattr(task, key):
+                            setattr(task, key, value)
+                elif isinstance(task, DownloadTask):
+                    for key, value in progress.items():
+                        if hasattr(task, key):
+                            setattr(task, key, value)
+
 
 class ResumableUploadQueue(PersistentQueue):
     """
