@@ -1,0 +1,35 @@
+END-USER LICENSE AGREEMENT FOR USENETSYNC
+
+IMPORTANT: PLEASE READ THIS LICENSE CAREFULLY BEFORE USING THIS SOFTWARE.
+
+1. LICENSE GRANT
+UsenetSync grants you a revocable, non-exclusive, non-transferable, limited license to download, install and use the application solely for your personal or business purposes strictly in accordance with the terms of this Agreement.
+
+2. RESTRICTIONS
+You agree not to, and you will not permit others to:
+- License, sell, rent, lease, assign, distribute, transmit, host, outsource, disclose or otherwise commercially exploit the application
+- Modify, make derivative works of, disassemble, decrypt, reverse compile or reverse engineer any part of the application
+- Remove, alter or obscure any proprietary notice (including any notice of copyright or trademark)
+
+3. INTELLECTUAL PROPERTY
+The application, including without limitation all copyrights, patents, trademarks, trade secrets and other intellectual property rights are, and shall remain, the sole and exclusive property of UsenetSync.
+
+4. PRIVACY
+Your use of the application is also governed by our Privacy Policy. The application operates with a "local-first" approach - all data processing occurs on your device, and no telemetry is collected without your explicit consent.
+
+5. TERMINATION
+This Agreement shall remain in effect until terminated by you or UsenetSync. UsenetSync may, in its sole discretion, at any time and for any or no reason, suspend or terminate this Agreement with or without prior notice.
+
+6. DISCLAIMER OF WARRANTIES
+THE APPLICATION IS PROVIDED TO YOU "AS IS" AND WITH ALL FAULTS AND DEFECTS WITHOUT WARRANTY OF ANY KIND. TO THE MAXIMUM EXTENT PERMITTED UNDER APPLICABLE LAW, USENETSYNC DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED OR STATUTORY.
+
+7. LIMITATION OF LIABILITY
+TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL USENETSYNC BE LIABLE FOR ANY INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES.
+
+8. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the internal laws without giving effect to any choice or conflict of law provision or rule.
+
+9. CONTACT INFORMATION
+If you have any questions about this Agreement, please contact us at support@usenetsync.com.
+
+By installing and using UsenetSync, you acknowledge that you have read and understood this Agreement and agree to be bound by its terms.

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { TransferCard } from '../components/progress/TransferCard';
+import { ConnectionPoolVisualization } from '../components/ConnectionPoolVisualization';
 import { getSystemStats } from '../lib/tauri';
 import { 
   Activity, 
@@ -261,6 +262,11 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
       )}
+
+      {/* Connection Pool Visualization */}
+      <div className="mt-6">
+        <ConnectionPoolVisualization />
+      </div>
     </div>
   );
 };

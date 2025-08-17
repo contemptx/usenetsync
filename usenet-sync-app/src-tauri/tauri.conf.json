@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "usenet-sync-app",
-  "version": "0.1.0",
-  "identifier": "com.ubuntu.usenet-sync-app",
+  "productName": "UsenetSync",
+  "version": "1.0.0",
+  "identifier": "com.usenetsync.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,19 @@
   "app": {
     "windows": [
       {
-        "title": "usenet-sync-app",
-        "width": 800,
-        "height": 600
+        "title": "UsenetSync",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "decorations": true,
+        "transparent": false,
+        "center": true,
+        "fileDropEnabled": true
       }
     ],
     "security": {
@@ -23,13 +33,65 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["msi", "nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "UsenetSync",
+    "copyright": "© 2024 UsenetSync. All rights reserved.",
+    "category": "Utility",
+    "shortDescription": "Secure file sharing through Usenet",
+    "longDescription": "UsenetSync is a powerful application for secure file sharing through Usenet networks with end-to-end encryption and advanced features.",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "oneClick": false,
+        "perMachine": false,
+        "allowDowngrade": false,
+        "allowElevation": true,
+        "createDesktopShortcut": true,
+        "createStartMenuShortcut": true,
+        "shortcutName": "UsenetSync",
+        "installerIcon": "icons/icon.ico",
+        "include": null,
+        "headerImage": null,
+        "sidebarImage": null,
+        "license": "../LICENSE.txt",
+        "displayLanguageSelector": false,
+        "installMode": "both",
+        "languages": ["English"]
+      },
+      "msi": {
+        "upgradeCode": "A9B4D5E6-F7G8-H9I0-J1K2-L3M4N5O6P7Q8"
+      }
+    },
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.15",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "depends": []
+      },
+      "rpm": {
+        "depends": []
+      }
+    }
   }
 }

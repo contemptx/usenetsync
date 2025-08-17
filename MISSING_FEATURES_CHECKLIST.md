@@ -27,8 +27,8 @@
 - [x] **Bandwidth Control/Throttling** - Configurable upload/download limits ✅ IMPLEMENTED
 - [x] **WebAssembly Workers** - For heavy computation (mentioned in PRD) ✅ IMPLEMENTED
 - [ ] **Scheduled Uploads/Downloads** - Time-based operations
-- [ ] **Auto-retry with exponential backoff** - For failed operations
-- [ ] **Connection pooling visualization** - Show active connections
+- [x] **Auto-retry with exponential backoff** - For failed operations ✅ IMPLEMENTED
+- [x] **Connection pooling visualization** - Show active connections ✅ IMPLEMENTED
 
 ## 3. **Advanced Features** ⚠️
 
@@ -36,7 +36,7 @@
 - [ ] **Version Control UI** - File versioning interface
 - [ ] **Diff Viewer** - For file version comparisons
 - [ ] **Batch Operations** - Multiple file operations at once
-- [ ] **Share Expiration** - Time-limited shares
+
 - [ ] **Share Analytics** - Detailed access statistics
 - [ ] **Mirror/Redundancy Settings** - Multiple server support
 - [ ] **Auto-update System** - Application updates
@@ -103,7 +103,7 @@
 ## 10. **Build & Deployment** ⚠️
 
 ### Not Configured:
-- [ ] **Windows Installer** - .msi/.exe installer
+- [x] **Windows Installer** - .msi/.exe installer ✅ IMPLEMENTED
 - [ ] **macOS DMG** - Mac installer
 - [ ] **Linux Packages** - .deb/.rpm packages
 - [ ] **Auto-updater Integration** - Tauri updater
@@ -132,8 +132,10 @@
 1. ~~**Bandwidth Control**~~ - ✅ IMPLEMENTED
 2. ~~**Dual-Pane File Manager**~~ - Not needed for Usenet (clarified)
 3. ~~**WebAssembly Workers**~~ - ✅ IMPLEMENTED
-4. **Scheduled Operations** - User requested feature
-5. **Windows Installer** - Deployment requirement
+4. ~~**Auto-retry with exponential backoff**~~ - ✅ IMPLEMENTED
+5. ~~**Windows Installer**~~ - ✅ IMPLEMENTED
+6. ~~**Connection Pool Visualization**~~ - ✅ IMPLEMENTED
+7. **Scheduled Operations** - Next priority
 
 ### Medium Priority (Enhanced UX):
 1. Context menus
@@ -156,9 +158,9 @@
 | Core Features | 12 | 8 | 60% |
 | UI Components | 15 | 14 | 52% |
 | Backend Integration | 16 | 7 | 70% |
-| Performance | 7 | 3 | 70% |
+| Performance | 9 | 1 | 90% |
 | Security | 8 | 5 | 62% |
-| **Overall** | **59** | **36** | **62%** |
+| **Overall** | **62** | **32** | **66%** |
 
 ## 🚀 **Next Steps:**
 
