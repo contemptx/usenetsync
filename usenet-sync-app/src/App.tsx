@@ -1,50 +1,151 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
+import { useAppStore } from './stores/useAppStore';
+import { checkLicense, onTransferProgress, onTransferComplete, onTransferError, onLicenseExpired } from './lib/tauri';
+
+// Components
+import { LicenseActivation } from './components/LicenseActivation';
+import { AppShell } from './components/AppShell';
+
+// Pages
+import { Dashboard } from './pages/Dashboard';
+import { Upload } from './pages/Upload';
+import { Download } from './pages/Download';
+import { Shares } from './pages/Shares';
+import { Settings } from './pages/Settings';
+
+// Create query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+    },
+  },
+});
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [isLicenseChecked, setIsLicenseChecked] = useState(false);
+  const [isLicenseValid, setIsLicenseValid] = useState(false);
+  const { setLicenseStatus, updateTransfer, darkMode } = useAppStore();
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  // Apply dark mode class to document
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // Check license on startup
+  useEffect(() => {
+    const checkLicenseStatus = async () => {
+      try {
+        const status = await checkLicense();
+        setLicenseStatus(status);
+        setIsLicenseValid(status.activated && status.genuine);
+      } catch (error) {
+        console.error('Failed to check license:', error);
+        setIsLicenseValid(false);
+      } finally {
+        setIsLicenseChecked(true);
+      }
+    };
+
+    checkLicenseStatus();
+  }, [setLicenseStatus]);
+
+  // Set up event listeners
+  useEffect(() => {
+    const unsubscribeProgress = onTransferProgress((progress) => {
+      updateTransfer(progress.id, {
+        transferredSize: progress.transferredSize,
+        speed: progress.speed,
+        eta: progress.eta,
+        segments: progress.segments
+      });
+    });
+
+    const unsubscribeComplete = onTransferComplete((transfer) => {
+      updateTransfer(transfer.id, {
+        status: 'completed',
+        completedAt: new Date()
+      });
+    });
+
+    const unsubscribeError = onTransferError((error) => {
+      updateTransfer(error.transferId, {
+        status: 'error',
+        error: error.message
+      });
+    });
+
+    const unsubscribeExpired = onLicenseExpired(() => {
+      setIsLicenseValid(false);
+      setLicenseStatus(null);
+    });
+
+    return () => {
+      unsubscribeProgress.then(fn => fn());
+      unsubscribeComplete.then(fn => fn());
+      unsubscribeError.then(fn => fn());
+      unsubscribeExpired.then(fn => fn());
+    };
+  }, [updateTransfer, setLicenseStatus]);
+
+  // Show loading while checking license
+  if (!isLicenseChecked) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Checking license...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show license activation if not valid
+  if (!isLicenseValid) {
+    return (
+      <div className="h-screen bg-gray-50 dark:bg-dark-bg">
+        <LicenseActivation 
+          onActivated={() => {
+            setIsLicenseValid(true);
+          }} 
+        />
+      </div>
+    );
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <div className="h-screen bg-gray-50 dark:bg-dark-bg">
+          <Routes>
+            <Route path="/" element={<AppShell />}>
+              <Route index element={<Dashboard />} />
+              <Route path="upload" element={<Upload />} />
+              <Route path="download" element={<Download />} />
+              <Route path="shares" element={<Shares />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+          
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              className: 'dark:bg-dark-surface dark:text-white',
+              duration: 4000,
+            }}
+          />
+        </div>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 
