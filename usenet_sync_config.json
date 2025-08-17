@@ -21,7 +21,9 @@
   "security": {
     "encryption_algorithm": "AES-256-GCM",
     "key_derivation": "PBKDF2",
-    "iterations": 100000
+    "iterations": 100000,
+    "message_id_domain": null,
+    "obfuscate_headers": true
   },
   "performance": {
     "max_upload_threads": 4,
