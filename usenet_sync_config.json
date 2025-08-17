@@ -1,13 +1,13 @@
 {
   "servers": [
     {
-      "name": "Primary Server",
+      "name": "NewsHosting",
       "hostname": "news.newshosting.com",
       "port": 563,
       "username": "contemptx",
-      "password": "S1983b1986#",
+      "password": "Kia211101#",
       "use_ssl": true,
-      "max_connections": 4,
+      "max_connections": 30,
       "enabled": true,
       "priority": 1,
       "posting_group": "alt.binaries.test"
@@ -28,7 +28,7 @@
   "performance": {
     "max_upload_threads": 4,
     "max_download_threads": 4,
-    "segment_size": 1048576,
+    "segment_size": 768000,
     "compression_enabled": true
   },
   "logging": {
