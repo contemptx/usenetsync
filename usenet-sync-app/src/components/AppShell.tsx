@@ -11,9 +11,12 @@ import {
   X,
   Moon,
   Sun,
-  User
+  User,
+  FileText
 } from 'lucide-react';
 import clsx from 'clsx';
+import { StatusBar } from './StatusBar';
+import { HeaderBar } from './HeaderBar';
 
 export const AppShell: React.FC = () => {
   const { sidebarOpen, toggleSidebar, darkMode, toggleDarkMode, licenseStatus, user } = useAppStore();
@@ -23,6 +26,7 @@ export const AppShell: React.FC = () => {
     { icon: Upload, label: 'Upload', path: '/upload' },
     { icon: Download, label: 'Download', path: '/download' },
     { icon: Share2, label: 'Shares', path: '/shares' },
+    { icon: FileText, label: 'Logs', path: '/logs' },
     { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
@@ -154,21 +158,7 @@ export const AppShell: React.FC = () => {
         </main>
 
         {/* Status Bar */}
-        <footer className="bg-white dark:bg-dark-surface border-t border-gray-200 dark:border-dark-border px-6 py-2">
-          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-            <div className="flex items-center gap-4">
-              <span>Ready</span>
-              {licenseStatus?.trial && (
-                <span className="text-yellow-600 dark:text-yellow-400">
-                  Trial: {licenseStatus.trialDays} days remaining
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
-              <span>v1.0.0</span>
-            </div>
-          </div>
-        </footer>
+        <StatusBar />
       </div>
     </div>
   );

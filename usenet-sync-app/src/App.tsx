@@ -15,6 +15,7 @@ import { Upload } from './pages/Upload';
 import { Download } from './pages/Download';
 import { Shares } from './pages/Shares';
 import { Settings } from './pages/Settings';
+import { Logs } from './pages/Logs';
 
 // Create query client
 const queryClient = new QueryClient({
@@ -132,6 +133,7 @@ function App() {
               <Route path="download" element={<Download />} />
               <Route path="shares" element={<Shares />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="logs" element={<Logs />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

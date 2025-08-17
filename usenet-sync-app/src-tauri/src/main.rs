@@ -13,6 +13,10 @@ use uuid::Uuid;
 mod turboactivate;
 use turboactivate::TurboActivate;
 
+// Import commands module
+mod commands;
+use commands::system::{SystemState, init_system_commands};
+
 // State management
 struct AppState {
     license: Mutex<TurboActivate>,
@@ -548,8 +552,11 @@ fn main() {
         transfers: Mutex::new(HashMap::new()),
     };
     
+    let system_state = init_system_commands();
+    
     tauri::Builder::default()
         .manage(app_state)
+        .manage(system_state)
         .invoke_handler(tauri::generate_handler![
             activate_license,
             check_license,
@@ -567,6 +574,16 @@ fn main() {
             save_server_config,
             get_system_stats,
             open_folder,
+            // System commands
+            commands::get_logs,
+            commands::set_bandwidth_limit,
+            commands::get_bandwidth_limit,
+            commands::get_statistics,
+            commands::export_data,
+            commands::import_data,
+            commands::clear_cache,
+            commands::get_system_info,
+            commands::restart_services,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
