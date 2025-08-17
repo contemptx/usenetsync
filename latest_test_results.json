@@ -1,0 +1,11 @@
+{
+  "uploads": [],
+  "retrievals": [],
+  "errors": [
+    {
+      "test": "connection",
+      "error": "502 Authentication Failed",
+      "type": "NNTPPermanentError"
+    }
+  ]
+}
