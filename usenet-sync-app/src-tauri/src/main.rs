@@ -212,9 +212,19 @@ async fn deactivate_license(state: State<'_, AppState>) -> Result<(), String> {
 
 // File Operations
 #[tauri::command]
-async fn select_files() -> Result<Vec<FileNode>, String> {
-    // Mock implementation - in production would use file dialog
-    let files = vec![PathBuf::from("/tmp/test.txt")];
+async fn select_files(app: tauri::AppHandle) -> Result<Vec<FileNode>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    
+    let file_paths = app.dialog()
+        .file()
+        .set_title("Select Files")
+        .add_filter("All Files", &["*"])
+        .blocking_pick_files()
+        .ok_or_else(|| "No files selected".to_string())?;
+    
+    let files: Vec<PathBuf> = file_paths.into_iter()
+        .filter_map(|f| f.as_path().map(|p| p.to_path_buf()))
+        .collect();
     
     let mut nodes = Vec::new();
     for path in files {
