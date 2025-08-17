@@ -23,8 +23,7 @@
         "skipTaskbar": false,
         "decorations": true,
         "transparent": false,
-        "center": true,
-        "fileDropEnabled": true
+        "center": true
       }
     ],
     "security": {
@@ -52,26 +51,6 @@
       "timestampUrl": "http://timestamp.digicert.com",
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
-      },
-      "nsis": {
-        "oneClick": false,
-        "perMachine": false,
-        "allowDowngrade": false,
-        "allowElevation": true,
-        "createDesktopShortcut": true,
-        "createStartMenuShortcut": true,
-        "shortcutName": "UsenetSync",
-        "installerIcon": "icons/icon.ico",
-        "include": null,
-        "headerImage": null,
-        "sidebarImage": null,
-        "license": "../LICENSE.txt",
-        "displayLanguageSelector": false,
-        "installMode": "both",
-        "languages": ["English"]
-      },
-      "msi": {
-        "upgradeCode": "A9B4D5E6-F7G8-H9I0-J1K2-L3M4N5O6P7Q8"
       }
     },
     "macOS": {
