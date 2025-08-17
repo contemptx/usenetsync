@@ -46,59 +46,48 @@ class ShareIDGenerator:
     def generate_share_id(self, folder_id: str, share_type: str,
                          version: int = 1) -> str:
         """
-        Generate unique share ID
-        Format: TYPE_XXXXXXXX_YYYY
+        Generate completely random share ID with no patterns
+        No underscores, no type prefixes, just random alphanumeric
         """
-        # Type prefix
-        type_prefix = share_type[0].upper()  # P, R, O (Public, pRivate, prOtected)
+        # Generate unique data including all inputs and randomness
+        unique_data = f"{folder_id}:{share_type}:{version}:{time.time()}:{secrets.token_hex(16)}"
         
-        # Generate unique component
-        unique_data = f"{folder_id}:{share_type}:{version}:{time.time()}:{secrets.token_hex(8)}"
-        unique_hash = hashlib.sha256(unique_data.encode()).hexdigest()
+        # Create hash
+        full_hash = hashlib.sha256(unique_data.encode()).digest()
         
-        # Take first 16 chars of hash
-        main_id = unique_hash[:16].upper()
+        # Convert to base32 (alphanumeric, no special chars)
+        # Use base32 for better readability (no 0/O or 1/l confusion)
+        share_id = base64.b32encode(full_hash[:15]).decode('ascii').rstrip('=')
         
-        # Generate checksum (last 4 chars)
-        checksum_data = f"{type_prefix}{main_id}"
-        checksum = hashlib.sha256(checksum_data.encode()).hexdigest()[:4].upper()
-        
-        share_id = f"{type_prefix}{main_id}_{checksum}"
+        # Ensure consistent length and no patterns
+        if len(share_id) > 24:
+            share_id = share_id[:24]
         
         self.logger.debug(f"Generated share ID: {share_id}")
         return share_id
         
     def validate_share_id(self, share_id: str) -> Tuple[bool, Optional[str]]:
         """
-        Validate share ID format and checksum
-        Returns: (is_valid, share_type)
+        Validate share ID format (just check it's valid base32 of right length)
+        Returns: (is_valid, share_type=None since we can't determine from ID)
         """
         try:
-            # Check format
-            if len(share_id) != 22:  # P + 16 chars + _ + 4 chars
+            # Check length (should be 24 chars or less)
+            if len(share_id) > 24 or len(share_id) < 10:
                 return False, None
-                
-            if share_id[17] != '_':
-                return False, None
-                
-            # Extract components
-            type_prefix = share_id[0]
-            main_id = share_id[1:17]
-            provided_checksum = share_id[18:22]
             
-            # Validate type
-            type_map = {'P': 'public', 'R': 'private', 'O': 'protected'}
-            if type_prefix not in type_map:
+            # Check if it's valid base32
+            try:
+                # Base32 alphabet (RFC 4648)
+                valid_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
+                if not all(c in valid_chars for c in share_id):
+                    return False, None
+            except:
                 return False, None
-                
-            # Verify checksum
-            checksum_data = f"{type_prefix}{main_id}"
-            expected_checksum = hashlib.sha256(checksum_data.encode()).hexdigest()[:4].upper()
             
-            if provided_checksum != expected_checksum:
-                return False, None
-                
-            return True, type_map[type_prefix]
+            # We can't determine share type from the ID (by design)
+            # The type must be looked up from the database
+            return True, None
             
         except Exception as e:
             self.logger.error(f"Error validating share ID: {e}")
