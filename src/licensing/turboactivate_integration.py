@@ -11,6 +11,7 @@ import sys
 import json
 import logging
 from pathlib import Path
+from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from enum import IntEnum
 from dataclasses import dataclass
@@ -104,10 +105,12 @@ class TurboActivate:
     def _find_dat_file(self) -> str:
         """Find TurboActivate.dat in common locations"""
         possible_paths = [
+            Path(__file__).parent / "data" / "TurboActivate.dat",  # Primary location
             Path(__file__).parent / "TurboActivate.dat",
             Path.cwd() / "TurboActivate.dat",
             Path(sys.executable).parent / "TurboActivate.dat",
             Path("/workspace") / "TurboActivate.dat",
+            Path("/workspace/src/licensing/data") / "TurboActivate.dat",
         ]
         
         for path in possible_paths:
@@ -125,24 +128,52 @@ class TurboActivate:
         system = platform.system()
         machine = platform.machine().lower()
         
+        # Base path for libraries
+        lib_base = Path(__file__).parent.parent.parent / "libs"
+        
         # Determine library name and path
         if system == "Windows":
             if "64" in machine or "amd64" in machine:
                 lib_name = "TurboActivate64.dll"
             else:
                 lib_name = "TurboActivate.dll"
-            self.lib = ctypes.CDLL(lib_name)
+            lib_path = lib_base / "windows" / lib_name
+            
+            # Try to load from path, fallback to system
+            try:
+                if lib_path.exists():
+                    self.lib = ctypes.CDLL(str(lib_path))
+                else:
+                    self.lib = ctypes.CDLL(lib_name)
+            except OSError:
+                self.lib = ctypes.CDLL(lib_name)
             
         elif system == "Darwin":  # macOS
             lib_name = "libTurboActivate.dylib"
-            self.lib = ctypes.CDLL(lib_name)
+            lib_path = lib_base / "macos" / lib_name
+            
+            try:
+                if lib_path.exists():
+                    self.lib = ctypes.CDLL(str(lib_path))
+                else:
+                    self.lib = ctypes.CDLL(lib_name)
+            except OSError:
+                self.lib = ctypes.CDLL(lib_name)
             
         elif system == "Linux":
             if "64" in machine or "x86_64" in machine:
                 lib_name = "libTurboActivate.so"
             else:
                 lib_name = "libTurboActivate.x86.so"
-            self.lib = ctypes.CDLL(lib_name)
+            lib_path = lib_base / "linux" / lib_name
+            
+            try:
+                if lib_path.exists():
+                    self.lib = ctypes.CDLL(str(lib_path))
+                else:
+                    self.lib = ctypes.CDLL(lib_name)
+            except OSError:
+                self.lib = ctypes.CDLL(lib_name)
         else:
             raise OSError(f"Unsupported platform: {system}")
         
