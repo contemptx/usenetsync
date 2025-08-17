@@ -25,14 +25,12 @@ from src.database.production_db_wrapper import ProductionDatabaseManager
 from src.security.enhanced_security_system import EnhancedSecuritySystem
 from optimized_indexing import OptimizedIndexingSystem
 from src.upload.segment_packing_system import SegmentPackingSystem
-from simplified_components import (
-    SimplifiedUploadSystem,
-    SimplifiedPublishingSystem,
-    SimplifiedDownloadSystem,
-    SimplifiedMonitoringSystem
-)
+from src.upload.enhanced_upload_system import EnhancedUploadSystem
+from src.upload.publishing_system import PublishingSystem
+from src.download.enhanced_download_system import EnhancedDownloadSystem
 from src.download.segment_retrieval_system import SegmentRetrievalSystem
 from src.security.user_management import UserManager
+from src.monitoring.monitoring_system import MonitoringSystem
 
 # Import database enhancements
 from enhance_db_pool import enhance_database_pool
@@ -120,8 +118,8 @@ class ComprehensiveE2ETests:
                 {'segment_size': 768000, 'compression_enabled': True}
             )
             
-            # Upload system (simplified for testing)
-            self.upload_system = SimplifiedUploadSystem(
+            # Upload system (real implementation)
+            self.upload_system = EnhancedUploadSystem(
                 self.db,
                 self.nntp,
                 self.security,
@@ -132,8 +130,8 @@ class ComprehensiveE2ETests:
             from src.indexing.simplified_binary_index import SimplifiedBinaryIndex
             self.binary_index = SimplifiedBinaryIndex("test_folder")
             
-            # Publishing system (simplified for testing)
-            self.publishing_system = SimplifiedPublishingSystem(
+            # Publishing system (real implementation)
+            self.publishing_system = PublishingSystem(
                 self.db,
                 self.security,
                 self.upload_system,
@@ -143,8 +141,8 @@ class ComprehensiveE2ETests:
                 {'default_share_type': 'private'}
             )
             
-            # Download system (simplified for testing)
-            self.download_system = SimplifiedDownloadSystem(
+            # Download system (real implementation)
+            self.download_system = EnhancedDownloadSystem(
                 self.db,
                 self.nntp,
                 self.security,
@@ -158,8 +156,8 @@ class ComprehensiveE2ETests:
                 {'cache_enabled': True, 'max_retries': 3}
             )
             
-            # Monitoring (simplified for testing)
-            self.monitoring = SimplifiedMonitoringSystem({'metrics_retention_hours': 24})
+            # Monitoring (real implementation)
+            self.monitoring = MonitoringSystem({'metrics_retention_hours': 24})
             
             print("\n✅ Setup complete!")
             return True
@@ -434,6 +432,7 @@ Timestamp: {datetime.now()}"""
             share_result = self.publishing_system.publish_folder(
                 folder_id,
                 share_type='private',
+                authorized_users=[self.user_id],  # Add authorized user
                 encryption_key=os.urandom(32),  # Generate encryption key
                 metadata={'name': 'Test Private Share', 'description': 'E2E test private share'}
             )

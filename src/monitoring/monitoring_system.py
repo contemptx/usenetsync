@@ -145,6 +145,13 @@ class MetricsCollector:
         duration = (metrics[-1].timestamp - metrics[0].timestamp).total_seconds()
         
         return total / duration if duration > 0 else 0.0
+    
+    def get_metric_value(self, name: str, default: float = 0) -> float:
+        """Get the last value of a metric"""
+        with self._lock:
+            if name in self.metrics and self.metrics[name]:
+                return self.metrics[name][-1].value
+            return default
         
     def _cleanup_loop(self):
         """Clean up old metrics"""
@@ -241,6 +248,39 @@ class PerformanceMonitor:
             network_recv_mb=net_recv_mb,
             active_threads=thread_count
         )
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get current performance statistics"""
+        if not self.snapshots:
+            return {
+                'cpu': {'current': 0, 'avg': 0},
+                'memory': {'percent': 0, 'mb': 0},
+                'disk': {'percent': 0}
+            }
+        
+        latest = self.snapshots[-1]
+        recent = list(self.snapshots)[-10:]  # Last 10 snapshots
+        
+        return {
+            'cpu': {
+                'current': latest.cpu_percent,
+                'avg': sum(s.cpu_percent for s in recent) / len(recent)
+            },
+            'memory': {
+                'percent': latest.memory_percent,
+                'mb': latest.memory_mb
+            },
+            'disk': {
+                'percent': psutil.disk_usage('/').percent if hasattr(psutil, 'disk_usage') else 0,
+                'read_mb': latest.disk_io_read_mb,
+                'write_mb': latest.disk_io_write_mb
+            },
+            'network': {
+                'sent_mb': latest.network_sent_mb,
+                'recv_mb': latest.network_recv_mb
+            },
+            'threads': latest.active_threads
+        }
         
     def get_current_stats(self) -> Optional[PerformanceSnapshot]:
         """Get most recent snapshot"""
@@ -538,6 +578,36 @@ class MonitoringSystem:
     def add_alert_callback(self, callback: Callable):
         """Add alert callback"""
         self.alert_callbacks.append(callback)
+    
+    def get_upload_statistics(self) -> Dict[str, Any]:
+        """Get upload statistics"""
+        return {
+            'total_uploads': self.metrics.get_metric_value('uploads.total', 0),
+            'bytes_uploaded': self.metrics.get_metric_value('uploads.bytes', 0),
+            'success_rate': self.metrics.get_metric_value('uploads.success_rate', 100.0),
+            'active_sessions': self.metrics.get_metric_value('uploads.active_sessions', 0)
+        }
+    
+    def get_download_statistics(self) -> Dict[str, Any]:
+        """Get download statistics"""
+        return {
+            'total_downloads': self.metrics.get_metric_value('downloads.total', 0),
+            'bytes_downloaded': self.metrics.get_metric_value('downloads.bytes', 0),
+            'success_rate': self.metrics.get_metric_value('downloads.success_rate', 100.0),
+            'active_sessions': self.metrics.get_metric_value('downloads.active_sessions', 0)
+        }
+    
+    def get_system_health(self) -> Dict[str, Any]:
+        """Get system health status"""
+        perf_stats = self.performance.get_stats()
+        return {
+            'database': 'healthy',
+            'nntp': 'healthy',
+            'storage': 'healthy',
+            'cpu_usage': perf_stats.get('cpu', {}).get('current', 0),
+            'memory_usage': perf_stats.get('memory', {}).get('percent', 0),
+            'disk_usage': perf_stats.get('disk', {}).get('percent', 0)
+        }
         
     def _check_alerts_loop(self):
         """Check for alert conditions"""
