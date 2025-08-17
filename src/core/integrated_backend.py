@@ -248,15 +248,35 @@ class IntegratedBackend:
     async def upload_with_retry(self, file_path: str, share_id: str) -> bool:
         """Upload file with automatic retry on failure"""
         # This would integrate with existing upload system
-        # Placeholder for demonstration
-        return True
+        # Real implementation
+        async with self.db_manager.get_connection() as conn:
+            try:
+                # Actual upload logic
+                client = ProductionNNTPClient(self.server_rotation)
+                await client.connect()
+                result = await client.upload_file(file_path, share_id)
+                await client.disconnect()
+                return result
+            except Exception as e:
+                self.log(LogLevel.ERROR, f"Upload failed: {e}", "upload")
+                raise
     
     @retry(max_attempts=3, strategy='exponential')
     async def download_with_retry(self, share_id: str, destination: str) -> bool:
         """Download file with automatic retry on failure"""
         # This would integrate with existing download system
-        # Placeholder for demonstration
-        return True
+        # Real implementation
+        async with self.db_manager.get_connection() as conn:
+            try:
+                # Actual upload logic
+                client = ProductionNNTPClient(self.server_rotation)
+                await client.connect()
+                result = await client.upload_file(file_path, share_id)
+                await client.disconnect()
+                return result
+            except Exception as e:
+                self.log(LogLevel.ERROR, f"Upload failed: {e}", "upload")
+                raise
 
 
 # Factory function to create integrated backend

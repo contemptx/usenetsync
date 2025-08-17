@@ -44,14 +44,6 @@ pub struct SystemInfo {
     pub free_memory: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExportOptions {
-    pub include_logs: bool,
-    pub include_settings: bool,
-    pub include_shares: bool,
-    pub encrypt: bool,
-}
-
 pub struct SystemState {
     logs: Arc<Mutex<Vec<LogEntry>>>,
     bandwidth_limits: Arc<Mutex<BandwidthLimits>>,
@@ -60,8 +52,38 @@ pub struct SystemState {
 
 impl SystemState {
     pub fn new() -> Self {
+        // Initialize with real log file if it exists
+        let logs = if let Ok(log_content) = fs::read_to_string("/var/log/usenet-sync.log") {
+            log_content.lines()
+                .filter_map(|line| {
+                    // Parse log lines in format: [TIMESTAMP] [LEVEL] [SOURCE] MESSAGE
+                    let parts: Vec<&str> = line.splitn(4, ' ').collect();
+                    if parts.len() >= 3 {
+                        Some(LogEntry {
+                            timestamp: parts[0].trim_matches(|c| c == '[' || c == ']').to_string(),
+                            level: parts[1].trim_matches(|c| c == '[' || c == ']').to_string(),
+                            source: if parts.len() > 3 {
+                                Some(parts[2].trim_matches(|c| c == '[' || c == ']').to_string())
+                            } else {
+                                None
+                            },
+                            message: if parts.len() > 3 {
+                                parts[3].to_string()
+                            } else {
+                                parts[2].to_string()
+                            },
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        
         Self {
-            logs: Arc::new(Mutex::new(Vec::new())),
+            logs: Arc::new(Mutex::new(logs)),
             bandwidth_limits: Arc::new(Mutex::new(BandwidthLimits {
                 upload_kbps: 0,
                 download_kbps: 0,
@@ -73,16 +95,34 @@ impl SystemState {
     
     pub async fn add_log(&self, level: String, message: String, source: Option<String>) {
         let mut logs = self.logs.lock().await;
-        logs.push(LogEntry {
+        let entry = LogEntry {
             timestamp: chrono::Utc::now().to_rfc3339(),
-            level,
-            message,
-            source,
-        });
+            level: level.clone(),
+            message: message.clone(),
+            source: source.clone(),
+        };
+        logs.push(entry);
         
-        // Keep only last 10000 logs
+        // Also write to actual log file
+        let log_line = format!("[{}] [{}] [{}] {}\n",
+            chrono::Utc::now().to_rfc3339(),
+            level,
+            source.unwrap_or_else(|| "system".to_string()),
+            message
+        );
+        
+        let _ = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/var/log/usenet-sync.log")
+            .and_then(|mut file| {
+                use std::io::Write;
+                file.write_all(log_line.as_bytes())
+            });
+        
+        // Keep only last 10000 logs in memory
         if logs.len() > 10000 {
-            logs.drain(0..logs.len() - 10000);
+            let drain_count = logs.len() - 10000; logs.drain(0..drain_count);
         }
     }
 }
@@ -96,6 +136,33 @@ pub async fn get_logs(
     filter: Option<serde_json::Value>,
     state: tauri::State<'_, SystemState>,
 ) -> Result<Vec<LogEntry>, String> {
+    // First try to get logs from Python backend
+    let output = ProcessCommand::new("python3")
+        .args(&[
+            "-c",
+            "from src.cli import UsenetSyncCLI; \
+             cli = UsenetSyncCLI(); \
+             import json; \
+             logs = cli.integrated_backend.log_manager.get_logs(); \
+             print(json.dumps([log.to_dict() for log in logs]))"
+        ])
+        .current_dir("/workspace")
+        .output();
+    
+    if let Ok(output) = output {
+        if output.status.success() {
+            if let Ok(backend_logs) = serde_json::from_slice::<Vec<LogEntry>>(&output.stdout) {
+                // Merge with local logs
+                let mut logs = state.logs.lock().await;
+                for log in backend_logs {
+                    if !logs.iter().any(|l| l.timestamp == log.timestamp && l.message == log.message) {
+                        logs.push(log);
+                    }
+                }
+            }
+        }
+    }
+    
     let logs = state.logs.lock().await;
     
     // Apply filters if provided
@@ -139,6 +206,26 @@ pub async fn set_bandwidth_limit(
     enabled: bool,
     state: tauri::State<'_, SystemState>,
 ) -> Result<(), String> {
+    // Apply to Python backend
+    let output = ProcessCommand::new("python3")
+        .args(&[
+            "-c",
+            &format!(
+                "from src.cli import UsenetSyncCLI; \
+                 cli = UsenetSyncCLI(); \
+                 cli.integrated_backend.set_bandwidth_limits({}, {})",
+                if enabled { upload_kbps * 1024 } else { 0 },
+                if enabled { download_kbps * 1024 } else { 0 }
+            )
+        ])
+        .current_dir("/workspace")
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
     let mut limits = state.bandwidth_limits.lock().await;
     *limits = BandwidthLimits {
         upload_kbps,
@@ -146,27 +233,12 @@ pub async fn set_bandwidth_limit(
         enabled,
     };
     
-    // Log the change
     state.add_log(
         "INFO".to_string(),
         format!("Bandwidth limits updated: Upload: {} kbps, Download: {} kbps, Enabled: {}", 
                 upload_kbps, download_kbps, enabled),
         Some("system".to_string())
     ).await;
-    
-    // Call Python backend to apply limits
-    ProcessCommand::new("python3")
-        .args(&[
-            "-c",
-            &format!(
-                "from src.core.integrated_backend import create_integrated_backend; \
-                 backend = create_integrated_backend({{}}); \
-                 backend.set_bandwidth_limits({}, {})",
-                upload_kbps * 1024, download_kbps * 1024
-            )
-        ])
-        .spawn()
-        .map_err(|e| e.to_string())?;
     
     Ok(())
 }
@@ -181,14 +253,12 @@ pub async fn get_bandwidth_limit(
 
 #[tauri::command]
 pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<SystemStats, String> {
-    // Get real system statistics
+    // Get real statistics from system
     let mut sys = sysinfo::System::new_all();
     sys.refresh_all();
     
-    // Calculate CPU usage
-    let cpu_usage = sys.global_cpu_usage();
+    let cpu_usage = sys.global_cpu_info().cpu_usage();
     
-    // Calculate memory usage
     let total_mem = sys.total_memory();
     let used_mem = sys.used_memory();
     let memory_usage = if total_mem > 0 {
@@ -197,7 +267,6 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
         0.0
     };
     
-    // Calculate disk usage
     let mut total_disk = 0u64;
     let mut used_disk = 0u64;
     for disk in sys.disks() {
@@ -210,10 +279,33 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
         0.0
     };
     
-    // Network speed would require more sophisticated tracking
-    let network_speed = NetworkSpeed {
-        upload: 0,
-        download: 0,
+    // Get network stats from Python backend
+    let network_speed = if let Ok(output) = ProcessCommand::new("python3")
+        .args(&[
+            "-c",
+            "from src.cli import UsenetSyncCLI; \
+             cli = UsenetSyncCLI(); \
+             stats = cli.integrated_backend.get_bandwidth_stats(); \
+             import json; \
+             print(json.dumps({\
+                 'upload': stats['upload']['current_speed'], \
+                 'download': stats['download']['current_speed']\
+             }))"
+        ])
+        .current_dir("/workspace")
+        .output() 
+    {
+        if output.status.success() {
+            if let Ok(speeds) = serde_json::from_slice::<NetworkSpeed>(&output.stdout) {
+                speeds
+            } else {
+                NetworkSpeed { upload: 0, download: 0 }
+            }
+        } else {
+            NetworkSpeed { upload: 0, download: 0 }
+        }
+    } else {
+        NetworkSpeed { upload: 0, download: 0 }
     };
     
     Ok(SystemStats {
@@ -228,131 +320,101 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
 pub async fn export_data(options: serde_json::Value, state: tauri::State<'_, SystemState>) -> Result<String, String> {
     use base64::{Engine as _, engine::general_purpose};
     
-    let export_opts: ExportOptions = serde_json::from_value(options)
+    // Call Python backend for full export
+    let output = ProcessCommand::new("python3")
+        .args(&[
+            "-c",
+            &format!(
+                "from src.cli import UsenetSyncCLI; \
+                 cli = UsenetSyncCLI(); \
+                 import json; \
+                 data = cli.integrated_backend.export_settings(\
+                     password='{}' if {} else None\
+                 ); \
+                 print(data)",
+                options.get("password").and_then(|v| v.as_str()).unwrap_or(""),
+                options.get("encrypt").and_then(|v| v.as_bool()).unwrap_or(false)
+            )
+        ])
+        .current_dir("/workspace")
+        .output()
         .map_err(|e| e.to_string())?;
     
-    let mut export_data = serde_json::json!({});
-    
-    if export_opts.include_logs {
-        let logs = state.logs.lock().await;
-        export_data["logs"] = serde_json::json!(logs.clone());
-    }
-    
-    if export_opts.include_settings {
-        let limits = state.bandwidth_limits.lock().await;
-        export_data["settings"] = serde_json::json!({
-            "bandwidth_limits": limits.clone()
-        });
-    }
-    
-    if export_opts.include_shares {
-        // Call Python backend to get shares
-        let output = ProcessCommand::new("python3")
-            .args(&[
-                "-c",
-                "from src.cli import UsenetSyncCLI; cli = UsenetSyncCLI(); \
-                 import json; print(json.dumps(cli.list_shares()))"
-            ])
-            .output()
-            .map_err(|e| e.to_string())?;
-        
-        if output.status.success() {
-            let shares_json = String::from_utf8_lossy(&output.stdout);
-            if let Ok(shares) = serde_json::from_str::<serde_json::Value>(&shares_json) {
-                export_data["shares"] = shares;
-            }
-        }
-    }
-    
-    let json_str = serde_json::to_string(&export_data)
-        .map_err(|e| e.to_string())?;
-    
-    if export_opts.encrypt {
-        Ok(general_purpose::STANDARD.encode(json_str))
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
-        Ok(json_str)
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }
 
 #[tauri::command]
 pub async fn import_data(data: String, options: serde_json::Value, state: tauri::State<'_, SystemState>) -> Result<bool, String> {
-    use base64::{Engine as _, engine::general_purpose};
-    
-    let encrypted = options.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false);
-    
-    let json_str = if encrypted {
-        let decoded = general_purpose::STANDARD.decode(&data)
-            .map_err(|e| e.to_string())?;
-        String::from_utf8(decoded)
-            .map_err(|e| e.to_string())?
-    } else {
-        data
-    };
-    
-    let import_data: serde_json::Value = serde_json::from_str(&json_str)
+    // Call Python backend for import
+    let output = ProcessCommand::new("python3")
+        .args(&[
+            "-c",
+            &format!(
+                "from src.cli import UsenetSyncCLI; \
+                 cli = UsenetSyncCLI(); \
+                 result = cli.integrated_backend.import_settings(\
+                     '{}', \
+                     password='{}' if {} else None\
+                 ); \
+                 print('success' if result else 'failed')",
+                data,
+                options.get("password").and_then(|v| v.as_str()).unwrap_or(""),
+                options.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false)
+            )
+        ])
+        .current_dir("/workspace")
+        .output()
         .map_err(|e| e.to_string())?;
     
-    // Import logs
-    if let Some(logs_data) = import_data.get("logs") {
-        if let Ok(imported_logs) = serde_json::from_value::<Vec<LogEntry>>(logs_data.clone()) {
-            let mut logs = state.logs.lock().await;
-            logs.extend(imported_logs);
-        }
+    if output.status.success() && String::from_utf8_lossy(&output.stdout).contains("success") {
+        state.add_log(
+            "INFO".to_string(),
+            "Data imported successfully".to_string(),
+            Some("system".to_string())
+        ).await;
+        Ok(true)
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
-    
-    // Import settings
-    if let Some(settings_data) = import_data.get("settings") {
-        if let Some(limits_data) = settings_data.get("bandwidth_limits") {
-            if let Ok(imported_limits) = serde_json::from_value::<BandwidthLimits>(limits_data.clone()) {
-                let mut limits = state.bandwidth_limits.lock().await;
-                *limits = imported_limits;
-            }
-        }
-    }
-    
-    state.add_log(
-        "INFO".to_string(),
-        "Data imported successfully".to_string(),
-        Some("system".to_string())
-    ).await;
-    
-    Ok(true)
 }
 
 #[tauri::command]
 pub async fn clear_cache(state: tauri::State<'_, SystemState>) -> Result<(), String> {
-    // Clear application cache directories
+    // Clear system cache directories
     let cache_dirs = vec![
         dirs::cache_dir().map(|d| d.join("usenet-sync")),
         Some(std::env::temp_dir().join("usenet-sync")),
+        Some(std::path::PathBuf::from("/tmp/usenet-sync")),
+        Some(std::path::PathBuf::from("/var/cache/usenet-sync")),
     ];
     
     for cache_dir in cache_dirs.into_iter().flatten() {
         if cache_dir.exists() {
-            // Remove cache directory contents
-            if let Err(e) = fs::remove_dir_all(&cache_dir) {
-                // Try to at least clear files if directory removal fails
-                if let Ok(entries) = fs::read_dir(&cache_dir) {
-                    for entry in entries.flatten() {
-                        let _ = fs::remove_file(entry.path());
-                    }
-                }
-            }
-            // Recreate the directory
+            let _ = fs::remove_dir_all(&cache_dir);
             let _ = fs::create_dir_all(&cache_dir);
         }
     }
     
-    // Clear Python cache
-    ProcessCommand::new("python3")
+    // Clear Python backend cache
+    let output = ProcessCommand::new("python3")
         .args(&[
             "-c",
-            "from src.core.integrated_backend import create_integrated_backend; \
-             backend = create_integrated_backend({{}}); \
-             backend.data_manager.clear_cache()"
+            "from src.cli import UsenetSyncCLI; \
+             cli = UsenetSyncCLI(); \
+             cli.integrated_backend.data_manager.clear_cache(); \
+             cli.integrated_backend.cleanup_old_data(days=0)"
         ])
-        .spawn()
+        .current_dir("/workspace")
+        .output()
         .map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
     
     state.add_log(
         "INFO".to_string(),
@@ -370,7 +432,7 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
     
     Ok(SystemInfo {
         os: std::env::consts::OS.to_string(),
-        version: sys.os_version().unwrap_or_else(|| "Unknown".to_string()),
+        version: sysinfo::System::os_version().unwrap_or_else(|| "Unknown".to_string()),
         arch: std::env::consts::ARCH.to_string(),
         cpu_cores: num_cpus::get(),
         total_memory: sys.total_memory(),
@@ -380,20 +442,24 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
 
 #[tauri::command]
 pub async fn restart_services(state: tauri::State<'_, SystemState>) -> Result<(), String> {
-    // Restart Python backend service
+    // Stop existing Python backend service
     #[cfg(not(target_os = "windows"))]
     {
-        // Stop existing service
         ProcessCommand::new("pkill")
-            .args(&["-f", "usenet_sync_backend"])
+            .args(&["-f", "usenet_sync"])
             .output()
-            .map_err(|e| format!("Failed to stop service: {}", e))?;
+            .ok();
+        
+        ProcessCommand::new("pkill")
+            .args(&["-f", "cli.py"])
+            .output()
+            .ok();
         
         std::thread::sleep(std::time::Duration::from_secs(2));
         
-        // Start service
+        // Start Python backend service
         ProcessCommand::new("python3")
-            .args(&["src/usenet_sync_backend.py", "--daemon"])
+            .args(&["src/cli.py", "--daemon"])
             .current_dir("/workspace")
             .spawn()
             .map_err(|e| format!("Failed to start service: {}", e))?;
@@ -401,17 +467,15 @@ pub async fn restart_services(state: tauri::State<'_, SystemState>) -> Result<()
     
     #[cfg(target_os = "windows")]
     {
-        // Stop existing service
         ProcessCommand::new("taskkill")
-            .args(&["/F", "/IM", "python.exe", "/FI", "WINDOWTITLE eq UsenetSync Backend"])
+            .args(&["/F", "/IM", "python.exe", "/FI", "WINDOWTITLE eq UsenetSync*"])
             .output()
-            .map_err(|e| format!("Failed to stop service: {}", e))?;
+            .ok();
         
         std::thread::sleep(std::time::Duration::from_secs(2));
         
-        // Start service
         ProcessCommand::new("python")
-            .args(&["src\\usenet_sync_backend.py", "--daemon"])
+            .args(&["src\\cli.py", "--daemon"])
             .current_dir("C:\\workspace")
             .spawn()
             .map_err(|e| format!("Failed to start service: {}", e))?;

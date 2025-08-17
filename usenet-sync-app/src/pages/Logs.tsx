@@ -85,63 +85,11 @@ export const Logs: React.FC = () => {
         console.error('Failed to fetch logs from backend:', error);
       }
       
-      // Fall back to mock data for demo
-      const mockLogs: LogEntry[] = [
-        {
-          id: '1',
-          timestamp: new Date(Date.now() - 3600000),
-          level: 'info',
-          category: 'Upload',
-          message: 'Upload started for document.pdf',
-          details: { file: 'document.pdf', size: 2048576 }
-        },
-        {
-          id: '2',
-          timestamp: new Date(Date.now() - 3500000),
-          level: 'debug',
-          category: 'Network',
-          message: 'Connected to news.provider.com:563',
-          source: 'NNTPClient'
-        },
-        {
-          id: '3',
-          timestamp: new Date(Date.now() - 3400000),
-          level: 'warning',
-          category: 'Network',
-          message: 'Retry attempt 1/5 for connection',
-          details: { server: 'news.provider.com', attempt: 1 }
-        },
-        {
-          id: '4',
-          timestamp: new Date(Date.now() - 3300000),
-          level: 'error',
-          category: 'Download',
-          message: 'Failed to download segment 45',
-          details: { segment: 45, error: 'Connection timeout' }
-        },
-        {
-          id: '5',
-          timestamp: new Date(Date.now() - 3200000),
-          level: 'info',
-          category: 'Share',
-          message: 'Share created successfully',
-          details: { shareId: 'SHARE123', type: 'public' }
-        },
-        {
-          id: '6',
-          timestamp: new Date(Date.now() - 3100000),
-          level: 'critical',
-          category: 'Database',
-          message: 'Database connection lost',
-          details: { error: 'Connection refused', retrying: true }
-        }
-      ];
-      
-      setLogs(mockLogs);
-      
-      // Extract unique categories
-      const uniqueCategories = [...new Set(mockLogs.map(log => log.category))];
-      setCategories(uniqueCategories);
+      // No mock data - only use real logs
+      if (!logEntries || logEntries.length === 0) {
+        setLogs([]);
+        setCategories([]);
+      }
     } catch (error) {
       console.error('Failed to load logs:', error);
     } finally {

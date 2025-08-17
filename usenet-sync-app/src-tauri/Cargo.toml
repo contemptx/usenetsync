@@ -31,6 +31,8 @@ sysinfo = "0.30"
 base64 = "0.21"
 sys-info = "0.9"
 num_cpus = "1.16"
+mac_address = "1.1"
+sha2 = "0.10"
 
 # For mock implementations (replace with actual libraries in production)
 tokio = { version = "1", features = ["full"] }
