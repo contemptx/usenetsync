@@ -68,28 +68,22 @@ def test_config_loading():
     try:
         from src.config.secure_config import SecureConfigLoader
         
-        # Check if credentials are set
-        if not os.environ.get('NNTP_USERNAME'):
-            print("⚠️  NNTP_USERNAME not set in environment")
-            print("   You can set it with: export NNTP_USERNAME='your_username'")
-            return False
-        
-        if not os.environ.get('NNTP_PASSWORD'):
-            print("⚠️  NNTP_PASSWORD not set in environment")
-            print("   You can set it with: export NNTP_PASSWORD='your_password'")
-            return False
-        
-        # Try to load config
+        # Try to load config (will use config file or environment variables)
         loader = SecureConfigLoader()
         config = loader.config
         
-        print(f"✓ Configuration loaded")
-        print(f"  Server: {config['servers'][0]['hostname']}")
-        print(f"  Port: {config['servers'][0]['port']}")
-        print(f"  SSL: {config['servers'][0]['use_ssl']}")
-        print(f"  Username: {config['servers'][0]['username'][:3]}...")
-        
-        return True
+        # Check if we have valid credentials (from file or environment)
+        if config['servers'][0]['username'] and config['servers'][0]['username'] != 'your_username':
+            print(f"✓ Configuration loaded")
+            print(f"  Server: {config['servers'][0]['hostname']}")
+            print(f"  Port: {config['servers'][0]['port']}")
+            print(f"  SSL: {config['servers'][0]['use_ssl']}")
+            print(f"  Username: {config['servers'][0]['username'][:3]}...")
+            return True
+        else:
+            print("⚠️  No valid credentials found")
+            print("   Set environment variables or update config file")
+            return False
         
     except Exception as e:
         print(f"❌ Configuration error: {e}")
@@ -111,8 +105,13 @@ def test_database_init():
             enable_retry=True
         )
         
-        # Test basic operation
-        db.initialize_schema()
+        # Database is initialized automatically in the constructor
+        # Test a basic operation to verify it works
+        with db.pool.get_connection() as conn:
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
+            result = cursor.fetchone()
+            if result:
+                print(f"  Found table: {result[0]}")
         
         print("✓ Database initialized successfully")
         
@@ -130,16 +129,13 @@ def test_main_module():
     print("\nTesting main module...")
     
     try:
-        # Check if credentials are available
-        if not os.environ.get('NNTP_USERNAME') or not os.environ.get('NNTP_PASSWORD'):
-            print("⚠️  Skipping main module test (credentials not set)")
-            return True  # Not a failure, just skipped
-        
         from src.core.main import UsenetSync
         
-        # Try to create instance (will fail if no valid config)
-        # We won't actually initialize to avoid connecting to NNTP
+        # Try to import the main module
         print("✓ Main module can be imported")
+        
+        # Note: We don't actually create an instance to avoid connecting to NNTP
+        # The actual connection test will be done in the E2E tests
         
         return True
         
