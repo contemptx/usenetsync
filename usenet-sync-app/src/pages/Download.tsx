@@ -118,7 +118,7 @@ export const Download: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Download Share</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="download-title">Download Share</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
           Enter a share ID to download files
         </p>
@@ -136,12 +136,14 @@ export const Download: React.FC = () => {
                 value={shareId}
                 onChange={(e) => setShareId(e.target.value.toUpperCase())}
                 placeholder="Enter share ID (e.g., MRFE3BX25XTF5CH6FPP2PXDL)"
+                data-testid="share-id-input"
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-dark-bg dark:text-white"
                 disabled={isLoading}
               />
               <button
                 onClick={handleLookupShare}
                 disabled={isLoading || !shareId.trim()}
+                data-testid="lookup-button"
                 className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
                 <Search className="w-4 h-4" />

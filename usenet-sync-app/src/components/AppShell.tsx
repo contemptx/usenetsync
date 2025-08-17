@@ -74,6 +74,7 @@ export const AppShell: React.FC = () => {
               <NavLink
                 key={item.path}
                 to={item.path}
+                data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
                 className={({ isActive }) =>
                   clsx(
                     'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
@@ -124,8 +125,9 @@ export const AppShell: React.FC = () => {
             <button
               onClick={toggleSidebar}
               className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-lg"
+              data-testid="menu-toggle"
             >
-              <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" data-testid="menu-icon" />
             </button>
 
             <div className="flex-1" />

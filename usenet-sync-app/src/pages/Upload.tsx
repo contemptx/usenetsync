@@ -152,7 +152,7 @@ export const Upload: React.FC = () => {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Upload Files</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="upload-title">Upload Files</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
           Select files or folders to create a secure share
         </p>
@@ -164,6 +164,7 @@ export const Upload: React.FC = () => {
           {/* Drag & Drop Area */}
           <div
             {...getRootProps()}
+            data-testid="drop-zone"
             className={clsx(
               'border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-all',
               isDragActive
@@ -184,6 +185,7 @@ export const Upload: React.FC = () => {
           {/* Folder Selection */}
           <div
             onClick={handleSelectFolder}
+            data-testid="select-folder"
             className="border-2 border-dashed border-gray-300 dark:border-dark-border rounded-lg p-12 text-center cursor-pointer hover:border-primary-400 transition-all"
           >
             <FolderOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
