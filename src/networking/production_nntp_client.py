@@ -492,18 +492,14 @@ class ProductionNNTPClient:
         # No timestamps or identifying prefixes
         random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
         
-        # Use configured domain or a list of generic domains for variety
+        # Use configured domain or default to ngPost.com for better blending
         # This can be set in config under security.message_id_domain
         configured_domain = getattr(self, 'message_id_domain', None)
         if configured_domain:
             host_part = configured_domain
         else:
-            # Use random generic domains for better obfuscation
-            generic_domains = [
-                "mail.local", "post.local", "msg.local", 
-                "nntp.local", "news.local", "relay.local"
-            ]
-            host_part = random.choice(generic_domains)
+            # Default to ngPost.com - blends in with legitimate ngPost traffic
+            host_part = "ngPost.com"
             
         return f"<{random_str}@{host_part}>"
     
