@@ -45,7 +45,6 @@
 ## 4. **Security Features** ⚠️
 
 ### Not Visible in UI:
-- [ ] **Encryption Algorithm Selection** - User choice of encryption
 - [ ] **Secure Delete Options** - Overwrite settings
 
 ## 5. **Backend Integration** ⚠️
