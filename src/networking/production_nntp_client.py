@@ -428,7 +428,7 @@ class ProductionNNTPClient:
     
     def __init__(self, host, port, username, password, use_ssl=True, 
                  max_connections=10, max_retries=3, retry_delay=1.0,
-                 timeout=30, user_agent="UsenetSync/1.0"):
+                 timeout=30, user_agent=None):
         self.host = host
         self.port = port
         self.username = username
@@ -436,6 +436,42 @@ class ProductionNNTPClient:
         self.use_ssl = use_ssl
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        
+        # Common user agents from popular Usenet tools
+        self._common_user_agents = [
+            # Most popular downloaders
+            "SABnzbd/3.7.1",
+            "SABnzbd/3.6.0", 
+            "SABnzbd/3.5.3",
+            "NZBGet/21.1",
+            "NZBGet/21.0",
+            # Popular newsreaders
+            "Newsbin/6.90",
+            "Newsbin/6.82",
+            "GrabIt 1.7.2 Beta 6",
+            "Pan/0.146",
+            "Pan/0.145",
+            "Unison/2.2",
+            # Email clients with news support
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Thunderbird/91.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:21.0) Gecko/20100101 Thunderbird/21.0",
+            # Popular posting tools
+            "ngPost/4.16",
+            "ngPost/4.15",
+            "ngPost/4.14",
+            "PowerPost/2000",
+            "PowerPost/2003",
+            "NewsPro/3.8.1",
+            # Classic newsreaders
+            "Forte Agent 8.0",
+            "Xnews/5.04.25",
+            "40tude_Dialog/2.0.15.41",
+            "slrn/1.0.3",
+            "tin/2.6.2",
+            None  # Sometimes no user agent is more anonymous
+        ]
+        
+        # Set user agent - use provided or random selection
         self.user_agent = user_agent
         
         # Initialize connection pool
@@ -486,6 +522,10 @@ class ProductionNNTPClient:
                 max_connections=10
             )
     
+    def _get_random_user_agent(self):
+        """Get a random user agent from common Usenet tools"""
+        return random.choice(self._common_user_agents)
+    
     def _generate_message_id(self, prefix=None):
         """Generate obfuscated unique message ID"""
         # Generate completely random ID for obfuscation
@@ -514,7 +554,15 @@ class ProductionNNTPClient:
         headers['Subject'] = subject.replace('_', ' ').strip() if subject else 'No Subject'
         headers['Message-ID'] = message_id or self._generate_message_id()
         headers['Date'] = email.utils.formatdate(localtime=True)
-        headers['User-Agent'] = self.user_agent
+        
+        # Use random user agent for each post if not specified
+        if self.user_agent:
+            headers['User-Agent'] = self.user_agent
+        else:
+            # Get random user agent for this post
+            random_agent = self._get_random_user_agent()
+            if random_agent:  # Only add if not None (sometimes no UA is better)
+                headers['User-Agent'] = random_agent
         
         # Optional headers
         headers['X-No-Archive'] = 'yes'
