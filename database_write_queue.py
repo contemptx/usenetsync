@@ -420,24 +420,24 @@ def test_write_queue():
     # Create parent records first
     with db.pool.get_connection() as conn:
         # Create a test folder
-        conn.execute("""
+        cursor = conn.execute("""
             INSERT INTO folders (folder_unique_id, folder_path, display_name, share_type)
             VALUES ('test_folder', '/test', 'Test Folder', 'private')
         """)
-        folder_id = conn.lastrowid
+        folder_id = cursor.lastrowid
         
         # Create test files
-        conn.execute("""
+        cursor = conn.execute("""
             INSERT INTO files (folder_id, filename, file_path, size, hash)
             VALUES (?, 'file1.txt', '/test/file1.txt', 1000, 'hash1')
         """, (folder_id,))
-        file1_id = conn.lastrowid
+        file1_id = cursor.lastrowid
         
-        conn.execute("""
+        cursor = conn.execute("""
             INSERT INTO files (folder_id, filename, file_path, size, hash)
             VALUES (?, 'file2.txt', '/test/file2.txt', 2000, 'hash2')
         """, (folder_id,))
-        file2_id = conn.lastrowid
+        file2_id = cursor.lastrowid
         
         conn.commit()
     

@@ -86,6 +86,7 @@ def create_complete_schema(db_path):
             message_id TEXT,
             size INTEGER,
             hash TEXT,
+            segment_hash TEXT,
             internal_subject TEXT,
             offset INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
