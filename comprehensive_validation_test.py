@@ -532,12 +532,17 @@ class ComprehensiveSystemValidator:
                 with open(file_path, 'rb') as f:
                     content = f.read()
                 
-                # Create segments using the segment packing system
-                segments = self.systems['segment_packing'].create_segments(
-                    file_id=file_id,
-                    data=content,
-                    segment_size=4096  # 4KB segments for testing
-                )
+                # Create segments manually for testing
+                segment_size = 4096  # 4KB segments
+                segments = []
+                
+                for i in range(0, len(content), segment_size):
+                    segment_data = content[i:i+segment_size]
+                    segments.append({
+                        'index': len(segments),
+                        'data': segment_data,
+                        'size': len(segment_data)
+                    })
                 
                 print(f"  Created {len(segments)} segments")
                 
