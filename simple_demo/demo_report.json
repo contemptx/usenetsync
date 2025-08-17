@@ -1,0 +1,75 @@
+{
+  "demo_dir": "/workspace/simple_demo",
+  "files_created": [
+    {
+      "name": "document.txt",
+      "path": "/workspace/simple_demo/test_files/document.txt",
+      "size": 3900,
+      "hash": "9fec9d10bc272c4173c78f3c3dc3a507a07e94a8cf90840db88b1b43d1444605"
+    },
+    {
+      "name": "data.csv",
+      "path": "/workspace/simple_demo/test_files/data.csv",
+      "size": 1250,
+      "hash": "2275aa9bff270dbcb35f1b1b267ddc724828a3b7224569e2c7cbe7c370ca405b"
+    },
+    {
+      "name": "image.dat",
+      "path": "/workspace/simple_demo/test_files/image.dat",
+      "size": 10240,
+      "hash": "3448fc9fbeab84cc0290d19bdb48a1804342c781756b4469115ea7d2f2de14d2"
+    },
+    {
+      "name": "large_file.bin",
+      "path": "/workspace/simple_demo/test_files/large_file.bin",
+      "size": 102400,
+      "hash": "15cbe2508a94c44dae84acb909b20a1ba64de19dd0dcf81a7ecf94553e7daa57"
+    }
+  ],
+  "files_indexed": [
+    {
+      "file_id": "107b75b6-99b3-4faa-8d38-06539d2f5ce7",
+      "filename": "document.txt",
+      "size": 3900
+    },
+    {
+      "file_id": "098922c9-48dc-4ad9-b8f2-e80872607625",
+      "filename": "data.csv",
+      "size": 1250
+    },
+    {
+      "file_id": "c2f345f3-d0b4-4f69-9bb2-20455365f2db",
+      "filename": "image.dat",
+      "size": 10240
+    },
+    {
+      "file_id": "485bff7a-4c5a-4bcc-8ebd-e599af758df2",
+      "filename": "large_file.bin",
+      "size": 102400
+    }
+  ],
+  "total_segments": 4,
+  "shares": [
+    [
+      "public",
+      "PUB-436adc6b1ede5f0d"
+    ],
+    [
+      "private",
+      "PRV-41557e3557176d85"
+    ],
+    [
+      "protected",
+      "PWD-e138dabc9433874c"
+    ]
+  ],
+  "statistics": {
+    "folders": 1,
+    "files": 4,
+    "segments": 4,
+    "shares": 3
+  },
+  "results": [
+    "Connection: module 'nntp' has no attribute 'NNTP_SSL'"
+  ]
+}
