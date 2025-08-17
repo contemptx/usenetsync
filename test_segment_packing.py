@@ -33,7 +33,7 @@ def test_segment_packing():
     # Create packing system with test config
     config = {
         'segment_size': 768000,  # 750KB segments
-        'pack_size': 5 * 1024 * 1024,  # 5MB packs for testing
+        'pack_size': 768000,  # 750KB articles (same as segment size for Usenet)
         'packing_strategy': 'optimized'
     }
     
@@ -41,7 +41,7 @@ def test_segment_packing():
     
     print(f"\n📊 Configuration:")
     print(f"  Segment Size: {config['segment_size']:,} bytes (750KB)")
-    print(f"  Pack Size: {config['pack_size']:,} bytes (5MB)")
+    print(f"  Article Size: {config['pack_size']:,} bytes (750KB)")
     print(f"  Strategy: {config['packing_strategy']}")
     
     # Create test files of various sizes
@@ -104,7 +104,7 @@ def test_segment_packing():
     print(f"\n📊 Total: {total_size:,} bytes in {len(segments)} segments")
     
     # Now pack the segments
-    print(f"\n📦 Packing segments into {config['pack_size']:,} byte articles...")
+    print(f"\n📦 Packing segments into {config['pack_size']:,} byte Usenet articles (750KB)...")
     print("-" * 50)
     
     packed_segments = packing_system._pack_optimized(segments, None)
