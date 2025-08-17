@@ -1,4 +1,3 @@
-use std::ffi::{CString, CStr};
 use std::os::raw::{c_char, c_int, c_uint};
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
@@ -79,7 +78,7 @@ pub struct LicenseStatus {
 pub struct TurboActivate;
 
 impl TurboActivate {
-    pub fn new(dat_file_path: Option<&str>) -> Result<Self, String> {
+    pub fn new(_dat_file_path: Option<&str>) -> Result<Self, String> {
         // In a real implementation, this would initialize the TurboActivate library
         // For now, we'll create a mock implementation
         

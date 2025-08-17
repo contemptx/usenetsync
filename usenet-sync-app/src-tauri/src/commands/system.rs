@@ -112,7 +112,8 @@ pub async fn get_statistics() -> Result<SystemStats, String> {
 #[tauri::command]
 pub async fn export_data(_options: serde_json::Value) -> Result<String, String> {
     // Mock implementation
-    Ok(base64::encode("exported_data"))
+    use base64::{Engine as _, engine::general_purpose};
+    Ok(general_purpose::STANDARD.encode("exported_data"))
 }
 
 #[tauri::command]

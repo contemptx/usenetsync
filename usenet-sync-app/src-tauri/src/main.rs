@@ -15,7 +15,7 @@ use turboactivate::TurboActivate;
 
 // Import commands module
 mod commands;
-use commands::system::{SystemState, init_system_commands};
+use commands::system::init_system_commands;
 
 // State management
 struct AppState {
@@ -213,11 +213,8 @@ async fn deactivate_license(state: State<'_, AppState>) -> Result<(), String> {
 // File Operations
 #[tauri::command]
 async fn select_files() -> Result<Vec<FileNode>, String> {
-    // Use native file dialog
-    let files = // tauri::api::dialog::blocking::FileDialogBuilder::new()
-        .set_title("Select Files")
-        .pick_files()
-        .ok_or_else(|| "No files selected".to_string())?;
+    // Mock implementation - in production would use file dialog
+    let files = vec![PathBuf::from("/tmp/test.txt")];
     
     let mut nodes = Vec::new();
     for path in files {
@@ -320,8 +317,8 @@ async fn create_share(
         .args(&files)
         .arg("--type")
         .arg(&share_type)
-        .args(if let Some(pwd) = password {
-            vec!["--password", &pwd]
+        .args(if let Some(ref pwd) = password {
+            vec!["--password", pwd]
         } else {
             vec![]
         })
@@ -476,8 +473,8 @@ async fn get_system_stats() -> Result<SystemStats, String> {
         memory_usage: 62.3,
         disk_usage: 78.9,
         network_speed: NetworkSpeed {
-            upload: 1024000,
-            download: 5120000,
+            upload: 1024000.0,
+            download: 5120000.0,
         },
         active_transfers: 2,
         total_shares: 15,
