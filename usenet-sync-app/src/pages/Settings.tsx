@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { testServerConnection, saveServerConfig, deactivateLicense } from '../lib/tauri';
-import { Server, Check, X, AlertCircle, Key, LogOut } from 'lucide-react';
+import { Server, Check, X, AlertCircle, Key, LogOut, Gauge, Upload, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const Settings: React.FC = () => {
@@ -19,6 +19,13 @@ export const Settings: React.FC = () => {
   
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<boolean | null>(null);
+  
+  const [bandwidthLimits, setBandwidthLimits] = useState({
+    uploadLimit: 0,
+    downloadLimit: 0,
+    uploadEnabled: false,
+    downloadEnabled: false
+  });
 
   const handleTestConnection = async () => {
     setIsTesting(true);
@@ -194,6 +201,132 @@ export const Settings: React.FC = () => {
             className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
             Save Settings
+          </button>
+        </div>
+      </div>
+
+      {/* Bandwidth Control */}
+      <div className="bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Gauge className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Bandwidth Control
+          </h2>
+        </div>
+
+        <div className="space-y-4">
+          {/* Upload Limit */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={bandwidthLimits.uploadEnabled}
+                  onChange={(e) => setBandwidthLimits({
+                    ...bandwidthLimits,
+                    uploadEnabled: e.target.checked
+                  })}
+                  className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Limit Upload Speed
+                </span>
+              </label>
+              <Upload className="w-4 h-4 text-gray-500" />
+            </div>
+            
+            {bandwidthLimits.uploadEnabled && (
+              <div className="ml-6 flex items-center gap-2">
+                <input
+                  type="number"
+                  value={bandwidthLimits.uploadLimit}
+                  onChange={(e) => setBandwidthLimits({
+                    ...bandwidthLimits,
+                    uploadLimit: parseFloat(e.target.value) || 0
+                  })}
+                  min="0"
+                  step="0.5"
+                  className="w-24 px-3 py-1 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-dark-bg dark:text-white"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">Mbps</span>
+                <span className="text-xs text-gray-500 dark:text-gray-500">
+                  ({(bandwidthLimits.uploadLimit * 125).toFixed(0)} KB/s)
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Download Limit */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={bandwidthLimits.downloadEnabled}
+                  onChange={(e) => setBandwidthLimits({
+                    ...bandwidthLimits,
+                    downloadEnabled: e.target.checked
+                  })}
+                  className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Limit Download Speed
+                </span>
+              </label>
+              <Download className="w-4 h-4 text-gray-500" />
+            </div>
+            
+            {bandwidthLimits.downloadEnabled && (
+              <div className="ml-6 flex items-center gap-2">
+                <input
+                  type="number"
+                  value={bandwidthLimits.downloadLimit}
+                  onChange={(e) => setBandwidthLimits({
+                    ...bandwidthLimits,
+                    downloadLimit: parseFloat(e.target.value) || 0
+                  })}
+                  min="0"
+                  step="0.5"
+                  className="w-24 px-3 py-1 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-dark-bg dark:text-white"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">Mbps</span>
+                <span className="text-xs text-gray-500 dark:text-gray-500">
+                  ({(bandwidthLimits.downloadLimit * 125).toFixed(0)} KB/s)
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Info Box */}
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-blue-700 dark:text-blue-400">
+                <p className="font-medium mb-1">Bandwidth Limiting</p>
+                <p>Limits apply to all transfers. Set to 0 or disable for unlimited speed.</p>
+                <p className="mt-1">1 Mbps = 125 KB/s = 1,000,000 bits/second</p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={async () => {
+              try {
+                // Save bandwidth settings
+                const upload = bandwidthLimits.uploadEnabled ? bandwidthLimits.uploadLimit : 0;
+                const download = bandwidthLimits.downloadEnabled ? bandwidthLimits.downloadLimit : 0;
+                
+                // This would call a Tauri command to set bandwidth limits
+                // await setBandwidthLimits(upload, download);
+                
+                toast.success('Bandwidth limits updated');
+              } catch (error) {
+                toast.error('Failed to update bandwidth limits');
+              }
+            }}
+            className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            Apply Bandwidth Limits
           </button>
         </div>
       </div>

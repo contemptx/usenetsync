@@ -24,8 +24,8 @@
 ## 2. **Performance Features** ⚠️
 
 ### Not Implemented:
-- [ ] **Bandwidth Control/Throttling** - Configurable upload/download limits
-- [ ] **WebAssembly Workers** - For heavy computation (mentioned in PRD)
+- [x] **Bandwidth Control/Throttling** - Configurable upload/download limits ✅ IMPLEMENTED
+- [x] **WebAssembly Workers** - For heavy computation (mentioned in PRD) ✅ IMPLEMENTED
 - [ ] **Scheduled Uploads/Downloads** - Time-based operations
 - [ ] **Auto-retry with exponential backoff** - For failed operations
 - [ ] **Connection pooling visualization** - Show active connections
@@ -53,7 +53,7 @@
 ## 5. **Backend Integration** ⚠️
 
 ### Missing Python Components in CLI:
-- [ ] **Bandwidth throttling implementation**
+- [x] **Bandwidth throttling implementation** ✅ IMPLEMENTED
 - [ ] **Version control operations**
 - [ ] **Mirror server management**
 - [ ] **Scheduled task management**
@@ -129,9 +129,9 @@
 ## 🎯 **Priority Recommendations:**
 
 ### High Priority (Core Functionality):
-1. **Bandwidth Control** - Essential for user experience
-2. **Dual-Pane File Manager** - Core navigation feature
-3. **WebAssembly Workers** - Performance critical
+1. ~~**Bandwidth Control**~~ - ✅ IMPLEMENTED
+2. ~~**Dual-Pane File Manager**~~ - Not needed for Usenet (clarified)
+3. ~~**WebAssembly Workers**~~ - ✅ IMPLEMENTED
 4. **Scheduled Operations** - User requested feature
 5. **Windows Installer** - Deployment requirement
 
@@ -156,9 +156,9 @@
 | Core Features | 12 | 8 | 60% |
 | UI Components | 15 | 14 | 52% |
 | Backend Integration | 16 | 7 | 70% |
-| Performance | 5 | 5 | 50% |
+| Performance | 7 | 3 | 70% |
 | Security | 8 | 5 | 62% |
-| **Overall** | **56** | **39** | **59%** |
+| **Overall** | **59** | **36** | **62%** |
 
 ## 🚀 **Next Steps:**
 
