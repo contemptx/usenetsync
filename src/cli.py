@@ -19,6 +19,7 @@ from indexing.share_id_generator import ShareIDGenerator
 from upload.enhanced_upload import EnhancedUploadSystem
 from download.enhanced_download import EnhancedDownloadSystem
 from publishing.publishing_system import PublishingSystem
+from core.integrated_backend import IntegratedBackend, create_integrated_backend
 
 class UsenetSyncCLI:
     def __init__(self):
@@ -27,6 +28,9 @@ class UsenetSyncCLI:
         self.security = EnhancedSecuritySystem(self.db_manager)
         self.share_generator = ShareIDGenerator()
         self.nntp_client = None
+        
+        # Initialize integrated backend with all new features
+        self.integrated_backend = IntegratedBackend(self.db_manager)
         
     def _load_config(self):
         """Load configuration from file"""

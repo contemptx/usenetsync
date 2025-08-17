@@ -16,6 +16,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { getLogs } from '../lib/tauri';
 
 interface LogEntry {
   id: string;
@@ -64,10 +65,24 @@ export const Logs: React.FC = () => {
   const loadLogs = async () => {
     setIsLoading(true);
     try {
-      // This would call Tauri backend
-      // const logEntries = await getLogs();
+      // Try to get logs from Tauri backend
+      try {
+        const logEntries = await getLogs({
+          level: filters.level !== 'all' ? filters.level : undefined,
+          category: filters.category !== 'all' ? filters.category : undefined,
+          search: searchQuery || undefined,
+          limit: 1000
+        });
+        
+        if (logEntries && logEntries.length > 0) {
+          setLogs(logEntries);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to fetch logs from backend:', error);
+      }
       
-      // Mock data for demo
+      // Fall back to mock data for demo
       const mockLogs: LogEntry[] = [
         {
           id: '1',
