@@ -325,24 +325,26 @@ class ShardedPostgreSQLManager:
         -- Create schema for this shard
         CREATE SCHEMA IF NOT EXISTS shard_{shard_id};
         
-        -- Segments table with partitioning
-        CREATE TABLE IF NOT EXISTS shard_{shard_id}.segments (
-            id BIGSERIAL PRIMARY KEY,
-            segment_id UUID NOT NULL,
-            file_id UUID NOT NULL,
-            folder_id UUID NOT NULL,
-            segment_index INTEGER NOT NULL,
-            segment_hash BYTEA NOT NULL,
-            size BIGINT NOT NULL,
-            message_id TEXT,
-            subject TEXT,
-            internal_subject TEXT,
-            uploaded_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            
-            -- Unique constraint
-            UNIQUE(file_id, segment_index)
-        ) PARTITION BY RANGE (created_at);
+                 -- Segments table with partitioning
+         CREATE TABLE IF NOT EXISTS shard_{shard_id}.segments (
+             id BIGSERIAL,
+             segment_id UUID NOT NULL,
+             file_id UUID NOT NULL,
+             folder_id UUID NOT NULL,
+             segment_index INTEGER NOT NULL,
+             segment_hash BYTEA NOT NULL,
+             size BIGINT NOT NULL,
+             message_id TEXT,
+             subject TEXT,
+             internal_subject TEXT,
+             uploaded_at TIMESTAMPTZ,
+             created_at TIMESTAMPTZ DEFAULT NOW(),
+
+             -- Primary key includes partition key
+             PRIMARY KEY (id, created_at),
+             -- Unique constraint also includes partition key
+             UNIQUE(file_id, segment_index, created_at)
+         ) PARTITION BY RANGE (created_at);
         
         -- Create monthly partitions
         CREATE TABLE IF NOT EXISTS shard_{shard_id}.segments_2024_01 
