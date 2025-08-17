@@ -46,7 +46,6 @@
 
 ### Not Visible in UI:
 - [ ] **Encryption Algorithm Selection** - User choice of encryption
-- [ ] **Key Management UI** - Import/export encryption keys
 - [ ] **Secure Delete Options** - Overwrite settings
 
 ## 5. **Backend Integration** ⚠️
@@ -137,6 +136,12 @@
 3. **Context menus** - Right-click operations
 4. **Keyboard shortcuts** - Power user efficiency
 
+### Low Priority (Advanced Features):
+1. **Key Management UI** - Import/export encryption keys (advanced users only)
+2. **macOS/Linux installers** - Platform-specific packages
+3. **Auto-updater** - Automatic updates
+4. **Code signing** - Digital signatures
+
 
 
 ## 📊 **Completion Status:**
@@ -147,7 +152,7 @@
 | UI Components | 15 | 8 | 65% |
 | Backend Integration | 16 | 5 | 76% |
 | Performance | 9 | 0 | 100% |
-| Security | 8 | 3 | 73% |
+| Security | 8 | 2 | 80% |
 | **Overall** | **60** | **23** | **72%** |
 
 ## 🚀 **Next Steps:**
