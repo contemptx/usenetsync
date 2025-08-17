@@ -244,7 +244,7 @@ class IntegratedBackend:
         return [log.to_dict() for log in logs]
     
     # Retry Wrapper for Network Operations
-    @retry(max_attempts=3, strategy='exponential')
+    @retry(strategy='exponential')
     async def upload_with_retry(self, file_path: str, share_id: str) -> bool:
         """Upload file with automatic retry on failure"""
         # This would integrate with existing upload system
@@ -261,7 +261,7 @@ class IntegratedBackend:
                 self.log(LogLevel.ERROR, f"Upload failed: {e}", "upload")
                 raise
     
-    @retry(max_attempts=3, strategy='exponential')
+    @retry(strategy='exponential')
     async def download_with_retry(self, share_id: str, destination: str) -> bool:
         """Download file with automatic retry on failure"""
         # This would integrate with existing download system

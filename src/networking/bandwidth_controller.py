@@ -1,11 +1,11 @@
 """
-Bandwidth Controller for UsenetSync
+Bandwidth Controller for UsenetSync - Fixed Version
 Implements rate limiting for upload and download operations
 """
 
+import asyncio
 import time
 import threading
-import asyncio
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import logging
@@ -50,26 +50,25 @@ class TokenBucket:
         with self.lock:
             now = time.time()
             elapsed = now - self.last_update
+            self.last_update = now
             
             # Add new tokens based on elapsed time
             self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
-            self.last_update = now
             
-            if tokens <= self.tokens:
-                # Enough tokens available
+            if self.tokens >= tokens:
                 self.tokens -= tokens
-                return 0.0
+                return 0  # No wait needed
             else:
                 # Calculate wait time
                 deficit = tokens - self.tokens
                 wait_time = deficit / self.rate
                 return wait_time
     
-    def update_rate(self, new_rate: int):
-        """Update the rate limit"""
+    def reset(self):
+        """Reset bucket to full capacity"""
         with self.lock:
-            self.rate = new_rate
-            self.capacity = new_rate * 2
+            self.tokens = self.capacity
+            self.last_update = time.time()
 
 class BandwidthController:
     """Controls bandwidth for all network operations"""
@@ -85,16 +84,23 @@ class BandwidthController:
         self.upload_bucket = None
         self.download_bucket = None
         
-        if self.config.max_upload_speed > 0:
+        # Upload/Download state
+        self.upload_limit = self.config.max_upload_speed
+        self.download_limit = self.config.max_download_speed
+        self.upload_limit_enabled = self.config.max_upload_speed > 0
+        self.download_limit_enabled = self.config.max_download_speed > 0
+        
+        # Initialize buckets if limits are set
+        if self.upload_limit_enabled:
             self.upload_bucket = TokenBucket(
-                self.config.max_upload_speed,
-                int(self.config.max_upload_speed * self.config.burst_size)
+                self.upload_limit,
+                int(self.upload_limit * self.config.burst_size)
             )
         
-        if self.config.max_download_speed > 0:
+        if self.download_limit_enabled:
             self.download_bucket = TokenBucket(
-                self.config.max_download_speed,
-                int(self.config.max_download_speed * self.config.burst_size)
+                self.download_limit,
+                int(self.download_limit * self.config.burst_size)
             )
         
         # Statistics
@@ -111,6 +117,12 @@ class BandwidthController:
             }
         }
         self.stats_lock = threading.Lock()
+        
+        # Additional stats for compatibility
+        self.upload_bytes_sent = 0
+        self.download_bytes_received = 0
+        self.upload_start_time = time.time()
+        self.download_start_time = time.time()
         
         # Start statistics updater
         self._start_stats_updater()
@@ -141,221 +153,199 @@ class BandwidthController:
                     stats['bytes_transferred'] = 0
                     stats['start_time'] = now
     
-    def throttle_upload(self, data: bytes) -> bytes:
-        """
-        Throttle upload data
-        
-        Args:
-            data: Data to upload
-            
-        Returns:
-            Same data (after appropriate delay)
-        """
-        if not self.upload_bucket:
-            # No throttling
-            self._record_transfer('upload', len(data))
-            return data
-        
-        # Calculate wait time
-        wait_time = self.upload_bucket.consume(len(data))
-        
-        if wait_time > 0:
-            logger.debug(f"Throttling upload: waiting {wait_time:.3f}s")
-            time.sleep(wait_time)
-        
-        self._record_transfer('upload', len(data))
-        return data
-    
-    def throttle_download(self, data: bytes) -> bytes:
-        """
-        Throttle download data
-        
-        Args:
-            data: Downloaded data
-            
-        Returns:
-            Same data (after appropriate delay)
-        """
-        if not self.download_bucket:
-            # No throttling
-            self._record_transfer('download', len(data))
-            return data
-        
-        # Calculate wait time
-        wait_time = self.download_bucket.consume(len(data))
-        
-        if wait_time > 0:
-            logger.debug(f"Throttling download: waiting {wait_time:.3f}s")
-            time.sleep(wait_time)
-        
-        self._record_transfer('download', len(data))
-        return data
-    
-    def throttle_upload_chunk(self, chunk_size: int) -> float:
-        """
-        Get wait time for uploading a chunk
-        
-        Args:
-            chunk_size: Size of chunk in bytes
-            
-        Returns:
-            Wait time in seconds
-        """
-        if not self.upload_bucket:
-            return 0.0
-        
-        wait_time = self.upload_bucket.consume(chunk_size)
-        if wait_time == 0:
-            self._record_transfer('upload', chunk_size)
-        return wait_time
-    
-    def throttle_download_chunk(self, chunk_size: int) -> float:
-        """
-        Get wait time for downloading a chunk
-        
-        Args:
-            chunk_size: Size of chunk in bytes
-            
-        Returns:
-            Wait time in seconds
-        """
-        if not self.download_bucket:
-            return 0.0
-        
-        wait_time = self.download_bucket.consume(chunk_size)
-        if wait_time == 0:
-            self._record_transfer('download', chunk_size)
-        return wait_time
-    
-    def _record_transfer(self, direction: str, bytes_count: int):
-        """Record bytes transferred for statistics"""
-        with self.stats_lock:
-            self.stats[direction]['bytes_transferred'] += bytes_count
-    
     def set_upload_limit(self, bytes_per_second: int):
-        """
-        Set upload speed limit
+        """Set upload bandwidth limit"""
+        self.upload_limit = bytes_per_second
+        self.upload_limit_enabled = bytes_per_second > 0
         
-        Args:
-            bytes_per_second: Maximum upload speed (0 = unlimited)
-        """
-        self.config.max_upload_speed = bytes_per_second
-        
-        if bytes_per_second > 0:
-            if self.upload_bucket:
-                self.upload_bucket.update_rate(bytes_per_second)
-            else:
-                self.upload_bucket = TokenBucket(
-                    bytes_per_second,
-                    int(bytes_per_second * self.config.burst_size)
-                )
+        if self.upload_limit_enabled:
+            self.upload_bucket = TokenBucket(
+                bytes_per_second,
+                int(bytes_per_second * self.config.burst_size)
+            )
         else:
             self.upload_bucket = None
         
-        logger.info(f"Upload limit set to {self._format_speed(bytes_per_second)}")
+        logger.info(f"Upload limit set to {bytes_per_second} bytes/sec")
     
     def set_download_limit(self, bytes_per_second: int):
-        """
-        Set download speed limit
+        """Set download bandwidth limit"""
+        self.download_limit = bytes_per_second
+        self.download_limit_enabled = bytes_per_second > 0
         
-        Args:
-            bytes_per_second: Maximum download speed (0 = unlimited)
-        """
-        self.config.max_download_speed = bytes_per_second
-        
-        if bytes_per_second > 0:
-            if self.download_bucket:
-                self.download_bucket.update_rate(bytes_per_second)
-            else:
-                self.download_bucket = TokenBucket(
-                    bytes_per_second,
-                    int(bytes_per_second * self.config.burst_size)
-                )
+        if self.download_limit_enabled:
+            self.download_bucket = TokenBucket(
+                bytes_per_second,
+                int(bytes_per_second * self.config.burst_size)
+            )
         else:
             self.download_bucket = None
         
-        logger.info(f"Download limit set to {self._format_speed(bytes_per_second)}")
+        logger.info(f"Download limit set to {bytes_per_second} bytes/sec")
     
-    def get_limits(self) -> Dict[str, int]:
+    def throttle_upload(self, data: bytes) -> bytes:
+        """Throttle upload data"""
+        if not self.upload_bucket:
+            return data
+        
+        wait_time = self.upload_bucket.consume(len(data))
+        if wait_time > 0:
+            time.sleep(wait_time)
+        
+        with self.stats_lock:
+            self.stats['upload']['bytes_transferred'] += len(data)
+            self.upload_bytes_sent += len(data)
+        
+        return data
+    
+    def throttle_download(self, data: bytes) -> bytes:
+        """Throttle download data"""
+        if not self.download_bucket:
+            return data
+        
+        wait_time = self.download_bucket.consume(len(data))
+        if wait_time > 0:
+            time.sleep(wait_time)
+        
+        with self.stats_lock:
+            self.stats['download']['bytes_transferred'] += len(data)
+            self.download_bytes_received += len(data)
+        
+        return data
+    
+    def consume_upload(self, bytes_count: int) -> float:
+        """Consume upload bandwidth and return wait time"""
+        if not self.upload_bucket:
+            return 0
+        return self.upload_bucket.consume(bytes_count)
+    
+    def consume_download(self, bytes_count: int) -> float:
+        """Consume download bandwidth and return wait time"""
+        if not self.download_bucket:
+            return 0
+        return self.download_bucket.consume(bytes_count)
+    
+    async def consume_upload_tokens(self, bytes_count: int) -> bool:
+        """Async version - consume upload tokens for rate limiting"""
+        if not self.upload_limit_enabled or not self.upload_bucket:
+            return True
+        
+        wait_time = self.upload_bucket.consume(bytes_count)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+            return False
+        
+        with self.stats_lock:
+            self.stats['upload']['bytes_transferred'] += bytes_count
+            self.upload_bytes_sent += bytes_count
+        
+        return True
+    
+    async def consume_download_tokens(self, bytes_count: int) -> bool:
+        """Async version - consume download tokens for rate limiting"""
+        if not self.download_limit_enabled or not self.download_bucket:
+            return True
+        
+        wait_time = self.download_bucket.consume(bytes_count)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+            return False
+        
+        with self.stats_lock:
+            self.stats['download']['bytes_transferred'] += bytes_count
+            self.download_bytes_received += bytes_count
+        
+        return True
+    
+    def throttle_upload_chunk(self, chunk: bytes, chunk_size: int = 8192) -> bytes:
+        """Throttle upload with chunking"""
+        result = bytearray()
+        for i in range(0, len(chunk), chunk_size):
+            sub_chunk = chunk[i:i + chunk_size]
+            result.extend(self.throttle_upload(sub_chunk))
+        return bytes(result)
+    
+    def throttle_download_chunk(self, chunk: bytes, chunk_size: int = 8192) -> bytes:
+        """Throttle download with chunking"""
+        result = bytearray()
+        for i in range(0, len(chunk), chunk_size):
+            sub_chunk = chunk[i:i + chunk_size]
+            result.extend(self.throttle_download(sub_chunk))
+        return bytes(result)
+    
+    def get_upload_speed(self) -> float:
+        """Get current upload speed in bytes/sec"""
+        with self.stats_lock:
+            return self.stats['upload']['current_speed']
+    
+    def get_download_speed(self) -> float:
+        """Get current download speed in bytes/sec"""
+        with self.stats_lock:
+            return self.stats['download']['current_speed']
+    
+    def get_limits(self) -> Dict[str, Any]:
         """Get current bandwidth limits"""
         return {
-            'upload': self.config.max_upload_speed,
-            'download': self.config.max_download_speed
+            'upload_limit': self.upload_limit,
+            'download_limit': self.download_limit,
+            'upload_enabled': self.upload_limit_enabled,
+            'download_enabled': self.download_limit_enabled
         }
     
     def get_stats(self) -> Dict[str, Any]:
         """Get bandwidth statistics"""
         with self.stats_lock:
-            return {
+            return self.stats.copy()
+    
+    def get_bandwidth_stats(self) -> Dict[str, Any]:
+        """Get comprehensive bandwidth statistics"""
+        return {
+            'upload': {
+                'current_speed': self.get_upload_speed(),
+                'limit': self.upload_limit,
+                'enabled': self.upload_limit_enabled,
+                'bytes_sent': self.upload_bytes_sent,
+                'start_time': self.upload_start_time
+            },
+            'download': {
+                'current_speed': self.get_download_speed(),
+                'limit': self.download_limit,
+                'enabled': self.download_limit_enabled,
+                'bytes_received': self.download_bytes_received,
+                'start_time': self.download_start_time
+            }
+        }
+    
+    def reset_stats(self):
+        """Reset all statistics"""
+        with self.stats_lock:
+            now = time.time()
+            self.stats = {
                 'upload': {
-                    'current_speed': self.stats['upload']['current_speed'],
-                    'limit': self.config.max_upload_speed,
-                    'utilization': self._calculate_utilization('upload')
+                    'bytes_transferred': 0,
+                    'start_time': now,
+                    'current_speed': 0
                 },
                 'download': {
-                    'current_speed': self.stats['download']['current_speed'],
-                    'limit': self.config.max_download_speed,
-                    'utilization': self._calculate_utilization('download')
+                    'bytes_transferred': 0,
+                    'start_time': now,
+                    'current_speed': 0
                 }
             }
-    
-    def _calculate_utilization(self, direction: str) -> float:
-        """Calculate bandwidth utilization percentage"""
-        limit = (self.config.max_upload_speed if direction == 'upload' 
-                else self.config.max_download_speed)
-        
-        if limit == 0:
-            return 0.0
-        
-        current_speed = self.stats[direction]['current_speed']
-        return min(100.0, (current_speed / limit) * 100)
-    
-    def _format_speed(self, bytes_per_second: int) -> str:
-        """Format speed for display"""
-        if bytes_per_second == 0:
-            return "Unlimited"
-        
-        units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-        speed = float(bytes_per_second)
-        unit_index = 0
-        
-        while speed >= 1024 and unit_index < len(units) - 1:
-            speed /= 1024
-            unit_index += 1
-        
-        return f"{speed:.2f} {units[unit_index]}"
+            self.upload_bytes_sent = 0
+            self.download_bytes_received = 0
+            self.upload_start_time = now
+            self.download_start_time = now
 
-# Global bandwidth controller instance
-_bandwidth_controller: Optional[BandwidthController] = None
+# Global instance
+_controller_instance = None
 
 def get_bandwidth_controller() -> BandwidthController:
-    """Get or create global bandwidth controller"""
-    global _bandwidth_controller
-    if _bandwidth_controller is None:
-        _bandwidth_controller = BandwidthController()
-    return _bandwidth_controller
-    async def consume_upload_tokens(self, bytes_count: int) -> bool:
-        """Consume upload tokens asynchronously"""
-        if not self.upload_limit_enabled:
-            return True
-        wait_time = self.consume_upload(bytes_count)
-        if wait_time > 0:
-            import asyncio
-            await asyncio.sleep(wait_time)
-            return False
-        return True
-    
-    async def consume_download_tokens(self, bytes_count: int) -> bool:
-        """Consume download tokens asynchronously"""
-        if not self.download_limit_enabled:
-            return True
-        wait_time = self.consume_download(bytes_count)
-        if wait_time > 0:
-            import asyncio
-            await asyncio.sleep(wait_time)
-            return False
-        return True
-
+    """Get or create global bandwidth controller instance"""
+    global _controller_instance
+    if _controller_instance is None:
+        _controller_instance = BandwidthController()
+    return _controller_instance
 
 def set_bandwidth_limits(upload_mbps: float = 0, download_mbps: float = 0):
     """
@@ -373,30 +363,3 @@ def set_bandwidth_limits(upload_mbps: float = 0, download_mbps: float = 0):
     
     controller.set_upload_limit(upload_bps)
     controller.set_download_limit(download_bps)
-# Add async methods to the first BandwidthController class
-# These are added at module level and will be attached to the class
-def _async_consume_upload(self, bytes_count):
-    import asyncio
-    async def _consume():
-        if not self.upload_bucket:
-            return True
-        wait_time = self.upload_bucket.consume(bytes_count) if hasattr(self.upload_bucket, 'consume') else 0
-        if wait_time > 0:
-            await asyncio.sleep(wait_time)
-        return wait_time == 0
-    return _consume()
-
-def _async_consume_download(self, bytes_count):
-    import asyncio
-    async def _consume():
-        if not self.download_bucket:
-            return True
-        wait_time = self.download_bucket.consume(bytes_count) if hasattr(self.download_bucket, 'consume') else 0
-        if wait_time > 0:
-            await asyncio.sleep(wait_time)
-        return wait_time == 0
-    return _consume()
-
-# Attach to class
-BandwidthController.consume_upload_tokens = _async_consume_upload
-BandwidthController.consume_download_tokens = _async_consume_download

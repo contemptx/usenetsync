@@ -1,0 +1,72 @@
+{
+  "timestamp": "2025-08-17T23:42:10.417266",
+  "total_tests": 15,
+  "passed": 10,
+  "failed": 5,
+  "pass_rate": 66.66666666666666,
+  "status": "FUNCTIONAL",
+  "modules_tested": 12,
+  "async_support": true,
+  "all_tests": [
+    {
+      "name": "Import cli",
+      "passed": false
+    },
+    {
+      "name": "Import core.integrated_backend",
+      "passed": false
+    },
+    {
+      "name": "Import networking.bandwidth_controller",
+      "passed": true
+    },
+    {
+      "name": "Import security.enhanced_security_system",
+      "passed": true
+    },
+    {
+      "name": "Import core.version_control",
+      "passed": true
+    },
+    {
+      "name": "Import networking.server_rotation",
+      "passed": false
+    },
+    {
+      "name": "Import networking.retry_manager",
+      "passed": true
+    },
+    {
+      "name": "Import core.log_manager",
+      "passed": true
+    },
+    {
+      "name": "Import core.data_management",
+      "passed": true
+    },
+    {
+      "name": "Import upload.enhanced_upload",
+      "passed": true
+    },
+    {
+      "name": "Import download.enhanced_download",
+      "passed": true
+    },
+    {
+      "name": "Import publishing.publishing_system",
+      "passed": true
+    },
+    {
+      "name": "BandwidthController",
+      "passed": false
+    },
+    {
+      "name": "Async Methods",
+      "passed": true
+    },
+    {
+      "name": "ServerRotation",
+      "passed": false
+    }
+  ]
+}

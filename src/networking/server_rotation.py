@@ -74,9 +74,7 @@ class ServerConfig:
 class ServerRotationManager:
     """Manages server rotation and failover"""
     
-    def __init__(
-        self,
-        servers: List[ServerConfig],
+    def __init__(self, servers: Optional[List[ServerConfig]] = None,
         strategy: RotationStrategy = RotationStrategy.FAILOVER,
         health_check_interval: int = 60,
         failure_threshold: int = 3
@@ -90,16 +88,13 @@ class ServerRotationManager:
             health_check_interval: Seconds between health checks
             failure_threshold: Failures before marking server as down
         """
-        self.servers = {s.server_id: s for s in servers}
+        self.servers = {s.id: s for s in (servers or [])}
         self.strategy = strategy
         self.health_check_interval = health_check_interval
         self.failure_threshold = failure_threshold
         
         # Server health tracking
-        self.server_health = {
-            s.server_id: ServerHealth(server_id=s.server_id)
-            for s in servers
-        }
+        self.server_health = {s.id: ServerHealth(server_id=s.id) for s in (servers or [])}
         
         # Rotation state
         self.current_server_index = 0
