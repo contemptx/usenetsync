@@ -371,11 +371,12 @@ class RealUsenetSyncTest:
                                 segment_data = f.read(segment['size'])
                             
                             # Create yEnc encoded message
+                            generated_msg_id = f"<{hashlib.sha256(f'{file['id']}-{segment['segment_index']}-{time.time()}'.encode()).hexdigest()[:16]}@usenetsync>"
                             headers = [
                                 f"Subject: {subject}",
                                 f"From: usenet-sync@test.com",
                                 f"Newsgroups: alt.binaries.test",
-                                f"Message-ID: <{hashlib.sha256(f'{file['id']}-{segment['segment_index']}'.encode()).hexdigest()[:16]}@usenetsync>",
+                                f"Message-ID: {generated_msg_id}",
                                 ""
                             ]
                             
@@ -390,8 +391,26 @@ class RealUsenetSyncTest:
                                 message_id = conn.post(message.encode('utf-8'))
                                 
                                 if message_id:
-                                    print(f"    ✅ Segment {segment['segment_index']}: {message_id}")
-                                    self.posted_messages.append(message_id)
+                                    # Extract the actual message ID returned
+                                    actual_msg_id = message_id[1] if isinstance(message_id, tuple) else message_id
+                                    
+                                    print(f"    ✅ Segment {segment['segment_index']} posted successfully!")
+                                    print(f"       Subject: {subject}")
+                                    print(f"       Message-ID sent: {generated_msg_id}")
+                                    print(f"       Server response: {message_id}")
+                                    print(f"       Actual ID: {actual_msg_id}")
+                                    
+                                    # Store complete information
+                                    upload_info = {
+                                        'segment_index': segment['segment_index'],
+                                        'subject': subject,
+                                        'message_id_sent': generated_msg_id,
+                                        'server_response': message_id,
+                                        'actual_id': actual_msg_id,
+                                        'file': file['filename'],
+                                        'size': segment['size']
+                                    }
+                                    self.posted_messages.append(upload_info)
                                     
                                     # Update database with message ID
                                     with self.enhanced_db.pool.get_connection() as db_conn:
@@ -690,9 +709,19 @@ class RealUsenetSyncTest:
         
         if self.posted_messages:
             print(f"\n📝 Posted {len(self.posted_messages)} messages to Usenet")
-            print("Sample message IDs:")
-            for msg_id in self.posted_messages[:3]:
-                print(f"  - {msg_id}")
+            print("\nDetailed Upload Information:")
+            print("-" * 80)
+            
+            for i, msg in enumerate(self.posted_messages[:5], 1):  # Show first 5
+                if isinstance(msg, dict):
+                    print(f"\n{i}. File: {msg['file']}")
+                    print(f"   Segment: {msg['segment_index']} ({msg['size']} bytes)")
+                    print(f"   Subject: {msg['subject']}")
+                    print(f"   Message-ID: {msg['message_id_sent']}")
+                    print(f"   Server Response: {msg['server_response']}")
+                else:
+                    # Handle old format
+                    print(f"\n{i}. Message ID: {msg}")
         
         if self.share_data:
             print(f"\n🔗 Created {len(self.share_data)} shares")
