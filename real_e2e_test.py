@@ -376,30 +376,31 @@ class RealUsenetSyncTest:
                                 f.seek(segment['offset'])
                                 segment_data = f.read(segment['size'])
                             
-                            # Create UNIQUE message ID - ALWAYS unique even for duplicate content
-                            import uuid
-                            import random
+                            # Use the REAL system's unique ID generation
+                            # The system already ensures uniqueness through:
+                            # 1. SubjectPair generation with entropy
+                            # 2. ProductionNNTPClient's _generate_message_id
                             
-                            # Combine multiple sources of uniqueness:
-                            # 1. UUID for guaranteed uniqueness
-                            # 2. High-precision timestamp (microseconds)
-                            # 3. Random component
-                            # 4. File hash
-                            # 5. Segment index
+                            # Generate unique message ID using the existing system
+                            generated_msg_id = self.nntp._generate_message_id(prefix=f"seg{segment['segment_index']}")
                             
-                            unique_uuid = str(uuid.uuid4())
-                            timestamp_micro = int(time.time() * 1000000)  # Microsecond precision
-                            random_part = random.randint(1000, 9999)
-                            file_hash_part = hashlib.sha256(file['filename'].encode()).hexdigest()[:6]
+                            # Generate unique subject using the security system
+                            subject_pair = self.security.generate_subject_pair(
+                                self.test_folder_id,
+                                version=1,
+                                segment_index=segment['segment_index']
+                            )
                             
-                            # Build a guaranteed unique message ID
-                            generated_msg_id = f"<{unique_uuid}-{timestamp_micro}-{random_part}-{file_hash_part}-seg{segment['segment_index']}@usenetsync.test>"
+                            # Use the obfuscated subject for Usenet
+                            obfuscated_subject = f"[{subject_pair.usenet_subject}] {file['filename']} ({segment['segment_index']+1}/{len(segments)})"
                             
                             print(f"       📝 Generated unique Message-ID: {generated_msg_id}")
+                            print(f"       🔒 Internal subject: {subject_pair.internal_subject[:20]}...")
+                            print(f"       📮 Usenet subject: {subject_pair.usenet_subject}")
                             
                             # Proper headers for binary posts
                             headers = [
-                                f"Subject: {subject}",
+                                f"Subject: {obfuscated_subject}",
                                 f"From: test@usenetsync.com",
                                 f"Newsgroups: alt.binaries.test",
                                 f"Message-ID: {generated_msg_id}",
@@ -441,7 +442,7 @@ class RealUsenetSyncTest:
                                     actual_msg_id = message_id[1] if isinstance(message_id, tuple) else message_id
                                     
                                     print(f"    ✅ Segment {segment['segment_index']} posted successfully!")
-                                    print(f"       Subject: {subject}")
+                                    print(f"       Subject: {obfuscated_subject}")
                                     print(f"       Message-ID sent: {generated_msg_id}")
                                     print(f"       Server response: {message_id}")
                                     print(f"       Actual ID: {actual_msg_id}")
@@ -449,7 +450,9 @@ class RealUsenetSyncTest:
                                     # Store complete information
                                     upload_info = {
                                         'segment_index': segment['segment_index'],
-                                        'subject': subject,
+                                        'subject': obfuscated_subject,
+                                        'internal_subject': subject_pair.internal_subject,
+                                        'usenet_subject': subject_pair.usenet_subject,
                                         'message_id_sent': generated_msg_id,
                                         'server_response': message_id,
                                         'actual_id': actual_msg_id,
