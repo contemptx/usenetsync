@@ -360,6 +360,11 @@ class RealUsenetSyncTest:
                 # Upload each segment to Usenet
                 for segment in segments:
                     try:
+                        # Add delay to avoid rate limiting
+                        if uploaded_segments > 0:
+                            print(f"    ⏳ Waiting 2 seconds to avoid rate limiting...")
+                            time.sleep(2)
+                        
                         # Create NNTP message
                         subject = f"[{self.test_folder_id}] [{file['filename']}] ({segment['segment_index']+1}/{len(segments)})"
                         
@@ -427,9 +432,24 @@ class RealUsenetSyncTest:
                                     print(f"    ❌ Failed to upload segment {segment['segment_index']}")
                         
                     except Exception as e:
-                        print(f"    ❌ Error uploading segment: {e}")
+                        error_msg = str(e)
+                        print(f"    ❌ Error uploading segment {segment['segment_index']}")
+                        
+                        # Identify the type of error
+                        if "502" in error_msg or "simultaneous" in error_msg:
+                            print(f"       ⚠️  RATE LIMITED: Too many connections from same IP")
+                            print(f"       Waiting 5 seconds before continuing...")
+                            time.sleep(5)
+                        elif "441" in error_msg or "refused" in error_msg:
+                            print(f"       ⚠️  ARTICLE REFUSED: Server rejected the post")
+                            print(f"       Possible reasons: duplicate message ID, invalid headers, or spam filter")
+                        else:
+                            print(f"       Error: {error_msg}")
                 
-                time.sleep(0.5)  # Rate limiting
+                # Add delay between files
+                if uploaded_segments > 0:
+                    print(f"  ⏳ Waiting 1 second before next file...")
+                    time.sleep(1)
             
             print(f"\n✅ Upload complete!")
             print(f"   Total segments: {total_segments}")
