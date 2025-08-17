@@ -96,9 +96,7 @@
 - [x] **Windows Installer** - .msi/.exe installer ✅ IMPLEMENTED
 - [ ] **macOS DMG** - Mac installer
 - [ ] **Linux Packages** - .deb/.rpm packages
-- [ ] **Auto-updater Integration** - Tauri updater
 - [ ] **Code Signing** - Digital signatures
-- [ ] **CI/CD Pipeline** - GitHub Actions
 
 ## ✅ **What IS Complete:**
 
@@ -136,8 +134,7 @@
 ### Low Priority (Advanced Features):
 1. **Key Management UI** - Import/export encryption keys (advanced users only)
 2. **macOS/Linux installers** - Platform-specific packages
-3. **Auto-updater** - Automatic updates
-4. **Code signing** - Digital signatures
+3. **Code signing** - Digital signatures
 
 
 
