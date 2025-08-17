@@ -51,7 +51,30 @@ class SimpleE2ETests:
             
             # Create database
             print("Initializing database...")
-            db_config = DatabaseConfig(path="test_workspace/test.db")
+            db_path = "test_workspace/test.db"
+            
+            # Ensure proper schema
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Create folders table with all columns
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS folders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    folder_id TEXT UNIQUE NOT NULL,
+                    path TEXT,
+                    private_key BLOB,
+                    public_key BLOB,
+                    keys_updated_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            conn.close()
+            
+            db_config = DatabaseConfig(path=db_path)
             self.db = ProductionDatabaseManager(
                 config=db_config,
                 enable_monitoring=False,
@@ -193,7 +216,7 @@ Test from UsenetSync at {datetime.now()}"""
             result = index_system.index_folder(
                 str(test_folder),
                 folder_id,
-                progress_callback=lambda p: print(f"  Progress: {p:.1f}%", end='\r')
+                progress_callback=lambda p: print(f"  Progress: {p['current'] if isinstance(p, dict) else p:.1f}%", end='\r') if isinstance(p, (dict, float, int)) else None
             )
             
             print(f"\n✅ Indexed {result['files_indexed']} files")
@@ -252,7 +275,9 @@ Test from UsenetSync at {datetime.now()}"""
             print("\nTesting unpacking...")
             if packed_segments:
                 first_segment = packed_segments[0]
-                unpacked_segments, _ = packer.unpack_segment(first_segment.data)
+                # Combine header and data for unpacking
+                full_packed_data = first_segment.header + first_segment.data
+                unpacked_segments, _ = packer.unpack_segment(full_packed_data)
                 print(f"✅ Unpacked {len(unpacked_segments)} segments")
             
             self.results.append(("Segment Packing", True))
