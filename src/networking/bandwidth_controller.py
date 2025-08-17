@@ -5,6 +5,7 @@ Implements rate limiting for upload and download operations
 
 import time
 import threading
+import asyncio
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import logging
@@ -333,6 +334,28 @@ def get_bandwidth_controller() -> BandwidthController:
     if _bandwidth_controller is None:
         _bandwidth_controller = BandwidthController()
     return _bandwidth_controller
+    async def consume_upload_tokens(self, bytes_count: int) -> bool:
+        """Consume upload tokens asynchronously"""
+        if not self.upload_limit_enabled:
+            return True
+        wait_time = self.consume_upload(bytes_count)
+        if wait_time > 0:
+            import asyncio
+            await asyncio.sleep(wait_time)
+            return False
+        return True
+    
+    async def consume_download_tokens(self, bytes_count: int) -> bool:
+        """Consume download tokens asynchronously"""
+        if not self.download_limit_enabled:
+            return True
+        wait_time = self.consume_download(bytes_count)
+        if wait_time > 0:
+            import asyncio
+            await asyncio.sleep(wait_time)
+            return False
+        return True
+
 
 def set_bandwidth_limits(upload_mbps: float = 0, download_mbps: float = 0):
     """
@@ -350,3 +373,30 @@ def set_bandwidth_limits(upload_mbps: float = 0, download_mbps: float = 0):
     
     controller.set_upload_limit(upload_bps)
     controller.set_download_limit(download_bps)
+# Add async methods to the first BandwidthController class
+# These are added at module level and will be attached to the class
+def _async_consume_upload(self, bytes_count):
+    import asyncio
+    async def _consume():
+        if not self.upload_bucket:
+            return True
+        wait_time = self.upload_bucket.consume(bytes_count) if hasattr(self.upload_bucket, 'consume') else 0
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+        return wait_time == 0
+    return _consume()
+
+def _async_consume_download(self, bytes_count):
+    import asyncio
+    async def _consume():
+        if not self.download_bucket:
+            return True
+        wait_time = self.download_bucket.consume(bytes_count) if hasattr(self.download_bucket, 'consume') else 0
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+        return wait_time == 0
+    return _consume()
+
+# Attach to class
+BandwidthController.consume_upload_tokens = _async_consume_upload
+BandwidthController.consume_download_tokens = _async_consume_download

@@ -12,7 +12,7 @@ import io
 import base64
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 @dataclass
 class SettingsBackup:
@@ -229,7 +229,7 @@ class SettingsManager:
     def _encrypt_data(self, data: str, password: str) -> bytes:
         """Encrypt data with password."""
         # Derive key from password
-        kdf = PBKDF2(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=b'usenetsync_salt',  # Should use random salt in production
@@ -244,7 +244,7 @@ class SettingsManager:
     def _decrypt_data(self, data: bytes, password: str) -> str:
         """Decrypt data with password."""
         # Derive key from password
-        kdf = PBKDF2(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=b'usenetsync_salt',
