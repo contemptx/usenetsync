@@ -1,9 +1,16 @@
 [
   {
+    "category": "indexing",
+    "issue": "Failed to index folder: no such column: keys_updated_at",
+    "suggestion": "Review indexing error handling and file validation",
+    "priority": "medium",
+    "timestamp": "2025-08-17T11:25:26.632273"
+  },
+  {
     "category": "system",
-    "issue": "Test execution failed: PublishingSystem.__init__() missing 1 required positional argument: 'config'",
+    "issue": "Test execution failed: no such column: file_id",
     "suggestion": "Review error handling and system resilience",
     "priority": "high",
-    "timestamp": "2025-08-17T11:23:30.999522"
+    "timestamp": "2025-08-17T11:25:26.633056"
   }
 ]

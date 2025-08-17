@@ -93,7 +93,7 @@ class OptimizedIndexingSystem:
                     conn.execute("""
                         UPDATE folders 
                         SET private_key = ?, public_key = ?, keys_updated_at = datetime('now')
-                        WHERE id = ?
+                        WHERE folder_id = ?
                     """, (private_bytes, public_bytes, folder_db_id))
                     conn.commit()
             
@@ -178,21 +178,26 @@ class OptimizedIndexingSystem:
     
     def _ensure_folder_exists(self, folder_id: str, folder_path: str) -> int:
         """Ensure folder exists in database"""
-        # Check if folder exists
-        folder = self.db.get_folder(folder_id)
-        
-        if folder:
-            return folder['id']
-        
-        # Create folder
-        folder_db_id = self.db.create_folder(
-            folder_id,
-            folder_path,
-            display_name=Path(folder_path).name,
-            share_type='private'
-        )
-        
-        return folder_db_id
+        with self.db.pool.get_connection() as conn:
+            # Check if folder exists
+            cursor = conn.execute("""
+                SELECT folder_id FROM folders 
+                WHERE folder_unique_id = ? OR folder_path = ?
+            """, (folder_id, folder_path))
+            result = cursor.fetchone()
+            
+            if result:
+                return result[0]
+            
+            # Create folder if it doesn't exist
+            cursor = conn.execute("""
+                INSERT INTO folders (folder_unique_id, folder_path, display_name, share_type)
+                VALUES (?, ?, ?, ?)
+            """, (folder_id, folder_path, Path(folder_path).name, 'private'))
+            folder_db_id = cursor.lastrowid
+            conn.commit()
+            
+            return folder_db_id
     
     def _scan_folder(self, folder_path: str) -> List[Path]:
         """Scan folder for files"""

@@ -379,7 +379,15 @@ class ComprehensiveDataTest:
         
         # Create schema
         self._create_schema()
-        print("✓ Database schema created")
+        
+        # Verify schema
+        with self.systems['enhanced_db'].pool.get_connection() as conn:
+            cursor = conn.execute("SELECT sql FROM sqlite_master WHERE type='table'")
+            tables = cursor.fetchall()
+            print(f"✓ Database schema created ({len(tables)} tables)")
+            for table in tables:
+                if table[0]:
+                    print(f"  - {table[0].split('(')[0].replace('CREATE TABLE', '').strip()}")
         
         # Initialize security system
         self.systems['security'] = EnhancedSecuritySystem(self.systems['enhanced_db'])
@@ -535,6 +543,7 @@ class ComprehensiveDataTest:
         self.systems['publishing'] = PublishingSystem(
             self.systems['enhanced_db'],
             self.systems['security'],
+            self.systems['upload'],  # upload_system
             self.systems['nntp'],
             self.systems['index_system'],
             self.systems['binary_index'],
@@ -558,7 +567,7 @@ class ComprehensiveDataTest:
         self.systems['monitoring'] = MonitoringSystem({'metrics_retention_hours': 24})
         
         # Share ID generator
-        self.systems['share_gen'] = ShareIDGenerator(self.systems['enhanced_db'])
+        self.systems['share_gen'] = ShareIDGenerator()
         
     def _test_nntp_connection(self) -> bool:
         """Test NNTP connection with a simple post"""
@@ -644,45 +653,45 @@ Connection test successful at {datetime.now()}
             
         print(f"✓ Created folder: ID={folder_id}, Path={folder_path}")
         
-        # Index files using optimized indexing system
+        # Index entire folder using optimized indexing system
         indexed_count = 0
-        for file_data in test_files:
-            try:
-                # Index file
-                result = self.systems['optimized_index'].index_file(
-                    folder_id,
-                    file_data['path']
-                )
+        try:
+            # Index entire folder
+            result = self.systems['optimized_index'].index_folder(
+                folder_path,
+                str(folder_id),
+                progress_callback=lambda p: print(f"    Indexing progress: {p:.1%}")
+            )
+            
+            # Track indexed data for each file
+            with self.systems['enhanced_db'].pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT file_id, filename, file_path, size, hash
+                    FROM files
+                    WHERE folder_id = ?
+                """, (folder_id,))
+                files = cursor.fetchall()
                 
-                # Track indexed data
-                with self.systems['enhanced_db'].pool.get_connection() as conn:
-                    cursor = conn.execute("""
-                        SELECT file_id, filename, file_path, size, hash
-                        FROM files
-                        WHERE folder_id = ? AND file_path = ?
-                    """, (folder_id, file_data['path']))
-                    file_info = cursor.fetchone()
+            for file_info in files:
+                file_dict = {
+                    'file_id': file_info[0],
+                    'filename': file_info[1],
+                    'file_path': file_info[2],
+                    'size': file_info[3],
+                    'hash': file_info[4]
+                }
+                self.tracker.track_indexed_file(file_info[0], folder_id, file_dict)
+                indexed_count += 1
+                print(f"  ✓ Indexed: {file_info[1]} (ID={file_info[0]}, Size={file_info[3]})")
                     
-                if file_info:
-                    file_dict = {
-                        'file_id': file_info[0],
-                        'filename': file_info[1],
-                        'file_path': file_info[2],
-                        'size': file_info[3],
-                        'hash': file_info[4]
-                    }
-                    self.tracker.track_indexed_file(file_info[0], folder_id, file_dict)
-                    indexed_count += 1
-                    print(f"  ✓ Indexed: {file_info[1]} (ID={file_info[0]}, Size={file_info[3]})")
-                    
-            except Exception as e:
-                print(f"  ⚠️  Failed to index {os.path.basename(file_data['path'])}: {e}")
-                self.tracker.add_recommendation(
-                    'indexing',
-                    f'Failed to index file: {e}',
-                    'Review indexing error handling and file validation',
-                    'medium'
-                )
+        except Exception as e:
+            print(f"  ⚠️  Failed to index folder: {e}")
+            self.tracker.add_recommendation(
+                'indexing',
+                f'Failed to index folder: {e}',
+                'Review indexing error handling and file validation',
+                'medium'
+            )
                 
         print(f"\nIndexing complete: {indexed_count}/{len(test_files)} files indexed")
         return folder_id
