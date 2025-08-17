@@ -17,8 +17,8 @@ from typing import Dict, List, Optional, Any
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from monitoring_system import create_monitoring_system, MonitoringSystem
-from monitoring_dashboard import MonitoringDashboard
+from src.monitoring.monitoring_system import create_monitoring_system, MonitoringSystem
+from src.monitoring.monitoring_dashboard import MonitoringDashboard
 
 
 class MonitoringCLI:

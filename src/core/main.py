@@ -14,21 +14,21 @@ from typing import Any, Dict, List, Optional
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from enhanced_database_manager import DatabaseConfig
-from production_db_wrapper import ProductionDatabaseManager
-from enhanced_security_system import EnhancedSecuritySystem
-from production_nntp_client import ProductionNNTPClient
-from segment_packing_system import SegmentPackingSystem
-from enhanced_upload_system import EnhancedUploadSystem
-from versioned_core_index_system import VersionedCoreIndexSystem
-from simplified_binary_index import SimplifiedBinaryIndex
-from enhanced_download_system import EnhancedDownloadSystem
-from publishing_system import PublishingSystem
-from user_management import UserManager
-from configuration_manager import ConfigurationManager, ServerConfig
-from monitoring_system import MonitoringSystem
-from segment_retrieval_system import SegmentRetrievalSystem
-from upload_queue_manager import SmartQueueManager
+from src.database.enhanced_database_manager import DatabaseConfig
+from src.database.production_db_wrapper import ProductionDatabaseManager
+from src.security.enhanced_security_system import EnhancedSecuritySystem
+from src.networking.production_nntp_client import ProductionNNTPClient
+from src.upload.segment_packing_system import SegmentPackingSystem
+from src.upload.enhanced_upload_system import EnhancedUploadSystem
+from src.indexing.versioned_core_index_system import VersionedCoreIndexSystem
+from src.indexing.simplified_binary_index import SimplifiedBinaryIndex
+from src.download.enhanced_download_system import EnhancedDownloadSystem
+from src.upload.publishing_system import PublishingSystem
+from src.security.user_management import UserManager
+from src.config.configuration_manager import ConfigurationManager, ServerConfig
+from src.monitoring.monitoring_system import MonitoringSystem
+from src.download.segment_retrieval_system import SegmentRetrievalSystem
+from src.upload.upload_queue_manager import SmartQueueManager
 
 class UsenetSync:
     """Main application class integrating all components"""
