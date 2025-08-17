@@ -127,23 +127,25 @@ class RealUsenetSyncTest:
             
             # 7. Initialize indexing system
             print("7. Initializing indexing system...")
-            self.index_system = VersionedCoreIndexSystem(
-                self.db,
+            # Use optimized indexing with write queue to prevent locking
+            from optimized_indexing import OptimizedIndexingSystem
+            self.index_system = OptimizedIndexingSystem(
+                self.enhanced_db,  # Use enhanced DB with proper pooling
                 self.security,
-                {'worker_threads': 2, 'segment_size': 768000}
+                {'worker_threads': 1, 'segment_size': 768000, 'batch_size': 50}
             )
             
             # 8. Initialize segment packing
             print("8. Initializing segment packing...")
             self.packing_system = SegmentPackingSystem(
-                self.db,
+                self.enhanced_db,  # Use enhanced DB
                 {'segment_size': 768000, 'compression_enabled': True}
             )
             
             # 9. Initialize upload system
             print("9. Initializing upload system...")
             self.upload_system = EnhancedUploadSystem(
-                self.db,
+                self.enhanced_db,  # Use enhanced DB
                 self.nntp,
                 self.security,
                 {'upload_workers': 2, 'max_retries': 3}
@@ -155,7 +157,7 @@ class RealUsenetSyncTest:
             self.binary_index = SimplifiedBinaryIndex("test_folder")
             
             self.publishing_system = PublishingSystem(
-                self.db,
+                self.enhanced_db,  # Use enhanced DB
                 self.security,
                 self.upload_system,
                 self.nntp,
@@ -167,7 +169,7 @@ class RealUsenetSyncTest:
             # 11. Initialize download system
             print("11. Initializing download system...")
             self.download_system = EnhancedDownloadSystem(
-                self.db,
+                self.enhanced_db,  # Use enhanced DB
                 self.nntp,
                 self.security,
                 {'download_workers': 2, 'verify_downloads': True}
@@ -177,7 +179,7 @@ class RealUsenetSyncTest:
             print("12. Initializing retrieval system...")
             self.retrieval_system = SegmentRetrievalSystem(
                 self.nntp,
-                self.db,
+                self.enhanced_db,  # Use enhanced DB
                 {'cache_enabled': True, 'max_retries': 3}
             )
             
@@ -276,16 +278,26 @@ class RealUsenetSyncTest:
             self.test_folder_id = folder_id
             
             # Verify in database
-            folder = self.db.get_folder(folder_id)
-            if folder:
-                print(f"✅ Folder stored in database: {folder['folder_unique_id']}")
+            with self.enhanced_db.pool.get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT * FROM folders WHERE folder_unique_id = ?",
+                    (folder_id,)
+                )
+                folder = cursor.fetchone()
                 
-                # Get files
-                files = self.db.get_folder_files(folder['id'])
-                print(f"✅ Files in database: {len(files)}")
-                
-                for file in files[:3]:  # Show first 3 files
-                    print(f"   - {file['filename']}: {file['size']:,} bytes")
+                if folder:
+                    print(f"✅ Folder stored in database: {folder_id}")
+                    
+                    # Get files
+                    cursor = conn.execute(
+                        "SELECT * FROM files WHERE folder_id = ?",
+                        (folder['id'],)
+                    )
+                    files = cursor.fetchall()
+                    print(f"✅ Files in database: {len(files)}")
+                    
+                    for file in files[:3]:  # Show first 3 files
+                        print(f"   - {file['filename']}: {file['size']:,} bytes")
             
             self.test_results.append(("Indexing", True))
             return True
@@ -309,13 +321,23 @@ class RealUsenetSyncTest:
             print(f"Uploading folder: {self.test_folder_id}")
             
             # Get folder and segments from database
-            folder = self.db.get_folder(self.test_folder_id)
-            if not folder:
-                print("❌ Folder not found in database")
-                return False
-            
-            files = self.db.get_folder_files(folder['id'])
-            print(f"Found {len(files)} files to upload")
+            with self.enhanced_db.pool.get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT * FROM folders WHERE folder_unique_id = ?",
+                    (self.test_folder_id,)
+                )
+                folder = cursor.fetchone()
+                
+                if not folder:
+                    print("❌ Folder not found in database")
+                    return False
+                
+                cursor = conn.execute(
+                    "SELECT * FROM files WHERE folder_id = ?",
+                    (folder['id'],)
+                )
+                files = cursor.fetchall()
+                print(f"Found {len(files)} files to upload")
             
             # Upload each file's segments
             total_segments = 0
@@ -324,8 +346,13 @@ class RealUsenetSyncTest:
             for file in files:
                 print(f"\nUploading file: {file['filename']}")
                 
-                # Get segments for this file
-                segments = self.db.get_file_segments(file['id'])
+                # Get segments for this file (need new connection context)
+                with self.enhanced_db.pool.get_connection() as seg_conn:
+                    cursor = seg_conn.execute(
+                        "SELECT * FROM segments WHERE file_id = ?",
+                        (file['id'],)
+                    )
+                    segments = cursor.fetchall()
                 total_segments += len(segments)
                 
                 print(f"  Segments to upload: {len(segments)}")
@@ -368,9 +395,11 @@ class RealUsenetSyncTest:
                                     
                                     # Update database with message ID
                                     with self.enhanced_db.pool.get_connection() as db_conn:
+                                        # Handle tuple message_id
+                                        msg_id_str = str(message_id[1]) if isinstance(message_id, tuple) else str(message_id)
                                         db_conn.execute(
                                             "UPDATE segments SET message_id = ? WHERE id = ?",
-                                            (message_id, segment['id'])
+                                            (msg_id_str, segment['id'])
                                         )
                                         db_conn.commit()
                                     
@@ -487,8 +516,16 @@ class RealUsenetSyncTest:
                 
                 try:
                     with self.nntp.connection_pool.get_connection() as conn:
-                        # Try to retrieve by message ID
-                        response = conn.article(message_id)
+                        # Extract the actual message ID from tuple if needed
+                        actual_msg_id = message_id[1] if isinstance(message_id, tuple) else message_id
+                        
+                        # NNTP article retrieval
+                        try:
+                            # Use the underlying NNTP connection
+                            response = conn.connection.article(actual_msg_id)
+                        except:
+                            # Try alternative method
+                            response = None
                         
                         if response:
                             print(f"   ✅ Retrieved successfully")
