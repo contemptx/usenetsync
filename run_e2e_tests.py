@@ -49,32 +49,19 @@ class SimpleE2ETests:
             self.config = self.config_loader.config
             server_config = self.config['servers'][0]
             
+            # Enhance database pool before creating manager
+            print("Enhancing database connection pool...")
+            import sys
+            sys.path.insert(0, '.')
+            from enhance_db_pool import enhance_database_pool
+            enhance_database_pool()
+            
             # Create database
             print("Initializing database...")
             db_path = "test_workspace/test.db"
             
-            # Ensure proper schema
-            import sqlite3
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            
-            # Create folders table with all columns
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS folders (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    folder_id TEXT UNIQUE NOT NULL,
-                    path TEXT,
-                    private_key BLOB,
-                    public_key BLOB,
-                    keys_updated_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            conn.close()
-            
-            db_config = DatabaseConfig(path=db_path)
+            # Use larger pool size for tests
+            db_config = DatabaseConfig(path=db_path, pool_size=20)
             self.db = ProductionDatabaseManager(
                 config=db_config,
                 enable_monitoring=False,
