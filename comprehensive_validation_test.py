@@ -756,6 +756,11 @@ class ComprehensiveSystemValidator:
                 if share_type == 'password':
                     kwargs['encryption_key'] = 'test_password_123'
                     print(f"  Password: {kwargs['encryption_key']}")
+                elif share_type == 'private':
+                    # For private shares, add authorized users using commitment system
+                    # These user IDs will be used to create zero-knowledge proof commitments
+                    kwargs['authorized_users'] = ['test_user_1', 'test_user_2']
+                    print(f"  Authorized Users: {kwargs['authorized_users']}")
                 
                 # Publish the folder
                 result = self.systems['publishing'].publish_folder(
@@ -830,7 +835,7 @@ class ComprehensiveSystemValidator:
                 try:
                     result = self.systems['download'].download_from_access_string(
                         access_string=pub_info['access_string'],
-                        output_dir=download_path,
+                        destination_path=download_path,
                         password=pub_info.get('password')
                     )
                     

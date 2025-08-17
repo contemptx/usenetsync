@@ -1,187 +1,187 @@
 {
   "folder_structure": {
     "Documents/Work/report.txt": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Documents/Work/report.txt",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Documents/Work/report.txt",
       "size": 1247,
-      "hash": "0fd0688aa2a6d10d6fff79f757ce7eee27ac3e68a4d384fd7a77bfd4af08174a",
-      "content": "File: report.txt\nPath: /tmp/system_validation_yfwj3h82/test_data/Documents/Work/report.txt\nCreated: 2025-08-17 12:02:50.618174\nContent: ==================================================\nThis is test "
+      "hash": "ba97df9b4b6740d29de191547bf52978e91f4a8af4a833dc26e55d21e416c246",
+      "content": "File: report.txt\nPath: /tmp/system_validation_bt3bc8p3/test_data/Documents/Work/report.txt\nCreated: 2025-08-17 12:18:57.357000\nContent: ==================================================\nThis is test "
     },
     "Documents/Work/presentation.pdf": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Documents/Work/presentation.pdf",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Documents/Work/presentation.pdf",
       "size": 1777,
-      "hash": "8cced199babd38b541bb9c9b9d1ae5ca22b432d0e3b1d17c8c107ace14ad350a",
-      "content": "File: presentation.pdf\nPath: /tmp/system_validation_yfwj3h82/test_data/Documents/Work/presentation.pdf\nCreated: 2025-08-17 12:02:50.618363\nContent: ==================================================\nT"
+      "hash": "4a83075dd3cdd409db0d0bc62250772834b45e242a70752b369ddca6e37fefe9",
+      "content": "File: presentation.pdf\nPath: /tmp/system_validation_bt3bc8p3/test_data/Documents/Work/presentation.pdf\nCreated: 2025-08-17 12:18:57.357203\nContent: ==================================================\nT"
     },
     "Documents/Personal/notes.txt": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Documents/Personal/notes.txt",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Documents/Personal/notes.txt",
       "size": 2272,
-      "hash": "9f5f9917f6b5e397b3bfe32fc01b7062c2c2b3e79a8fd5c91f8b28b32b18685c",
-      "content": "File: notes.txt\nPath: /tmp/system_validation_yfwj3h82/test_data/Documents/Personal/notes.txt\nCreated: 2025-08-17 12:02:50.618517\nContent: ==================================================\nThis is tes"
+      "hash": "5f9f25dfd95297665cc7844bfe6e3c0ef11653c989c9cfc1f79c5e87cb95e703",
+      "content": "File: notes.txt\nPath: /tmp/system_validation_bt3bc8p3/test_data/Documents/Personal/notes.txt\nCreated: 2025-08-17 12:18:57.357391\nContent: ==================================================\nThis is tes"
     },
     "Documents/Personal/todo.md": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Documents/Personal/todo.md",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Documents/Personal/todo.md",
       "size": 2778,
-      "hash": "7c31d92e811932ab6ac5506cb66e38db24a8e9b763c710d4988d52efb81c62aa",
-      "content": "File: todo.md\nPath: /tmp/system_validation_yfwj3h82/test_data/Documents/Personal/todo.md\nCreated: 2025-08-17 12:02:50.618601\nContent: ==================================================\nThis is test co"
+      "hash": "0fa0ecbfcd45b18f784aa8821cf502aff5d2644f34d8299529bccddbd18a96aa",
+      "content": "File: todo.md\nPath: /tmp/system_validation_bt3bc8p3/test_data/Documents/Personal/todo.md\nCreated: 2025-08-17 12:18:57.357498\nContent: ==================================================\nThis is test co"
     },
     "Images/Vacation/beach.jpg": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Images/Vacation/beach.jpg",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Images/Vacation/beach.jpg",
       "size": 3293,
-      "hash": "b91590b14eaf65ce248b39cedf769f4e5814f9504ed54a5a4185bc6ffb3368d6",
-      "content": "File: beach.jpg\nPath: /tmp/system_validation_yfwj3h82/test_data/Images/Vacation/beach.jpg\nCreated: 2025-08-17 12:02:50.618864\nContent: ==================================================\nThis is test c"
+      "hash": "53014aa12c17a8f8533e58d0c3f2aa27e365f21f2b777e28f61fdd50c1c9c963",
+      "content": "File: beach.jpg\nPath: /tmp/system_validation_bt3bc8p3/test_data/Images/Vacation/beach.jpg\nCreated: 2025-08-17 12:18:57.357729\nContent: ==================================================\nThis is test c"
     },
     "Images/Vacation/sunset.png": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Images/Vacation/sunset.png",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Images/Vacation/sunset.png",
       "size": 3808,
-      "hash": "e6ac561ba9a0606b6546421052e00c8c7da027d4c9fba4935e940d26f94ae6a9",
-      "content": "File: sunset.png\nPath: /tmp/system_validation_yfwj3h82/test_data/Images/Vacation/sunset.png\nCreated: 2025-08-17 12:02:50.618935\nContent: ==================================================\nThis is test"
+      "hash": "a48b0612cf1112224f1a93ed27354e59228af7ac3ab3e1fe0845a7b560c9c693",
+      "content": "File: sunset.png\nPath: /tmp/system_validation_bt3bc8p3/test_data/Images/Vacation/sunset.png\nCreated: 2025-08-17 12:18:57.357818\nContent: ==================================================\nThis is test"
     },
     "Images/Family/reunion.jpg": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Images/Family/reunion.jpg",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Images/Family/reunion.jpg",
       "size": 4321,
-      "hash": "4d7f78917c2e4ebee5630cbbc9f76eea51d52be2ea0bfdcf441f80795fb0c5d9",
-      "content": "File: reunion.jpg\nPath: /tmp/system_validation_yfwj3h82/test_data/Images/Family/reunion.jpg\nCreated: 2025-08-17 12:02:50.619025\nContent: ==================================================\nThis is test"
+      "hash": "fb14d567074ddb6f3056acc340b39430f73d7670f31f8d326fbc53587015cb6e",
+      "content": "File: reunion.jpg\nPath: /tmp/system_validation_bt3bc8p3/test_data/Images/Family/reunion.jpg\nCreated: 2025-08-17 12:18:57.358007\nContent: ==================================================\nThis is test"
     },
     "Projects/Code/main.py": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Projects/Code/main.py",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Projects/Code/main.py",
       "size": 4821,
-      "hash": "2ffda53debddd018cd52765b534c014312cb221963d92de9d9e8021ad5533ada",
-      "content": "File: main.py\nPath: /tmp/system_validation_yfwj3h82/test_data/Projects/Code/main.py\nCreated: 2025-08-17 12:02:50.619150\nContent: ==================================================\nThis is test content"
+      "hash": "7596132f0e5515c6babab52d98ebfe5450148288cd61e5653e1e386ff306e3f4",
+      "content": "File: main.py\nPath: /tmp/system_validation_bt3bc8p3/test_data/Projects/Code/main.py\nCreated: 2025-08-17 12:18:57.358273\nContent: ==================================================\nThis is test content"
     },
     "Projects/Code/utils.py": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Projects/Code/utils.py",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Projects/Code/utils.py",
       "size": 5336,
-      "hash": "e4482cfe9262e9a67b5f958f84cf1424510704dd718f0fffdb70a22c504fa1d1",
-      "content": "File: utils.py\nPath: /tmp/system_validation_yfwj3h82/test_data/Projects/Code/utils.py\nCreated: 2025-08-17 12:02:50.619214\nContent: ==================================================\nThis is test conte"
+      "hash": "4f85791a41414901bf741d06be1478f692131cc6c08ce835ac72ce5b5208c10d",
+      "content": "File: utils.py\nPath: /tmp/system_validation_bt3bc8p3/test_data/Projects/Code/utils.py\nCreated: 2025-08-17 12:18:57.358375\nContent: ==================================================\nThis is test conte"
     },
     "Projects/Code/readme.md": {
-      "path": "/tmp/system_validation_yfwj3h82/test_data/Projects/Code/readme.md",
+      "path": "/tmp/system_validation_bt3bc8p3/test_data/Projects/Code/readme.md",
       "size": 5851,
-      "hash": "21a4c862786485a65560ae77f40b2ca90e176a319a2bc4e4d6b061ff675a51ba",
-      "content": "File: readme.md\nPath: /tmp/system_validation_yfwj3h82/test_data/Projects/Code/readme.md\nCreated: 2025-08-17 12:02:50.619287\nContent: ==================================================\nThis is test con"
+      "hash": "5555d817d93b4a1931ec13097b4adb89b52c1a8a6d6df0874bd1f4e933e2c2cb",
+      "content": "File: readme.md\nPath: /tmp/system_validation_bt3bc8p3/test_data/Projects/Code/readme.md\nCreated: 2025-08-17 12:18:57.358468\nContent: ==================================================\nThis is test con"
     }
   },
   "indexed_files": {
-    "ea575c6f-6dc2-408b-a5ae-bf9a3716272f": {
-      "file_id": "ea575c6f-6dc2-408b-a5ae-bf9a3716272f",
-      "folder_id": "02b8f2b7-b600-44bb-ae45-d5559cbcb0a5",
+    "2f3ec780-dba2-4d36-b9c7-f8f57e2a6884": {
+      "file_id": "2f3ec780-dba2-4d36-b9c7-f8f57e2a6884",
+      "folder_id": "2b2abc94-90ae-4404-a763-86659d70c489",
       "filename": "presentation.pdf",
       "size": 1777,
-      "hash": "8cced199babd38b541bb9c9b9d1ae5ca22b432d0e3b1d17c8c107ace14ad350a",
+      "hash": "4a83075dd3cdd409db0d0bc62250772834b45e242a70752b369ddca6e37fefe9",
       "rel_path": "Documents/Work/presentation.pdf"
     },
-    "fac2a66e-10e4-4431-9c97-34faafb31b0e": {
-      "file_id": "fac2a66e-10e4-4431-9c97-34faafb31b0e",
-      "folder_id": "02b8f2b7-b600-44bb-ae45-d5559cbcb0a5",
+    "fa267703-eeda-43ec-8c6d-8a13d2e2d269": {
+      "file_id": "fa267703-eeda-43ec-8c6d-8a13d2e2d269",
+      "folder_id": "2b2abc94-90ae-4404-a763-86659d70c489",
       "filename": "report.txt",
       "size": 1247,
-      "hash": "0fd0688aa2a6d10d6fff79f757ce7eee27ac3e68a4d384fd7a77bfd4af08174a",
+      "hash": "ba97df9b4b6740d29de191547bf52978e91f4a8af4a833dc26e55d21e416c246",
       "rel_path": "Documents/Work/report.txt"
     },
-    "0eade103-e1e6-41c6-8d21-39f024298c18": {
-      "file_id": "0eade103-e1e6-41c6-8d21-39f024298c18",
-      "folder_id": "44d00647-cbe7-4eda-86a2-16157a09d613",
+    "6a7a3680-2bc8-48c9-9ec8-f8d26410ab5f": {
+      "file_id": "6a7a3680-2bc8-48c9-9ec8-f8d26410ab5f",
+      "folder_id": "efb029ab-1d38-4dd7-9b41-778db65edb1b",
       "filename": "notes.txt",
       "size": 2272,
-      "hash": "9f5f9917f6b5e397b3bfe32fc01b7062c2c2b3e79a8fd5c91f8b28b32b18685c",
+      "hash": "5f9f25dfd95297665cc7844bfe6e3c0ef11653c989c9cfc1f79c5e87cb95e703",
       "rel_path": "Documents/Personal/notes.txt"
     },
-    "bb321f14-75d8-48ed-abd6-3713da2d9f71": {
-      "file_id": "bb321f14-75d8-48ed-abd6-3713da2d9f71",
-      "folder_id": "44d00647-cbe7-4eda-86a2-16157a09d613",
+    "5088d741-d328-4004-b1f7-a9a1bbc378ea": {
+      "file_id": "5088d741-d328-4004-b1f7-a9a1bbc378ea",
+      "folder_id": "efb029ab-1d38-4dd7-9b41-778db65edb1b",
       "filename": "todo.md",
       "size": 2778,
-      "hash": "7c31d92e811932ab6ac5506cb66e38db24a8e9b763c710d4988d52efb81c62aa",
+      "hash": "0fa0ecbfcd45b18f784aa8821cf502aff5d2644f34d8299529bccddbd18a96aa",
       "rel_path": "Documents/Personal/todo.md"
     },
-    "9783c5b4-a64e-4ff6-834e-32b75fcdc248": {
-      "file_id": "9783c5b4-a64e-4ff6-834e-32b75fcdc248",
-      "folder_id": "2cd262cd-9686-41a1-8a66-e59d654b7891",
+    "679130d9-9bcb-4879-ba11-b4198493f3c5": {
+      "file_id": "679130d9-9bcb-4879-ba11-b4198493f3c5",
+      "folder_id": "4cc45de4-46bd-4e9a-9b85-6eb4f231ab7f",
       "filename": "reunion.jpg",
       "size": 4321,
-      "hash": "4d7f78917c2e4ebee5630cbbc9f76eea51d52be2ea0bfdcf441f80795fb0c5d9",
+      "hash": "fb14d567074ddb6f3056acc340b39430f73d7670f31f8d326fbc53587015cb6e",
       "rel_path": "Images/Family/reunion.jpg"
     },
-    "3f46ebb4-5426-4c12-b3c0-ca78ed04a194": {
-      "file_id": "3f46ebb4-5426-4c12-b3c0-ca78ed04a194",
-      "folder_id": "200843c4-837a-4f35-8b1d-829860fcc4e5",
+    "a7f38fee-8dc4-4ce3-9770-b2b46d88c7f5": {
+      "file_id": "a7f38fee-8dc4-4ce3-9770-b2b46d88c7f5",
+      "folder_id": "12b552e1-e7e2-4ee8-a093-688694bb9f44",
       "filename": "beach.jpg",
       "size": 3293,
-      "hash": "b91590b14eaf65ce248b39cedf769f4e5814f9504ed54a5a4185bc6ffb3368d6",
+      "hash": "53014aa12c17a8f8533e58d0c3f2aa27e365f21f2b777e28f61fdd50c1c9c963",
       "rel_path": "Images/Vacation/beach.jpg"
     },
-    "7cf6f90a-e319-42b2-be39-54bfd81baacd": {
-      "file_id": "7cf6f90a-e319-42b2-be39-54bfd81baacd",
-      "folder_id": "200843c4-837a-4f35-8b1d-829860fcc4e5",
+    "4422ddb1-e7ca-46c3-9928-05a187f27d04": {
+      "file_id": "4422ddb1-e7ca-46c3-9928-05a187f27d04",
+      "folder_id": "12b552e1-e7e2-4ee8-a093-688694bb9f44",
       "filename": "sunset.png",
       "size": 3808,
-      "hash": "e6ac561ba9a0606b6546421052e00c8c7da027d4c9fba4935e940d26f94ae6a9",
+      "hash": "a48b0612cf1112224f1a93ed27354e59228af7ac3ab3e1fe0845a7b560c9c693",
       "rel_path": "Images/Vacation/sunset.png"
     },
-    "d1ff94b0-4854-46f5-bccc-5065ae8aab94": {
-      "file_id": "d1ff94b0-4854-46f5-bccc-5065ae8aab94",
-      "folder_id": "a81f228a-85d6-4904-83f4-fc4468e79190",
+    "9d699c48-5e9d-4ac6-aff8-775b3190348d": {
+      "file_id": "9d699c48-5e9d-4ac6-aff8-775b3190348d",
+      "folder_id": "e9bf4304-b0e1-4f2a-9ad1-635e0b52eea3",
       "filename": "readme.md",
       "size": 5851,
-      "hash": "21a4c862786485a65560ae77f40b2ca90e176a319a2bc4e4d6b061ff675a51ba",
+      "hash": "5555d817d93b4a1931ec13097b4adb89b52c1a8a6d6df0874bd1f4e933e2c2cb",
       "rel_path": "Projects/Code/readme.md"
     },
-    "7c60006b-9f3a-4dfd-b095-13f5381de598": {
-      "file_id": "7c60006b-9f3a-4dfd-b095-13f5381de598",
-      "folder_id": "a81f228a-85d6-4904-83f4-fc4468e79190",
+    "9f2cb4ae-c1e3-4523-a257-32968b29b8e5": {
+      "file_id": "9f2cb4ae-c1e3-4523-a257-32968b29b8e5",
+      "folder_id": "e9bf4304-b0e1-4f2a-9ad1-635e0b52eea3",
       "filename": "main.py",
       "size": 4821,
-      "hash": "2ffda53debddd018cd52765b534c014312cb221963d92de9d9e8021ad5533ada",
+      "hash": "7596132f0e5515c6babab52d98ebfe5450148288cd61e5653e1e386ff306e3f4",
       "rel_path": "Projects/Code/main.py"
     },
-    "0005daea-58c9-4be0-823e-9344aff3e28e": {
-      "file_id": "0005daea-58c9-4be0-823e-9344aff3e28e",
-      "folder_id": "a81f228a-85d6-4904-83f4-fc4468e79190",
+    "13dee89d-43ae-46ae-8e56-24d4dbc384c0": {
+      "file_id": "13dee89d-43ae-46ae-8e56-24d4dbc384c0",
+      "folder_id": "e9bf4304-b0e1-4f2a-9ad1-635e0b52eea3",
       "filename": "utils.py",
       "size": 5336,
-      "hash": "e4482cfe9262e9a67b5f958f84cf1424510704dd718f0fffdb70a22c504fa1d1",
+      "hash": "4f85791a41414901bf741d06be1478f692131cc6c08ce835ac72ce5b5208c10d",
       "rel_path": "Projects/Code/utils.py"
     }
   },
   "segments": {
-    "ea575c6f-6dc2-408b-a5ae-bf9a3716272f": [
+    "2f3ec780-dba2-4d36-b9c7-f8f57e2a6884": [
       {
         "index": 0,
         "size": 1777,
-        "hash": "8cced199babd38b541bb9c9b9d1ae5ca22b432d0e3b1d17c8c107ace14ad350a",
+        "hash": "4a83075dd3cdd409db0d0bc62250772834b45e242a70752b369ddca6e37fefe9",
         "data_preview": "b'File: presentation.pdf\\nPath: /tmp/system_validatio'"
       }
     ],
-    "fac2a66e-10e4-4431-9c97-34faafb31b0e": [
+    "fa267703-eeda-43ec-8c6d-8a13d2e2d269": [
       {
         "index": 0,
         "size": 1247,
-        "hash": "0fd0688aa2a6d10d6fff79f757ce7eee27ac3e68a4d384fd7a77bfd4af08174a",
-        "data_preview": "b'File: report.txt\\nPath: /tmp/system_validation_yfwj'"
+        "hash": "ba97df9b4b6740d29de191547bf52978e91f4a8af4a833dc26e55d21e416c246",
+        "data_preview": "b'File: report.txt\\nPath: /tmp/system_validation_bt3b'"
       }
     ],
-    "0eade103-e1e6-41c6-8d21-39f024298c18": [
+    "6a7a3680-2bc8-48c9-9ec8-f8d26410ab5f": [
       {
         "index": 0,
         "size": 2272,
-        "hash": "9f5f9917f6b5e397b3bfe32fc01b7062c2c2b3e79a8fd5c91f8b28b32b18685c",
-        "data_preview": "b'File: notes.txt\\nPath: /tmp/system_validation_yfwj3'"
+        "hash": "5f9f25dfd95297665cc7844bfe6e3c0ef11653c989c9cfc1f79c5e87cb95e703",
+        "data_preview": "b'File: notes.txt\\nPath: /tmp/system_validation_bt3bc'"
       }
     ],
-    "bb321f14-75d8-48ed-abd6-3713da2d9f71": [
+    "5088d741-d328-4004-b1f7-a9a1bbc378ea": [
       {
         "index": 0,
         "size": 2778,
-        "hash": "7c31d92e811932ab6ac5506cb66e38db24a8e9b763c710d4988d52efb81c62aa",
-        "data_preview": "b'File: todo.md\\nPath: /tmp/system_validation_yfwj3h8'"
+        "hash": "0fa0ecbfcd45b18f784aa8821cf502aff5d2644f34d8299529bccddbd18a96aa",
+        "data_preview": "b'File: todo.md\\nPath: /tmp/system_validation_bt3bc8p'"
       }
     ],
-    "9783c5b4-a64e-4ff6-834e-32b75fcdc248": [
+    "679130d9-9bcb-4879-ba11-b4198493f3c5": [
       {
         "index": 0,
         "size": 4096,
-        "hash": "a9a50d869b0a6d53ad4c0cc2d8e54e66bceb06ef4e88e4a17dd44a03b8eb1c8a",
-        "data_preview": "b'File: reunion.jpg\\nPath: /tmp/system_validation_yfw'"
+        "hash": "c950c317861686f1243a0ec86d64ee328d90dc4113a4f65e1d8ebfb962c785ab",
+        "data_preview": "b'File: reunion.jpg\\nPath: /tmp/system_validation_bt3'"
       },
       {
         "index": 1,
@@ -190,28 +190,28 @@
         "data_preview": "b'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'"
       }
     ],
-    "3f46ebb4-5426-4c12-b3c0-ca78ed04a194": [
+    "a7f38fee-8dc4-4ce3-9770-b2b46d88c7f5": [
       {
         "index": 0,
         "size": 3293,
-        "hash": "b91590b14eaf65ce248b39cedf769f4e5814f9504ed54a5a4185bc6ffb3368d6",
-        "data_preview": "b'File: beach.jpg\\nPath: /tmp/system_validation_yfwj3'"
+        "hash": "53014aa12c17a8f8533e58d0c3f2aa27e365f21f2b777e28f61fdd50c1c9c963",
+        "data_preview": "b'File: beach.jpg\\nPath: /tmp/system_validation_bt3bc'"
       }
     ],
-    "7cf6f90a-e319-42b2-be39-54bfd81baacd": [
+    "4422ddb1-e7ca-46c3-9928-05a187f27d04": [
       {
         "index": 0,
         "size": 3808,
-        "hash": "e6ac561ba9a0606b6546421052e00c8c7da027d4c9fba4935e940d26f94ae6a9",
-        "data_preview": "b'File: sunset.png\\nPath: /tmp/system_validation_yfwj'"
+        "hash": "a48b0612cf1112224f1a93ed27354e59228af7ac3ab3e1fe0845a7b560c9c693",
+        "data_preview": "b'File: sunset.png\\nPath: /tmp/system_validation_bt3b'"
       }
     ],
-    "d1ff94b0-4854-46f5-bccc-5065ae8aab94": [
+    "9d699c48-5e9d-4ac6-aff8-775b3190348d": [
       {
         "index": 0,
         "size": 4096,
-        "hash": "53f6595b3421149267333d3decc023ecd08f41b189f4e480f6fdebccb0711fd5",
-        "data_preview": "b'File: readme.md\\nPath: /tmp/system_validation_yfwj3'"
+        "hash": "298d4f936024bf59696565056926a7276b71809ec4d786be540f9b60d31b81d4",
+        "data_preview": "b'File: readme.md\\nPath: /tmp/system_validation_bt3bc'"
       },
       {
         "index": 1,
@@ -220,12 +220,12 @@
         "data_preview": "b'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'"
       }
     ],
-    "7c60006b-9f3a-4dfd-b095-13f5381de598": [
+    "9f2cb4ae-c1e3-4523-a257-32968b29b8e5": [
       {
         "index": 0,
         "size": 4096,
-        "hash": "9c5f8a2ce04edcce0ae036693730a77ee1d7aefca719f638ef5346a130e69334",
-        "data_preview": "b'File: main.py\\nPath: /tmp/system_validation_yfwj3h8'"
+        "hash": "6762d05c700a6e1fb6f37aee8b2b9f81f87e495df118acdd389faace71f62c3a",
+        "data_preview": "b'File: main.py\\nPath: /tmp/system_validation_bt3bc8p'"
       },
       {
         "index": 1,
@@ -234,12 +234,12 @@
         "data_preview": "b'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'"
       }
     ],
-    "0005daea-58c9-4be0-823e-9344aff3e28e": [
+    "13dee89d-43ae-46ae-8e56-24d4dbc384c0": [
       {
         "index": 0,
         "size": 4096,
-        "hash": "9f5fd11a0632ebdedd3865a9463749ae25d1c996e87e2c83a528756a44ff18ea",
-        "data_preview": "b'File: utils.py\\nPath: /tmp/system_validation_yfwj3h'"
+        "hash": "2e5d2155075d30294b7f51ff901c15ad36ff2309ca46d81b339c85edf51af5c6",
+        "data_preview": "b'File: utils.py\\nPath: /tmp/system_validation_bt3bc8'"
       },
       {
         "index": 1,
@@ -250,50 +250,50 @@
     ]
   },
   "uploads": {
-    "ea575c6f-6dc2-408b-a5ae-bf9a3716272f": [
+    "2f3ec780-dba2-4d36-b9c7-f8f57e2a6884": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120250-c45e621bc4cc9a5b@news.newshosting.com>",
+        "message_id": "<usync-20250817121857-bc13ff479700be4e@news.newshosting.com>",
         "subject": "[presentation.pdf] - segment 1/1",
         "size": 207,
         "success": true,
         "response": "True"
       }
     ],
-    "fac2a66e-10e4-4431-9c97-34faafb31b0e": [
+    "fa267703-eeda-43ec-8c6d-8a13d2e2d269": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120253-98b79b0bf2e264ba@news.newshosting.com>",
+        "message_id": "<usync-20250817121900-d862f08c63c547e7@news.newshosting.com>",
         "subject": "[report.txt] - segment 1/1",
         "size": 201,
         "success": true,
         "response": "True"
       }
     ],
-    "0eade103-e1e6-41c6-8d21-39f024298c18": [
+    "6a7a3680-2bc8-48c9-9ec8-f8d26410ab5f": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120256-a11dd0d822b3b3a5@news.newshosting.com>",
+        "message_id": "<usync-20250817121903-217873e3ea38d0f2@news.newshosting.com>",
         "subject": "[notes.txt] - segment 1/1",
         "size": 200,
         "success": true,
         "response": "True"
       }
     ],
-    "bb321f14-75d8-48ed-abd6-3713da2d9f71": [
+    "5088d741-d328-4004-b1f7-a9a1bbc378ea": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120259-dc1996dd98261ca3@news.newshosting.com>",
+        "message_id": "<usync-20250817121905-93852011b733297e@news.newshosting.com>",
         "subject": "[todo.md] - segment 1/1",
         "size": 198,
         "success": true,
         "response": "True"
       }
     ],
-    "9783c5b4-a64e-4ff6-834e-32b75fcdc248": [
+    "679130d9-9bcb-4879-ba11-b4198493f3c5": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120302-4bac442438490fc5@news.newshosting.com>",
+        "message_id": "<usync-20250817121908-2f7d9deb98110b5e@news.newshosting.com>",
         "subject": "[reunion.jpg] - segment 1/2",
         "size": 202,
         "success": true,
@@ -301,37 +301,37 @@
       },
       {
         "segment_index": 1,
-        "message_id": "<usync-20250817120304-7fe2799a7eaffe4d@news.newshosting.com>",
+        "message_id": "<usync-20250817121911-a6224e89359b4326@news.newshosting.com>",
         "subject": "[reunion.jpg] - segment 2/2",
         "size": 202,
         "success": true,
         "response": "True"
       }
     ],
-    "3f46ebb4-5426-4c12-b3c0-ca78ed04a194": [
+    "a7f38fee-8dc4-4ce3-9770-b2b46d88c7f5": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120307-3e52097c60b3cd15@news.newshosting.com>",
+        "message_id": "<usync-20250817121914-9c6a8cbeec4d7f81@news.newshosting.com>",
         "subject": "[beach.jpg] - segment 1/1",
         "size": 200,
         "success": true,
         "response": "True"
       }
     ],
-    "7cf6f90a-e319-42b2-be39-54bfd81baacd": [
+    "4422ddb1-e7ca-46c3-9928-05a187f27d04": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120310-8fc188e0971e213e@news.newshosting.com>",
+        "message_id": "<usync-20250817121917-af9dd834a301de8e@news.newshosting.com>",
         "subject": "[sunset.png] - segment 1/1",
         "size": 201,
         "success": true,
         "response": "True"
       }
     ],
-    "d1ff94b0-4854-46f5-bccc-5065ae8aab94": [
+    "9d699c48-5e9d-4ac6-aff8-775b3190348d": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120313-ab096d5fac7afb03@news.newshosting.com>",
+        "message_id": "<usync-20250817121919-50b2ba7ee1a24466@news.newshosting.com>",
         "subject": "[readme.md] - segment 1/2",
         "size": 200,
         "success": true,
@@ -339,17 +339,17 @@
       },
       {
         "segment_index": 1,
-        "message_id": "<usync-20250817120316-745344f9525cfe76@news.newshosting.com>",
+        "message_id": "<usync-20250817121922-6791c29036aa382b@news.newshosting.com>",
         "subject": "[readme.md] - segment 2/2",
         "size": 200,
         "success": true,
         "response": "True"
       }
     ],
-    "7c60006b-9f3a-4dfd-b095-13f5381de598": [
+    "9f2cb4ae-c1e3-4523-a257-32968b29b8e5": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120318-451ea9c28887c44b@news.newshosting.com>",
+        "message_id": "<usync-20250817121925-951e0825986d3b4d@news.newshosting.com>",
         "subject": "[main.py] - segment 1/2",
         "size": 198,
         "success": true,
@@ -357,17 +357,17 @@
       },
       {
         "segment_index": 1,
-        "message_id": "<usync-20250817120321-59ec7bd0814daacb@news.newshosting.com>",
+        "message_id": "<usync-20250817121928-448b0c544016b1dc@news.newshosting.com>",
         "subject": "[main.py] - segment 2/2",
         "size": 198,
         "success": true,
         "response": "True"
       }
     ],
-    "0005daea-58c9-4be0-823e-9344aff3e28e": [
+    "13dee89d-43ae-46ae-8e56-24d4dbc384c0": [
       {
         "segment_index": 0,
-        "message_id": "<usync-20250817120324-1f6e6c7dda63eda4@news.newshosting.com>",
+        "message_id": "<usync-20250817121930-c651d9426a5c77f4@news.newshosting.com>",
         "subject": "[utils.py] - segment 1/2",
         "size": 199,
         "success": true,
@@ -375,7 +375,7 @@
       },
       {
         "segment_index": 1,
-        "message_id": "<usync-20250817120327-a293d855f539a388@news.newshosting.com>",
+        "message_id": "<usync-20250817121933-55cd7c45ce6158ce@news.newshosting.com>",
         "subject": "[utils.py] - segment 2/2",
         "size": 199,
         "success": true,
@@ -384,18 +384,29 @@
     ]
   },
   "publications": {
-    "02b8f2b7-b600-44bb-ae45-d5559cbcb0a5": {
-      "folder_id": "02b8f2b7-b600-44bb-ae45-d5559cbcb0a5",
-      "folder_path": "/tmp/system_validation_yfwj3h82/test_data/Documents/Work",
-      "share_id": "share_9dda2779",
-      "access_string": "PUBLIC#share_9dda2779#02b8f2b7-b600-44bb-ae45-d5559cbcb0a5",
+    "2b2abc94-90ae-4404-a763-86659d70c489": {
+      "folder_id": "2b2abc94-90ae-4404-a763-86659d70c489",
+      "folder_path": "/tmp/system_validation_bt3bc8p3/test_data/Documents/Work",
+      "share_id": "share_1ee7a852",
+      "access_string": "PUBLIC#share_1ee7a852#2b2abc94-90ae-4404-a763-86659d70c489",
       "share_type": "public",
+      "password": null
+    },
+    "efb029ab-1d38-4dd7-9b41-778db65edb1b": {
+      "folder_id": "efb029ab-1d38-4dd7-9b41-778db65edb1b",
+      "folder_path": "/tmp/system_validation_bt3bc8p3/test_data/Documents/Personal",
+      "share_id": "share_a75bd3e2",
+      "access_string": "PRIVATE#share_a75bd3e2#gnh7VbyHUHRc1rLt4iyGGxJ10kX20zlm#efb029ab-1d38-4dd7-9b41-778db65edb1b",
+      "share_type": "private",
       "password": null
     }
   },
   "downloads": {
-    "02b8f2b7-b600-44bb-ae45-d5559cbcb0a5": {
-      "error": "EnhancedDownloadSystem.download_from_access_string() got an unexpected keyword argument 'output_dir'"
+    "2b2abc94-90ae-4404-a763-86659d70c489": {
+      "error": "Invalid access string: Incorrect padding"
+    },
+    "efb029ab-1d38-4dd7-9b41-778db65edb1b": {
+      "error": "Invalid access string: 'utf-8' codec can't decode byte 0x85 in position 6: invalid start byte"
     }
   },
   "validation": {}
