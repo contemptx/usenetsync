@@ -486,12 +486,14 @@ class ProductionNNTPClient:
                 max_connections=10
             )
     
-    def _generate_message_id(self, prefix="usync"):
-        """Generate unique message ID"""
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-        host_part = self.host.replace('.', '-')
-        return f"<{prefix}-{timestamp}-{random_str}@{host_part}>"
+    def _generate_message_id(self, prefix=None):
+        """Generate obfuscated unique message ID"""
+        # Generate completely random ID for obfuscation
+        # No timestamps or identifying prefixes
+        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
+        # Use generic host part
+        host_part = "mail.local"
+        return f"<{random_str}@{host_part}>"
     
     def _build_headers(self, subject, newsgroup, from_user=None, 
                       message_id=None, extra_headers=None):

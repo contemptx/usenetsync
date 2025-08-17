@@ -417,11 +417,28 @@ class ComprehensiveSystemValidator:
                 folder_size = sum(os.path.getsize(os.path.join(root, f)) for f in files)
                 file_count = len(files)
                 
-                # Insert folder
+                # Generate folder keys using the security system
+                folder_keys = self.systems['security'].generate_folder_keys(folder_id)
+                
+                # Serialize keys for storage
+                from cryptography.hazmat.primitives import serialization
+                private_key_bytes = folder_keys.private_key.private_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PrivateFormat.Raw,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
+                public_key_bytes = folder_keys.public_key.public_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PublicFormat.Raw
+                )
+                
+                # Insert folder with keys
                 conn.execute("""
-                    INSERT INTO folders (folder_id, path, display_name, size, file_count, created_at)
-                    VALUES (?, ?, ?, ?, ?, datetime('now'))
-                """, (folder_id, folder_path, folder_name, folder_size, file_count))
+                    INSERT INTO folders (folder_id, path, display_name, size, file_count, 
+                                       private_key, public_key, keys_updated_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                """, (folder_id, folder_path, folder_name, folder_size, file_count,
+                     private_key_bytes, public_key_bytes))
                 
                 folders_indexed[folder_path] = folder_id
                 
@@ -625,9 +642,17 @@ class ComprehensiveSystemValidator:
                 # Upload only first 2 segments per file for testing
                 for segment in segments[:2]:
                     try:
-                        # Generate unique message ID
-                        message_id = f"<usync-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(8)}@news.newshosting.com>"
-                        subject = f"[{file_info['filename']}] - segment {segment['index']+1}/{len(segments)}"
+                        # Use system's obfuscated Message-ID generation
+                        message_id = self.systems['nntp']._generate_message_id()
+                        
+                        # Generate obfuscated subject using the security system
+                        # This creates a random 20-character subject that reveals nothing
+                        subject_pair = self.systems['security'].generate_subject_pair(
+                            folder_id=file_info['folder_id'],
+                            file_version=1,
+                            segment_index=segment['index']
+                        )
+                        subject = subject_pair.usenet_subject  # Use the obfuscated Usenet subject
                         
                         # Create message headers
                         headers = {
@@ -644,8 +669,9 @@ class ComprehensiveSystemValidator:
                         body += "Data: " + "A" * min(100, segment['size'])
                         
                         print(f"\n  📤 Uploading segment {segment['index']}:")
-                        print(f"    Message-ID: {message_id}")
-                        print(f"    Subject: {subject}")
+                        print(f"    Message-ID: {message_id} (obfuscated)")
+                        print(f"    Usenet Subject: {subject} (obfuscated)")
+                        print(f"    Internal Subject: {subject_pair.internal_subject[:16]}... (for local tracking)")
                         print(f"    Size: {len(body)} bytes")
                         
                         # Post to server
@@ -668,13 +694,13 @@ class ComprehensiveSystemValidator:
                             }
                             self.test_data['uploads'][file_id].append(upload_info)
                             
-                            # Update database
+                            # Update database with both subjects
                             conn = sqlite3.connect(self.db_path)
                             conn.execute("""
                                 UPDATE segments 
-                                SET message_id = ?, subject = ?, uploaded_at = datetime('now')
+                                SET message_id = ?, subject = ?, internal_subject = ?, uploaded_at = datetime('now')
                                 WHERE file_id = ? AND segment_index = ?
-                            """, (message_id, subject, file_id, segment['index']))
+                            """, (message_id, subject, subject_pair.internal_subject, file_id, segment['index']))
                             conn.commit()
                             conn.close()
                         else:
