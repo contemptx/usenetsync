@@ -17,7 +17,6 @@ import {
   Share2,
   Clock
 } from 'lucide-react';
-import clsx from 'clsx';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -52,16 +51,22 @@ export const Dashboard: React.FC = () => {
   useKeyboardShortcuts();
   
   // Context menu setup
-  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+  const { menuState: contextMenu, openContextMenu: handleContextMenu, closeContextMenu } = useContextMenu();
   
-  const dashboardContextMenuItems = [
+  const dashboardContextMenuItems: ContextMenuItem[] = [
     {
+
+      id: 'New Upload'.toLowerCase().replace(/ /g, '-'),
+
       label: 'New Upload',
       icon: Upload,
       onClick: () => navigate('/upload'),
       shortcut: 'Ctrl+U'
     },
     {
+
+      id: 'New Download'.toLowerCase().replace(/ /g, '-'),
+
       label: 'New Download',
       icon: Download,
       onClick: () => navigate('/download'),
@@ -69,17 +74,26 @@ export const Dashboard: React.FC = () => {
     },
     { type: 'separator' as const },
     {
+
+      id: 'View Shares'.toLowerCase().replace(/ /g, '-'),
+
       label: 'View Shares',
       icon: Share2,
       onClick: () => navigate('/shares')
     },
     {
+
+      id: 'Settings'.toLowerCase().replace(/ /g, '-'),
+
       label: 'Settings',
       onClick: () => navigate('/settings'),
       shortcut: 'Ctrl+,'
     },
     { type: 'separator' as const },
     {
+
+      id: 'Refresh'.toLowerCase().replace(/ /g, '-'),
+
       label: 'Refresh',
       onClick: () => {
         toast.success('Dashboard refreshed');
@@ -128,6 +142,9 @@ export const Dashboard: React.FC = () => {
     labels: speedHistory.map((_, i) => `${30 - i}s`),
     datasets: [
       {
+
+        id: 'Network Speed'.toLowerCase().replace(/ /g, '-'),
+
         label: 'Network Speed',
         data: speedHistory,
         fill: true,

@@ -26,7 +26,7 @@ export interface ContextMenuItem {
   shortcut?: string;
   disabled?: boolean;
   danger?: boolean;
-  separator?: boolean;
+  type?: 'separator';
   submenu?: ContextMenuItem[];
   onClick?: () => void;
 }
@@ -234,7 +234,7 @@ export const contextMenuTemplates = {
       shortcut: 'Space',
       onClick: handlers.preview
     },
-    { separator: true },
+    { id: 'separator-1', label: '', type: 'separator' as const },
     {
       id: 'version',
       label: 'Version History',
@@ -249,7 +249,7 @@ export const contextMenuTemplates = {
       shortcut: 'Ctrl+D',
       onClick: handlers.download
     },
-    { separator: true },
+    { id: 'separator-2', label: '', type: 'separator' as const },
     {
       id: 'share',
       label: 'Share',
@@ -268,7 +268,7 @@ export const contextMenuTemplates = {
           icon: <Lock className="w-4 h-4" />,
           onClick: handlers.sharePrivate
         },
-        { separator: true },
+        { id: 'separator-3', label: '', type: 'separator' as const },
         {
           id: 'copy-link',
           label: 'Copy Share Link',
@@ -278,7 +278,7 @@ export const contextMenuTemplates = {
         }
       ]
     },
-    { separator: true },
+    { id: 'separator-4', label: '', type: 'separator' as const },
     {
       id: 'rename',
       label: 'Rename',
@@ -299,7 +299,7 @@ export const contextMenuTemplates = {
       icon: <Archive className="w-4 h-4" />,
       onClick: handlers.archive
     },
-    { separator: true },
+    { id: 'separator-5', label: '', type: 'separator' as const },
     {
       id: 'info',
       label: 'Properties',
@@ -307,7 +307,7 @@ export const contextMenuTemplates = {
       shortcut: 'Alt+Enter',
       onClick: handlers.info
     },
-    { separator: true },
+    { id: 'separator-6', label: '', type: 'separator' as const },
     {
       id: 'delete',
       label: 'Delete',
@@ -332,14 +332,14 @@ export const contextMenuTemplates = {
       icon: <FileText className="w-4 h-4" />,
       onClick: handlers.openNewTab
     },
-    { separator: true },
+    { id: 'separator-7', label: '', type: 'separator' as const },
     {
       id: 'upload',
       label: 'Upload to Folder',
       icon: <Share2 className="w-4 h-4" />,
       onClick: handlers.upload
     },
-    { separator: true },
+    { id: 'separator-8', label: '', type: 'separator' as const },
     {
       id: 'rename',
       label: 'Rename',
@@ -354,7 +354,7 @@ export const contextMenuTemplates = {
       shortcut: 'Ctrl+C',
       onClick: handlers.copy
     },
-    { separator: true },
+    { id: 'separator-9', label: '', type: 'separator' as const },
     {
       id: 'info',
       label: 'Properties',
@@ -362,7 +362,7 @@ export const contextMenuTemplates = {
       shortcut: 'Alt+Enter',
       onClick: handlers.info
     },
-    { separator: true },
+    { id: 'separator-10', label: '', type: 'separator' as const },
     {
       id: 'delete',
       label: 'Delete',
@@ -393,7 +393,7 @@ export const contextMenuTemplates = {
       icon: <Link className="w-4 h-4" />,
       onClick: handlers.copyLink
     },
-    { separator: true },
+    { id: 'separator-11', label: '', type: 'separator' as const },
     {
       id: 'regenerate',
       label: 'Regenerate Share',
@@ -406,14 +406,14 @@ export const contextMenuTemplates = {
       icon: <Settings className="w-4 h-4" />,
       onClick: handlers.settings
     },
-    { separator: true },
+    { id: 'separator-12', label: '', type: 'separator' as const },
     {
       id: 'info',
       label: 'Share Details',
       icon: <Info className="w-4 h-4" />,
       onClick: handlers.info
     },
-    { separator: true },
+    { id: 'separator-13', label: '', type: 'separator' as const },
     {
       id: 'revoke',
       label: 'Revoke Share',

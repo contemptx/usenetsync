@@ -15,7 +15,7 @@ import { debounce } from 'lodash';
 
 interface SearchResult {
   id: string;
-  type: 'file' | 'folder' | 'share';
+  type: 'file' as const | 'folder' | 'share';
   name: string;
   path?: string;
   shareId?: string;
@@ -99,7 +99,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         const mockResults: SearchResult[] = [
           {
             id: '1',
-            type: 'file',
+            type: 'file' as const,
             name: 'document.pdf',
             path: '/documents/document.pdf',
             size: 2048576,
@@ -111,7 +111,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           },
           {
             id: '2',
-            type: 'folder',
+            type: 'folder' as const,
             name: 'Documents',
             path: '/documents',
             modifiedAt: new Date().toISOString(),
@@ -121,7 +121,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           },
           {
             id: '3',
-            type: 'share',
+            type: 'share' as const,
             name: 'Shared Document',
             shareId: 'SHARE123',
             size: 1048576,

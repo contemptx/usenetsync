@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Server, TrendingUp, TrendingDown, AlertCircle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { Activity, Server, TrendingUp, AlertCircle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 
 interface PoolConnection {
   id: string;

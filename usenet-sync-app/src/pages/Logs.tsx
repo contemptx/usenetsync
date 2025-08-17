@@ -15,7 +15,6 @@ import {
   Copy,
   ChevronDown
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { getLogs } from '../lib/tauri';
 
 interface LogEntry {
@@ -35,6 +34,10 @@ export const Logs: React.FC = () => {
   const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>([]);
   const [selectedLevel, setSelectedLevel] = useState<LogLevel>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState({
+    level: 'all',
+    category: 'all'
+  });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [categories, setCategories] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);

@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { StatusBar } from './StatusBar';
-import { HeaderBar } from './HeaderBar';
 import { NotificationCenter } from './NotificationCenter';
 
 export const AppShell: React.FC = () => {
@@ -186,7 +185,7 @@ export const AppShell: React.FC = () => {
             onClick={() => setShowNotifications(false)}
           />
           <div className="absolute right-4 top-16 w-96 max-h-[80vh] overflow-hidden">
-            <NotificationCenter />
+            <NotificationCenter notifications={[]} />
           </div>
         </div>
       )}

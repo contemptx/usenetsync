@@ -11,14 +11,10 @@ import {
   Grid,
   List
 } from 'lucide-react';
-import { FileGridView } from '../components/FileGridView';
-import { BreadcrumbNav } from '../components/BreadcrumbNav';
-import { BatchOperations } from '../components/BatchOperations';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { downloadShare, getShareDetails } from '../lib/tauri';
 import { useAppStore } from '../stores/useAppStore';
 import toast from 'react-hot-toast';
-import clsx from 'clsx';
 import { FileNode, Transfer } from '../types';
 
 export const Download: React.FC = () => {
@@ -27,8 +23,6 @@ export const Download: React.FC = () => {
   const [shareDetails, setShareDetails] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-  const [currentPath, setCurrentPath] = useState<string[]>(['Home', 'Downloads']);
   
   const { addDownload, selectedFiles } = useAppStore();
   
@@ -155,7 +149,7 @@ export const Download: React.FC = () => {
           {shareDetails?.type === 'protected' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <Lock className="w-4 h-4 inline mr-1" />
+                <LockIcon className="w-4 h-4 inline mr-1" />
                 Password Required
               </label>
               <input

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { testServerConnection, saveServerConfig, deactivateLicense } from '../lib/tauri';
 import { Server, Check, X, AlertCircle, Key, LogOut, Gauge, Upload, Download } from 'lucide-react';

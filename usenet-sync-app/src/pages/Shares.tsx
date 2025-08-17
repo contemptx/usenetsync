@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { Share2, Copy, Trash2, Eye, Calendar, Users, History, X } from 'lucide-react';
-import QRCode from 'qrcode.react';
+import { QRCodeSVG as QRCode } from 'qrcode.react';
 import { VersionHistory } from '../components/VersionHistory';
-import { BatchOperations } from '../components/BatchOperations';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
