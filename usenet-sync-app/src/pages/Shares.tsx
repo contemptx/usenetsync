@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
-import { Share2, Copy, Trash2, Eye, Calendar, Users } from 'lucide-react';
+import { Share2, Copy, Trash2, Eye, Calendar, Users, History, X } from 'lucide-react';
 import QRCode from 'qrcode.react';
+import { VersionHistory } from '../components/VersionHistory';
+import { BatchOperations } from '../components/BatchOperations';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
 export const Shares: React.FC = () => {
   const { shares, removeShare } = useAppStore();
+  const [selectedShare, setSelectedShare] = useState<string | null>(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  
+  // Use keyboard shortcuts
+  useKeyboardShortcuts();
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -85,15 +93,27 @@ export const Shares: React.FC = () => {
                     </div>
                   </div>
                   
-                  <button
-                    onClick={() => {
-                      removeShare(share.id);
-                      toast.success('Share removed');
-                    }}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded"
-                  >
-                    <Trash2 className="w-4 h-4 text-gray-500" />
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => {
+                        setSelectedShare(share.shareId);
+                        setShowVersionHistory(true);
+                      }}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded"
+                      title="Version History"
+                    >
+                      <History className="w-4 h-4 text-gray-500" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        removeShare(share.id);
+                        toast.success('Share removed');
+                      }}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded"
+                    >
+                      <Trash2 className="w-4 h-4 text-gray-500" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
@@ -151,6 +171,41 @@ export const Shares: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      
+      {/* Version History Modal */}
+      {showVersionHistory && selectedShare && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50" 
+            onClick={() => setShowVersionHistory(false)}
+          />
+          <div className="relative bg-white dark:bg-dark-surface rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b border-gray-200 dark:border-dark-border flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Version History
+              </h2>
+              <button
+                onClick={() => setShowVersionHistory(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(80vh-80px)]">
+              <VersionHistory 
+                fileId={selectedShare}
+                onRollback={(versionId) => {
+                  console.log('Rollback to version:', versionId);
+                  toast.success('Rolled back to selected version');
+                }}
+                onCompare={(v1, v2) => {
+                  console.log('Compare versions:', v1, v2);
+                }}
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

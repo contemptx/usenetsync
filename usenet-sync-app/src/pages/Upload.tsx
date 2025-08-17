@@ -1,9 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FileTree } from '../components/FileTree';
+import { FileGridView } from '../components/FileGridView';
+import { BreadcrumbNav } from '../components/BreadcrumbNav';
+import { BatchOperations } from '../components/BatchOperations';
 import { useAppStore } from '../stores/useAppStore';
 import { selectFiles, indexFolder, createShare } from '../lib/tauri';
 import { FileNode, Transfer } from '../types';
+import { useDragDrop } from '../hooks/useDragDrop';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { 
   Upload as UploadIcon, 
   FolderOpen, 
@@ -13,7 +18,9 @@ import {
   Lock,
   Globe,
   Shield,
-  AlertCircle
+  AlertCircle,
+  Grid,
+  List
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -23,8 +30,13 @@ export const Upload: React.FC = () => {
   const [shareType, setShareType] = useState<'public' | 'private' | 'protected'>('public');
   const [password, setPassword] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [currentPath, setCurrentPath] = useState<string[]>(['Home', 'Uploads']);
   
   const { selectedFiles, addUpload, clearSelection } = useAppStore();
+  
+  // Use keyboard shortcuts
+  useKeyboardShortcuts();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     // Convert File objects to FileNode structure
@@ -185,22 +197,61 @@ export const Upload: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* File Tree */}
+          {/* Breadcrumb Navigation */}
+          <BreadcrumbNav 
+            items={currentPath.map((path, index) => ({
+              label: path,
+              onClick: index < currentPath.length - 1 ? () => {
+                setCurrentPath(currentPath.slice(0, index + 1));
+              } : undefined
+            }))}
+          />
+
+          {/* File Browser */}
           <div className="bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border">
             <div className="p-4 border-b border-gray-200 dark:border-dark-border">
               <div className="flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Selected Files
                 </h2>
-                <button
-                  onClick={() => {
-                    setFiles(null);
-                    clearSelection();
-                  }}
-                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-dark-border rounded"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* View Mode Toggle */}
+                  <div className="flex rounded-lg border border-gray-200 dark:border-dark-border">
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={clsx(
+                        'p-1.5 transition-colors',
+                        viewMode === 'list' 
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400' 
+                          : 'hover:bg-gray-100 dark:hover:bg-dark-border'
+                      )}
+                      title="List view"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={clsx(
+                        'p-1.5 transition-colors',
+                        viewMode === 'grid' 
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400' 
+                          : 'hover:bg-gray-100 dark:hover:bg-dark-border'
+                      )}
+                      title="Grid view"
+                    >
+                      <Grid className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setFiles(null);
+                      clearSelection();
+                    }}
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-dark-border rounded"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
                 <span>{selectedFiles.length} selected</span>
@@ -209,12 +260,27 @@ export const Upload: React.FC = () => {
               </div>
             </div>
             
-            <FileTree 
-              data={files} 
-              selectable={true}
-              className="h-96"
-            />
+            {/* File Display */}
+            {viewMode === 'grid' ? (
+              <FileGridView 
+                files={files?.children || []}
+                viewMode="grid"
+                onFileSelect={(file) => console.log('Selected:', file)}
+                onFileOpen={(file) => console.log('Open:', file)}
+              />
+            ) : (
+              <FileTree 
+                data={files} 
+                selectable={true}
+                className="h-96"
+              />
+            )}
           </div>
+
+          {/* Batch Operations */}
+          {selectedFiles.length > 0 && (
+            <BatchOperations />
+          )}
 
           {/* Share Options */}
           <div className="bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border p-6">

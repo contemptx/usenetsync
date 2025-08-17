@@ -1,9 +1,24 @@
 import React, { useState } from 'react';
-import { getShareDetails, downloadShare } from '../lib/tauri';
-import { FileTree } from '../components/FileTree';
+import { 
+  Download as DownloadIcon, 
+  Search, 
+  Filter,
+  Folder,
+  File,
+  Clock,
+  Check,
+  X,
+  Grid,
+  List
+} from 'lucide-react';
+import { FileGridView } from '../components/FileGridView';
+import { BreadcrumbNav } from '../components/BreadcrumbNav';
+import { BatchOperations } from '../components/BatchOperations';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { downloadShare, getShareDetails } from '../lib/tauri';
 import { useAppStore } from '../stores/useAppStore';
-import { Download as DownloadIcon, Search, Lock, Folder } from 'lucide-react';
 import toast from 'react-hot-toast';
+import clsx from 'clsx';
 import { FileNode, Transfer } from '../types';
 
 export const Download: React.FC = () => {
@@ -12,8 +27,13 @@ export const Download: React.FC = () => {
   const [shareDetails, setShareDetails] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [currentPath, setCurrentPath] = useState<string[]>(['Home', 'Downloads']);
   
   const { addDownload, selectedFiles } = useAppStore();
+  
+  // Use keyboard shortcuts
+  useKeyboardShortcuts();
 
   const handleLookupShare = async () => {
     if (!shareId.trim()) {

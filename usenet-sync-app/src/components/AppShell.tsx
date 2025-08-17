@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useAppStore } from '../stores/useAppStore';
 import { 
@@ -12,14 +12,17 @@ import {
   Moon,
   Sun,
   User,
-  FileText
+  FileText,
+  Bell
 } from 'lucide-react';
 import clsx from 'clsx';
 import { StatusBar } from './StatusBar';
 import { HeaderBar } from './HeaderBar';
+import { NotificationCenter } from './NotificationCenter';
 
 export const AppShell: React.FC = () => {
   const { sidebarOpen, toggleSidebar, darkMode, toggleDarkMode, licenseStatus, user } = useAppStore();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const menuItems = [
     { icon: Home, label: 'Dashboard', path: '/' },
@@ -126,6 +129,16 @@ export const AppShell: React.FC = () => {
             <div className="flex-1" />
 
             <div className="flex items-center gap-3">
+              {/* Notifications */}
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-lg transition-colors relative"
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              </button>
+
               {/* Dark Mode Toggle */}
               <button
                 onClick={toggleDarkMode}
@@ -160,6 +173,19 @@ export const AppShell: React.FC = () => {
         {/* Status Bar */}
         <StatusBar />
       </div>
+      
+      {/* Notification Center - Overlay */}
+      {showNotifications && (
+        <div className="fixed inset-0 z-50">
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-25" 
+            onClick={() => setShowNotifications(false)}
+          />
+          <div className="absolute right-4 top-16 w-96 max-h-[80vh] overflow-hidden">
+            <NotificationCenter />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

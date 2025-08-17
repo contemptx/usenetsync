@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { TransferCard } from '../components/progress/TransferCard';
 import { ConnectionPoolVisualization } from '../components/ConnectionPoolVisualization';
+import { ContextMenu, useContextMenu } from '../components/ContextMenu';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { getSystemStats } from '../lib/tauri';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { 
   Activity, 
   HardDrive, 
@@ -42,6 +46,48 @@ export const Dashboard: React.FC = () => {
   const { uploads, downloads, shares, licenseStatus } = useAppStore();
   const [stats, setStats] = useState<any>(null);
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
+  const navigate = useNavigate();
+  
+  // Use keyboard shortcuts
+  useKeyboardShortcuts();
+  
+  // Context menu setup
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+  
+  const dashboardContextMenuItems = [
+    {
+      label: 'New Upload',
+      icon: Upload,
+      onClick: () => navigate('/upload'),
+      shortcut: 'Ctrl+U'
+    },
+    {
+      label: 'New Download',
+      icon: Download,
+      onClick: () => navigate('/download'),
+      shortcut: 'Ctrl+D'
+    },
+    { type: 'separator' as const },
+    {
+      label: 'View Shares',
+      icon: Share2,
+      onClick: () => navigate('/shares')
+    },
+    {
+      label: 'Settings',
+      onClick: () => navigate('/settings'),
+      shortcut: 'Ctrl+,'
+    },
+    { type: 'separator' as const },
+    {
+      label: 'Refresh',
+      onClick: () => {
+        toast.success('Dashboard refreshed');
+        window.location.reload();
+      },
+      shortcut: 'F5'
+    }
+  ];
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -121,7 +167,10 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div 
+      className="p-6 space-y-6"
+      onContextMenu={handleContextMenu}
+    >
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -267,6 +316,16 @@ export const Dashboard: React.FC = () => {
       <div className="mt-6">
         <ConnectionPoolVisualization />
       </div>
+      
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={dashboardContextMenuItems}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   );
 };
