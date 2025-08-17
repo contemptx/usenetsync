@@ -505,18 +505,19 @@ class ComprehensiveDataTest:
     def _initialize_core_systems(self):
         """Initialize all core system components"""
         # User management
-        self.systems['user_mgr'] = UserManager(self.systems['enhanced_db'])
+        self.systems['user_mgr'] = UserManager(self.systems['enhanced_db'], self.systems['security'])
         self.systems['user_id'] = self.systems['user_mgr'].initialize("Test User")
         
         # Indexing systems
         self.systems['index_system'] = VersionedCoreIndexSystem(
             self.systems['enhanced_db'],
-            self.systems['security']
+            self.systems['security'],
+            self.config
         )
         self.systems['optimized_index'] = OptimizedIndexingSystem(
             self.systems['enhanced_db'],
-            self.systems['write_queue'],
-            self.systems['security']
+            self.systems['security'],
+            self.config
         )
         self.systems['binary_index'] = SimplifiedBinaryIndex("test_folder")
         
