@@ -40,7 +40,6 @@
 
 
 - [ ] **Mirror/Redundancy Settings** - Multiple server support
-- [ ] **Auto-update System** - Application updates
 
 ## 4. **Security Features** ⚠️
 
@@ -54,7 +53,6 @@
 - [ ] **Version control operations** - Track file versions
 - [ ] **Mirror server management**
 
-- [ ] **Analytics collection**
 - [ ] **Log management**
 
 ## 6. **Tauri Backend** ⚠️
@@ -66,7 +64,7 @@
 - [ ] `get_statistics` - Detailed statistics
 - [ ] `export_data` - Export shares/settings
 - [ ] `import_data` - Import shares/settings
-- [ ] `check_for_updates` - Auto-update check
+
 
 ## 7. **User Experience** ⚠️
 
