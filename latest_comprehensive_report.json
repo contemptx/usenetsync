@@ -1,0 +1,70 @@
+{
+  "folder_structure": {
+    "Documents/Work/report.txt": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Documents/Work/report.txt",
+      "size": 1247,
+      "hash": "16d55ebdbfa4000b225b3ed7d1aeab78d689a5003d7f5b67ec890963516d9462",
+      "content": "File: report.txt\nPath: /tmp/system_validation_dxitxxq7/test_data/Documents/Work/report.txt\nCreated: 2025-08-17 12:01:31.099870\nContent: ==================================================\nThis is test "
+    },
+    "Documents/Work/presentation.pdf": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Documents/Work/presentation.pdf",
+      "size": 1777,
+      "hash": "4cf81ffd1b0b306225eae8fbcc4aa10ffcfb095098a84832f1ebb50ad02139fb",
+      "content": "File: presentation.pdf\nPath: /tmp/system_validation_dxitxxq7/test_data/Documents/Work/presentation.pdf\nCreated: 2025-08-17 12:01:31.100007\nContent: ==================================================\nT"
+    },
+    "Documents/Personal/notes.txt": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Documents/Personal/notes.txt",
+      "size": 2272,
+      "hash": "71ab8b00a17e20253d3a9fd0ed8781720bf4966c8c9e423e2052a0dd552811be",
+      "content": "File: notes.txt\nPath: /tmp/system_validation_dxitxxq7/test_data/Documents/Personal/notes.txt\nCreated: 2025-08-17 12:01:31.100130\nContent: ==================================================\nThis is tes"
+    },
+    "Documents/Personal/todo.md": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Documents/Personal/todo.md",
+      "size": 2778,
+      "hash": "a9bd39326c8ee3044dbd3c17b7d8e8ea673242d63887dc437b377ac1b3dc6a99",
+      "content": "File: todo.md\nPath: /tmp/system_validation_dxitxxq7/test_data/Documents/Personal/todo.md\nCreated: 2025-08-17 12:01:31.100204\nContent: ==================================================\nThis is test co"
+    },
+    "Images/Vacation/beach.jpg": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Images/Vacation/beach.jpg",
+      "size": 3293,
+      "hash": "e96b026d8d23fb7b47e8e30bb00beaff9676f278c3db7a28a42306d946e876d1",
+      "content": "File: beach.jpg\nPath: /tmp/system_validation_dxitxxq7/test_data/Images/Vacation/beach.jpg\nCreated: 2025-08-17 12:01:31.100395\nContent: ==================================================\nThis is test c"
+    },
+    "Images/Vacation/sunset.png": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Images/Vacation/sunset.png",
+      "size": 3808,
+      "hash": "dbbf129cf5a6c24e01ca48cf82de4f3ab2aa041f0935dfca65a27993743f3604",
+      "content": "File: sunset.png\nPath: /tmp/system_validation_dxitxxq7/test_data/Images/Vacation/sunset.png\nCreated: 2025-08-17 12:01:31.100473\nContent: ==================================================\nThis is test"
+    },
+    "Images/Family/reunion.jpg": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Images/Family/reunion.jpg",
+      "size": 4321,
+      "hash": "aac6995cb197a63787406d30c30dc5226d723d6ffc93133ec794a00d5ae63ad8",
+      "content": "File: reunion.jpg\nPath: /tmp/system_validation_dxitxxq7/test_data/Images/Family/reunion.jpg\nCreated: 2025-08-17 12:01:31.100617\nContent: ==================================================\nThis is test"
+    },
+    "Projects/Code/main.py": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Projects/Code/main.py",
+      "size": 4821,
+      "hash": "05195448e7c588c17c3380a1bdc22378e0b7dc821a00dcf901f9acfa3af0d103",
+      "content": "File: main.py\nPath: /tmp/system_validation_dxitxxq7/test_data/Projects/Code/main.py\nCreated: 2025-08-17 12:01:31.100803\nContent: ==================================================\nThis is test content"
+    },
+    "Projects/Code/utils.py": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Projects/Code/utils.py",
+      "size": 5336,
+      "hash": "d64c782d5d6d61dbec8515815465aadfabb5ae4f8ec40702d8adec00ba261822",
+      "content": "File: utils.py\nPath: /tmp/system_validation_dxitxxq7/test_data/Projects/Code/utils.py\nCreated: 2025-08-17 12:01:31.100871\nContent: ==================================================\nThis is test conte"
+    },
+    "Projects/Code/readme.md": {
+      "path": "/tmp/system_validation_dxitxxq7/test_data/Projects/Code/readme.md",
+      "size": 5851,
+      "hash": "f6214a585a64442df4f05e26bda340211f69a64cb4c8875e88acbaec31bbef7e",
+      "content": "File: readme.md\nPath: /tmp/system_validation_dxitxxq7/test_data/Projects/Code/readme.md\nCreated: 2025-08-17 12:01:31.100945\nContent: ==================================================\nThis is test con"
+    }
+  },
+  "indexed_files": {},
+  "segments": {},
+  "uploads": {},
+  "publications": {},
+  "downloads": {},
+  "validation": {}
+}
