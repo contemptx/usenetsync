@@ -6,9 +6,7 @@ import {
   Upload, 
   Download, 
   Activity,
-  Server,
   AlertCircle,
-  CheckCircle,
   Clock
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -37,7 +35,7 @@ interface StorageStatus {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+  const [connectionStatus] = useState<ConnectionStatus>({
     isConnected: true,
     serverName: 'news.provider.com',
     latency: 45
@@ -50,14 +48,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
     activeDownloads: 0
   });
   
-  const [storageStatus, setStorageStatus] = useState<StorageStatus>({
+  const [storageStatus] = useState<StorageStatus>({
     used: 45 * 1024 * 1024 * 1024, // 45 GB
     total: 100 * 1024 * 1024 * 1024, // 100 GB
     percentage: 45
   });
   
   const [lastSync, setLastSync] = useState<Date>(new Date());
-  const [notifications, setNotifications] = useState<number>(0);
+  const [notifications] = useState<number>(0);
 
   // Update status periodically
   useEffect(() => {

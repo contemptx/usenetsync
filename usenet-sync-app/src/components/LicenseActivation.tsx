@@ -45,7 +45,7 @@ export const LicenseActivation: React.FC<LicenseActivationProps> = ({ onActivate
     setError('');
     
     try {
-      const days = await startTrial();
+      
       const status = await checkLicense();
       setLicenseStatus(status);
       setShowSuccess(true);

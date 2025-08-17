@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { 
-  Search, 
   Bell, 
   Settings, 
   User, 
@@ -11,12 +10,12 @@ import {
   ChevronDown,
   Command
 } from 'lucide-react';
-import { SearchBar } from './SearchBar';
+import {Bar } from './Bar';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 interface HeaderBarProps {
   title?: string;
-  showSearch?: boolean;
+  show?: boolean;
   onThemeToggle?: () => void;
   isDarkMode?: boolean;
   userName?: string;
@@ -25,7 +24,7 @@ interface HeaderBarProps {
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
   title = 'UsenetSync',
-  showSearch = true,
+  show = true,
   onThemeToggle,
   isDarkMode = false,
   userName = 'User',
@@ -77,10 +76,10 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </button>
           </div>
 
-          {/* Center Section - Search */}
-          {showSearch && (
+          {/* Center Section - */}
+          {show && (
             <div className="flex-1 max-w-xl mx-4">
-              <SearchBar />
+              <Bar />
             </div>
           )}
 
@@ -262,7 +261,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                   >
                     <span>{shortcut.description}</span>
                     <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-dark-border rounded">
-                      {shortcut.keys.join(' + ')}
+                      {shortcut.key.join(' + ')}
                     </kbd>
                   </button>
                 ))}

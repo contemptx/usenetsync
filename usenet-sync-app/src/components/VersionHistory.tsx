@@ -3,14 +3,11 @@ import {
   History, 
   Clock, 
   User, 
-  FileText, 
   Download, 
   RotateCcw,
   ChevronDown,
   ChevronRight,
-  Hash,
   HardDrive,
-  GitBranch,
   Diff
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -343,7 +340,7 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
                         <p className="font-mono text-gray-900 dark:text-white">{version.share_id}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500 dark:text-gray-500">File Hash:</span>
+                        <span className="text-gray-500 dark:text-gray-500">File:</span>
                         <p className="font-mono text-gray-900 dark:text-white truncate" title={version.file_hash}>
                           {version.file_hash}
                         </p>

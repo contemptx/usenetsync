@@ -92,15 +92,15 @@ function App() {
         genuine: false,
         trial: false,
         hardwareId: '',
-        tier: 'basic'
+        tier: 'basic' as 'basic' | 'pro' | 'enterprise'
       });
     });
 
     return () => {
-      unsubscribeProgress.then(fn => fn());
-      unsubscribeComplete.then(fn => fn());
-      unsubscribeError.then(fn => fn());
-      unsubscribeExpired.then(fn => fn());
+      unsubscribeProgress.then((fn: any) => fn());
+      unsubscribeComplete.then((fn: any) => fn());
+      unsubscribeError.then((fn: any) => fn());
+      unsubscribeExpired.then((fn: any) => fn());
     };
   }, [updateTransfer, setLicenseStatus]);
 

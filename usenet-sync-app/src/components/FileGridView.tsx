@@ -10,9 +10,6 @@ import {
   Archive,
   FileText,
   Code,
-  Download,
-  Share2,
-  Trash2,
   MoreVertical,
   Check
 } from 'lucide-react';
@@ -52,7 +49,7 @@ export const FileGridView: React.FC<FileGridViewProps> = ({
 }) => {
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'date'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const { showContextMenu } = useContextMenu();
+  const { openContextMenu } = useContextMenu();
   const {
     selectedIds,
     toggleSelection,
@@ -163,7 +160,7 @@ export const FileGridView: React.FC<FileGridViewProps> = ({
       toggleSelection(file.id);
     }
     
-    showContextMenu(event, {
+    openContextMenu(event, {
       type: file.type,
       items: selectedItems.length > 1 ? selectedItems : [file],
       onAction: (action) => {

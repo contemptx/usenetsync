@@ -87,7 +87,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ items, position, onClo
   }, [position]);
 
   const handleItemClick = (item: ContextMenuItem) => {
-    if (item.disabled || item.separator) return;
+    if (item.disabled || item.type === 'separator') return;
     
     if (item.submenu) {
       setActiveSubmenu(activeSubmenu === item.id ? null : item.id);
@@ -109,7 +109,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ items, position, onClo
   };
 
   const renderMenuItem = (item: ContextMenuItem, index: number) => {
-    if (item.separator) {
+    if (item.type === 'separator') {
       return <div key={`sep-${index}`} className="h-px bg-gray-200 dark:bg-dark-border my-1" />;
     }
 

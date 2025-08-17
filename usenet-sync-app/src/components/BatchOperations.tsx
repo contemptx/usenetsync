@@ -4,13 +4,11 @@ import {
   Square, 
   MinusSquare,
   Download,
-  Upload,
   Trash2,
   Share2,
   Archive,
   Move,
   Copy,
-  Edit,
   X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -50,17 +48,7 @@ export const BatchOperations: React.FC<BatchOperationsProps> = ({
     } else {
       onSelectionChange(new Set(items.map(item => item.id)));
     }
-  };
-
-  const toggleItemSelection = (itemId: string) => {
-    const newSelection = new Set(selectedIds);
-    if (newSelection.has(itemId)) {
-      newSelection.delete(itemId);
-    } else {
-      newSelection.add(itemId);
-    }
-    onSelectionChange(newSelection);
-  };
+    };
 
   const handleBatchAction = async (action: string) => {
     if (selectedItems.length === 0) {

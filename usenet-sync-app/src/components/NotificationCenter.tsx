@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Bell, 
   X, 
@@ -9,7 +9,6 @@ import {
   Download,
   Upload,
   Share2,
-  Trash2,
   Settings,
   Clock
 } from 'lucide-react';

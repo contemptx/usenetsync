@@ -3,19 +3,16 @@ import {
   Search, 
   X, 
   Filter,
-  Calendar,
   FileText,
   Folder,
   Hash,
-  User,
-  Clock,
-  ChevronDown
+  User
 } from 'lucide-react';
 import { debounce } from 'lodash';
 
 interface SearchResult {
   id: string;
-  type: 'file' as const | 'folder' | 'share';
+  type: 'file' | 'folder' | 'share';
   name: string;
   path?: string;
   shareId?: string;
