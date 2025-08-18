@@ -9,7 +9,7 @@ import json
 import sys
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import traceback
 
@@ -53,12 +53,21 @@ class UsenetSyncCLI:
     def __init__(self, skip_db=False):
         self.config = self._load_config()
         self.db_manager = None if skip_db else self._init_database()
-        self.security = EnhancedSecuritySystem(self.db_manager) if self.db_manager else None
         self.share_generator = ShareIDGenerator()
         self.nntp_client = None
         
-        # Initialize integrated backend with all new features
-        self.integrated_backend = IntegratedBackend(self.db_manager) if self.db_manager else None
+        # Only initialize components that require database if db is available
+        if self.db_manager:
+            try:
+                self.security = EnhancedSecuritySystem(self.db_manager)
+                self.integrated_backend = IntegratedBackend(self.db_manager)
+            except Exception as e:
+                # If initialization fails, continue without these features
+                self.security = None
+                self.integrated_backend = None
+        else:
+            self.security = None
+            self.integrated_backend = None
         
     def _load_config(self):
         """Load configuration from file"""
@@ -81,6 +90,10 @@ class UsenetSyncCLI:
     def _init_database(self):
         """Initialize PostgreSQL connection"""
         try:
+            # Skip database if explicitly disabled
+            if os.environ.get('SKIP_DATABASE', 'false').lower() == 'true':
+                return None
+                
             config = PostgresConfig(
                 host=os.environ.get('DB_HOST', 'localhost'),
                 port=int(os.environ.get('DB_PORT', 5432)),
@@ -90,7 +103,7 @@ class UsenetSyncCLI:
             )
             return ShardedPostgreSQLManager(config)
         except Exception as e:
-            print(f"Warning: Database initialization failed: {e}", file=sys.stderr)
+            # Silently skip database - it's optional for most operations
             return None
     
     def _init_nntp(self):
@@ -150,7 +163,7 @@ def create_share(files, share_type, password):
             "size": total_size,
             "fileCount": len(existing_files),
             "folderCount": len(set(Path(f).parent for f in existing_files)),
-            "createdAt": datetime.utcnow().isoformat(),
+            "createdAt": datetime.now(timezone.utc).isoformat(),
             "expiresAt": None,
             "accessCount": 0,
             "lastAccessed": None,

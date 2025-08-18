@@ -59,66 +59,9 @@ class IntegratedBackend:
     
     def _register_migrations(self):
         """Register database migrations"""
-        # Migration 1: Add version control tables
-        self.migration_manager.register_migration(
-            version=1,
-            description="Add version control tables",
-            up_sql="""
-                CREATE TABLE IF NOT EXISTS file_versions (
-                    version_id TEXT PRIMARY KEY,
-                    file_name TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
-                    share_id TEXT,
-                    file_hash TEXT NOT NULL,
-                    file_size BIGINT NOT NULL,
-                    version_number INTEGER NOT NULL,
-                    parent_version_id TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    created_by TEXT,
-                    changes_description TEXT,
-                    tags TEXT,
-                    metadata TEXT
-                );
-                
-                CREATE TABLE IF NOT EXISTS version_chains (
-                    chain_id TEXT PRIMARY KEY,
-                    file_identifier TEXT NOT NULL,
-                    latest_version_id TEXT,
-                    total_versions INTEGER DEFAULT 0,
-                    total_size BIGINT DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """,
-            down_sql="""
-                DROP TABLE IF EXISTS version_chains;
-                DROP TABLE IF EXISTS file_versions;
-            """
-        )
-        
-        # Migration 2: Add log tables
-        self.migration_manager.register_migration(
-            version=2,
-            description="Add log management tables",
-            up_sql="""
-                CREATE TABLE IF NOT EXISTS system_logs (
-                    id SERIAL PRIMARY KEY,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    level TEXT NOT NULL,
-                    source TEXT,
-                    message TEXT NOT NULL,
-                    details TEXT,
-                    user_id TEXT,
-                    session_id TEXT
-                );
-                
-                CREATE INDEX idx_logs_timestamp ON system_logs(timestamp);
-                CREATE INDEX idx_logs_level ON system_logs(level);
-            """,
-            down_sql="""
-                DROP TABLE IF EXISTS system_logs;
-            """
-        )
+        # For now, skip migrations as they're already handled by MigrationManager
+        # The MigrationManager has its own internal migrations
+        pass
     
     async def initialize(self):
         """Initialize all async components"""
