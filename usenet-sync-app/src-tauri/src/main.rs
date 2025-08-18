@@ -368,7 +368,7 @@ async fn create_share(
     password: Option<String>,
 ) -> Result<Share, String> {
     // Call Python backend to create share
-    let output = Command::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = Command::new(get_python_command())
         .arg(get_workspace_dir().join("src").join("cli.py"))
         .arg("create-share")
         .arg("--files")
@@ -401,7 +401,7 @@ async fn download_share(
     selected_files: Option<Vec<String>>,
 ) -> Result<(), String> {
     // Call Python backend to download share
-    let mut cmd = Command::new(if cfg!(target_os = "windows") { "python" } else { "python3" });
+    let mut cmd = Command::new(get_python_command());
     cmd.arg("/workspace/src/cli.py")
         .arg("download-share")
         .arg("--share-id")
@@ -426,7 +426,7 @@ async fn download_share(
 #[tauri::command]
 async fn get_share_details(share_id: String) -> Result<Share, String> {
     // Call Python backend to get share details
-    let output = Command::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = Command::new(get_python_command())
         .arg(get_workspace_dir().join("src").join("cli.py"))
         .arg("share-details")
         .arg("--share-id")
@@ -484,7 +484,7 @@ async fn cancel_transfer(state: State<'_, AppState>, transfer_id: String) -> Res
 #[tauri::command]
 async fn test_server_connection(config: ServerConfig) -> Result<bool, String> {
     // Call Python backend to test connection
-    let output = Command::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = Command::new(get_python_command())
         .arg(get_workspace_dir().join("src").join("cli.py"))
         .arg("test-connection")
         .arg("--hostname")

@@ -6,6 +6,15 @@ use std::fs;
 use std::process::Command as ProcessCommand;
 use std::path::PathBuf;
 
+// Helper function to get the correct Python command for the OS
+fn get_python_command() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    }
+}
+
 // Helper function to get the workspace directory
 fn get_workspace_dir() -> PathBuf {
     std::env::current_dir()
@@ -159,7 +168,7 @@ pub async fn get_logs(
     state: tauri::State<'_, SystemState>,
 ) -> Result<Vec<LogEntry>, String> {
     // First try to get logs from Python backend
-    let output = ProcessCommand::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = ProcessCommand::new(get_python_command())
         .args(&[
             "-c",
             "from src.cli import UsenetSyncCLI; \
@@ -229,7 +238,7 @@ pub async fn set_bandwidth_limit(
     state: tauri::State<'_, SystemState>,
 ) -> Result<(), String> {
     // Apply to Python backend
-    let output = ProcessCommand::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = ProcessCommand::new(get_python_command())
         .args(&[
             "-c",
             &format!(
@@ -299,7 +308,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
     };
     
     // Get network stats from Python backend
-    let network_speed = if let Ok(output) = ProcessCommand::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let network_speed = if let Ok(output) = ProcessCommand::new(get_python_command())
         .args(&[
             "-c",
             "from src.cli import UsenetSyncCLI; \
@@ -339,7 +348,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
 pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, SystemState>) -> Result<String, String> {
     
     // Call Python backend for full export
-    let output = ProcessCommand::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = ProcessCommand::new(get_python_command())
         .args(&[
             "-c",
             &format!(
@@ -368,7 +377,7 @@ pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, Sy
 #[tauri::command]
 pub async fn import_data(data: String, options: serde_json::Value, state: tauri::State<'_, SystemState>) -> Result<bool, String> {
     // Call Python backend for import
-    let output = ProcessCommand::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = ProcessCommand::new(get_python_command())
         .args(&[
             "-c",
             &format!(
@@ -418,7 +427,7 @@ pub async fn clear_cache(state: tauri::State<'_, SystemState>) -> Result<(), Str
     }
     
     // Clear Python backend cache
-    let output = ProcessCommand::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+    let output = ProcessCommand::new(get_python_command())
         .args(&[
             "-c",
             "from src.cli import UsenetSyncCLI; \
@@ -476,7 +485,7 @@ pub async fn restart_services(state: tauri::State<'_, SystemState>) -> Result<()
         std::thread::sleep(std::time::Duration::from_secs(2));
         
         // Start Python backend service
-        ProcessCommand::new(if cfg!(target_os = "windows") { "python" } else { "python3" })
+        ProcessCommand::new(get_python_command())
             .args(&["src/cli.py", "--daemon"])
             .current_dir(&get_workspace_dir())
             .spawn()
@@ -492,9 +501,9 @@ pub async fn restart_services(state: tauri::State<'_, SystemState>) -> Result<()
         
         std::thread::sleep(std::time::Duration::from_secs(2));
         
-        ProcessCommand::new("python")
+        ProcessCommand::new(get_python_command())
             .args(&["src\\cli.py", "--daemon"])
-            .current_dir("C:\\workspace")
+            .current_dir(&get_workspace_dir())
             .spawn()
             .map_err(|e| format!("Failed to start service: {}", e))?;
     }
