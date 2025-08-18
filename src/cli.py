@@ -793,22 +793,37 @@ def initialize_database_schema(db_manager, db_type='postgresql'):
             cursor = conn.cursor()
             
             # Check if the files table exists - use different syntax for SQLite vs PostgreSQL
-            if db_type == 'sqlite':
-                cursor.execute("""
-                    SELECT name FROM sqlite_master 
-                    WHERE type='table' AND name='files'
-                """)
-                result = cursor.fetchone()
-                tables_exist = result is not None
-            else:  # PostgreSQL
-                cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_schema = 'public' 
-                        AND table_name = 'files'
-                    )
-                """)
-                tables_exist = cursor.fetchone()[0]
+            try:
+                if db_type == 'sqlite':
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name='files'
+                    """)
+                    result = cursor.fetchone()
+                    tables_exist = result is not None
+                else:  # PostgreSQL
+                    cursor.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'files'
+                        )
+                    """)
+                    tables_exist = cursor.fetchone()[0]
+            except Exception as check_error:
+                # If checking fails, assume we're using SQLite with wrong detection
+                # Try SQLite syntax as fallback
+                try:
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name='files'
+                    """)
+                    result = cursor.fetchone()
+                    tables_exist = result is not None
+                    db_type = 'sqlite'  # Force SQLite mode
+                except:
+                    # If both fail, assume tables don't exist
+                    tables_exist = False
             
             if not tables_exist:
                 # Create all required tables - use compatible SQL for both databases
@@ -1033,8 +1048,21 @@ def check_database():
             
             # Initialize schema for both SQLite and PostgreSQL
             actual_db_type = db_info.get('type', db_type)
+            # Add debug info
+            db_info['detected_type'] = actual_db_type
+            db_info['db_type_param'] = db_type
+            
             if actual_db_type in ['postgresql', 'sqlite']:
                 schema_ok, schema_msg = initialize_database_schema(db_manager, actual_db_type)
+                if not schema_ok:
+                    db_info['status'] = 'error'
+                    db_info['message'] = schema_msg
+                    click.echo(json.dumps(db_info))
+                    return
+                db_info['schema_status'] = schema_msg
+            else:
+                # If type is not recognized, try with sqlite as default
+                schema_ok, schema_msg = initialize_database_schema(db_manager, 'sqlite')
                 if not schema_ok:
                     db_info['status'] = 'error'
                     db_info['message'] = schema_msg
