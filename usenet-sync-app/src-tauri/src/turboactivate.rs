@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // TurboActivate integration for license management
 // This is a stubbed version for development/testing
 // In production, replace with actual TurboActivate library integration
@@ -10,14 +11,23 @@ use sysinfo::System;
 // Error codes
 #[allow(dead_code)]
 pub const TA_OK: i32 = 0;
+#[allow(dead_code)]
 pub const TA_FAIL: i32 = 1;
+#[allow(dead_code)]
 pub const TA_E_PDETS: i32 = 2;
+#[allow(dead_code)]
 pub const TA_E_ACTIVATE: i32 = 3;
+#[allow(dead_code)]
 pub const TA_E_INET: i32 = 4;
+#[allow(dead_code)]
 pub const TA_E_INUSE: i32 = 5;
+#[allow(dead_code)]
 pub const TA_E_REVOKED: i32 = 6;
+#[allow(dead_code)]
 pub const TA_E_INVALID_KEY: i32 = 7;
+#[allow(dead_code)]
 pub const TA_E_EXPIRED: i32 = 8;
+#[allow(dead_code)]
 pub const TA_E_TRIAL_EXPIRED: i32 = 9;
 
 // Mock state for development
