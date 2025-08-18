@@ -790,7 +790,8 @@ def check_database():
     """Check database connection status"""
     try:
         if not DatabaseSelector:
-            return output_error("Database selector not available")
+            click.echo(json.dumps({"error": "Database selector not available"}), err=True)
+            return
         
         db_info = DatabaseSelector.get_connection_info()
         
@@ -803,16 +804,16 @@ def check_database():
             db_info['status'] = 'error'
             db_info['message'] = str(e)
         
-        return output_json(db_info)
+        click.echo(json.dumps(db_info))
     except Exception as e:
-        return output_error(f"Failed to check database: {e}")
+        click.echo(json.dumps({"error": f"Failed to check database: {e}"}), err=True)
 
 @cli.command('database-info')
 def database_info():
     """Get database configuration information"""
     try:
         if not DatabaseSelector:
-            return output_json({
+            click.echo(json.dumps({
                 'error': 'Database selector not available',
                 'help': 'PostgreSQL may not be installed. The application can use SQLite as an alternative.'
             })
@@ -824,7 +825,7 @@ def database_info():
             info['note'] = 'Using SQLite database. PostgreSQL is optional on Windows.'
             info['location'] = info.get('path', 'Unknown')
         
-        return output_json(info)
+        click.echo(json.dumps(info)
     except Exception as e:
         return output_error(f"Failed to get database info: {e}")
 
@@ -833,7 +834,7 @@ def setup_postgresql():
     """Setup PostgreSQL automatically (Windows)"""
     try:
         if sys.platform != "win32":
-            return output_json({
+            click.echo(json.dumps({
                 'status': 'skipped',
                 'message': 'Automatic PostgreSQL setup is only available on Windows'
             })
@@ -850,7 +851,7 @@ def setup_postgresql():
         existing = setup.check_existing_postgres()
         if existing:
             if setup.is_postgres_running():
-                return output_json({
+                click.echo(json.dumps({
                     'status': 'already_installed',
                     'message': 'PostgreSQL is already installed and running',
                     'details': existing
@@ -858,7 +859,7 @@ def setup_postgresql():
             else:
                 # Try to start it
                 if setup.start_postgres():
-                    return output_json({
+                    click.echo(json.dumps({
                         'status': 'started',
                         'message': 'PostgreSQL was installed but not running. Started successfully.',
                         'details': existing
@@ -867,7 +868,7 @@ def setup_postgresql():
         # Perform full setup
         success, message = setup.full_setup()
         
-        return output_json({
+        click.echo(json.dumps({
             'status': 'success' if success else 'error',
             'message': message,
             'installed': success
