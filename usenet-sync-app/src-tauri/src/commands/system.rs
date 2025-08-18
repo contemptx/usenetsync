@@ -6,7 +6,36 @@ use std::fs;
 use std::process::Command as ProcessCommand;
 use std::path::PathBuf;
 
-// Helper function to get the correct Python command for the OS
+// Helper function to get the Python backend executable
+fn get_python_backend() -> Result<String, String> {
+    // First, try to use bundled backend executable
+    if let Ok(exe_dir) = std::env::current_exe() {
+        let exe_dir = exe_dir.parent().ok_or("Failed to get exe directory")?;
+        
+        // Check for bundled backend
+        let backend_name = if cfg!(target_os = "windows") {
+            "usenetsync-backend.exe"
+        } else {
+            "usenetsync-backend"
+        };
+        
+        let bundled_backend = exe_dir.join(backend_name);
+        if bundled_backend.exists() {
+            return Ok(bundled_backend.to_string_lossy().to_string());
+        }
+        
+        // Check in resources folder
+        let resources_backend = exe_dir.join("resources").join(backend_name);
+        if resources_backend.exists() {
+            return Ok(resources_backend.to_string_lossy().to_string());
+        }
+    }
+    
+    // Fallback to system Python for development
+    Ok(get_python_command().to_string())
+}
+
+// Helper function to get the correct Python command for the OS (fallback)
 fn get_python_command() -> &'static str {
     if cfg!(target_os = "windows") {
         "python"
@@ -168,7 +197,8 @@ pub async fn get_logs(
     state: tauri::State<'_, SystemState>,
 ) -> Result<Vec<LogEntry>, String> {
     // First try to get logs from Python backend
-    let output = ProcessCommand::new(get_python_command())
+    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
             "from src.cli import UsenetSyncCLI; \
@@ -238,7 +268,8 @@ pub async fn set_bandwidth_limit(
     state: tauri::State<'_, SystemState>,
 ) -> Result<(), String> {
     // Apply to Python backend
-    let output = ProcessCommand::new(get_python_command())
+    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
             &format!(
@@ -348,7 +379,8 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
 pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, SystemState>) -> Result<String, String> {
     
     // Call Python backend for full export
-    let output = ProcessCommand::new(get_python_command())
+    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
             &format!(
@@ -377,7 +409,8 @@ pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, Sy
 #[tauri::command]
 pub async fn import_data(data: String, options: serde_json::Value, state: tauri::State<'_, SystemState>) -> Result<bool, String> {
     // Call Python backend for import
-    let output = ProcessCommand::new(get_python_command())
+    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
             &format!(
@@ -427,7 +460,8 @@ pub async fn clear_cache(state: tauri::State<'_, SystemState>) -> Result<(), Str
     }
     
     // Clear Python backend cache
-    let output = ProcessCommand::new(get_python_command())
+    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
             "from src.cli import UsenetSyncCLI; \
