@@ -4,7 +4,7 @@ import { TransferCard } from '../components/progress/TransferCard';
 import { ConnectionPoolVisualization } from '../components/ConnectionPoolVisualization';
 import { ContextMenu, useContextMenu } from '../components/ContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { getSystemStats } from '../lib/tauri.ts';
+import { getSystemStats } from '../lib/tauri';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { 

@@ -19,13 +19,9 @@ export default defineConfig(({ command, mode }) => ({
     },
   },
   
-  // Add resolve alias for Tauri API when not in Tauri environment
+  // Add resolve configuration
   resolve: {
-    alias: mode === 'test' || !process.env.TAURI_ENV ? {
-      '@tauri-apps/api/tauri': '/src/test/mocks/tauri.ts',
-      '@tauri-apps/api/event': '/src/test/mocks/event.ts',
-      '@tauri-apps/api': '/src/test/mocks/api.ts',
-    } : {},
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   },
   
   // Define global variable for Tauri environment

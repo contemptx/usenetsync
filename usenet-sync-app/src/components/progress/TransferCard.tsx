@@ -13,7 +13,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import clsx from 'clsx';
-import { pauseTransfer, resumeTransfer, cancelTransfer } from '../../lib/tauri.ts';
+import { pauseTransfer, resumeTransfer, cancelTransfer } from '../../lib/tauri';
 import { useAppStore } from '../../stores/useAppStore';
 
 interface TransferCardProps {
