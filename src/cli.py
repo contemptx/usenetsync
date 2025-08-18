@@ -897,46 +897,14 @@ def index_folder(path):
 # Add other commands as needed...
 
 def initialize_database_schema(db_manager, db_type='postgresql'):
-    """Initialize database schema if needed"""
+    """Initialize database schema - always try to create tables"""
     try:
-        # Check if tables exist
         with db_manager.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Check if the files table exists - use different syntax for SQLite vs PostgreSQL
-            try:
-                if db_type == 'sqlite':
-                    cursor.execute("""
-                        SELECT name FROM sqlite_master 
-                        WHERE type='table' AND name='files'
-                    """)
-                    result = cursor.fetchone()
-                    tables_exist = result is not None
-                else:  # PostgreSQL
-                    cursor.execute("""
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.tables 
-                            WHERE table_schema = 'public' 
-                            AND table_name = 'files'
-                        )
-                    """)
-                    tables_exist = cursor.fetchone()[0]
-            except Exception as check_error:
-                # If checking fails, assume we're using SQLite with wrong detection
-                # Try SQLite syntax as fallback
-                try:
-                    cursor.execute("""
-                        SELECT name FROM sqlite_master 
-                        WHERE type='table' AND name='files'
-                    """)
-                    result = cursor.fetchone()
-                    tables_exist = result is not None
-                    db_type = 'sqlite'  # Force SQLite mode
-                except:
-                    # If both fail, assume tables don't exist
-                    tables_exist = False
-            
-            if not tables_exist:
+            # Don't check if tables exist - just try to create them
+            # CREATE TABLE IF NOT EXISTS handles existing tables gracefully
+            tables_exist = False  # Always try to create
                 # Create all required tables - use compatible SQL for both databases
                 if db_type == 'sqlite':
                     # SQLite-compatible schema
@@ -1126,8 +1094,6 @@ def initialize_database_schema(db_manager, db_type='postgresql'):
                 
                 conn.commit()
                 return True, "Database schema initialized successfully"
-            else:
-                return True, "Database schema already exists"
                 
     except Exception as e:
         return False, f"Failed to initialize schema: {str(e)}"

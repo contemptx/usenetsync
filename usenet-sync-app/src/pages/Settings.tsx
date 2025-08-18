@@ -501,21 +501,30 @@ export const Settings: React.FC = () => {
                   <button
                     onClick={async () => {
                       try {
+                        setIsCheckingDb(true);
                         await checkDatabaseStatus();
                         const status = await checkDbStatus();
                         if (status?.status === 'connected') {
-                          toast.success('PostgreSQL connection verified!');
+                          toast.success('Database connected and schema initialized!');
+                          setDatabaseStatus(status);
                         } else {
-                          toast.error('PostgreSQL connection failed');
+                          toast.error('Database connection failed');
                         }
                       } catch (error) {
                         toast.error('Failed to test connection');
+                      } finally {
+                        setIsCheckingDb(false);
                       }
                     }}
-                    className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
+                    disabled={isCheckingDb}
+                    className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                   >
-                    <Database className="w-4 h-4" />
-                    Test Connection
+                    {isCheckingDb ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Database className="w-4 h-4" />
+                    )}
+                    Initialize Schema
                   </button>
                   
                   <button
