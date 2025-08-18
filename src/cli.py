@@ -32,6 +32,13 @@ src_dir, parent_dir = setup_python_path()
 # Now import with better error handling
 import_errors = []
 
+# Try to import database selector for automatic database selection
+try:
+    from database.database_selector import DatabaseSelector
+except ImportError as e:
+    import_errors.append(f"database.database_selector: {e}")
+    DatabaseSelector = None
+
 # Try to import each module individually for better error reporting
 try:
     from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
@@ -780,3 +787,45 @@ def index_folder(path):
 
 if __name__ == '__main__':
     cli()
+@cli.command('check-database')
+def check_database():
+    """Check database connection status"""
+    try:
+        if not DatabaseSelector:
+            return output_error("Database selector not available")
+        
+        db_info = DatabaseSelector.get_connection_info()
+        
+        # Try to actually connect
+        try:
+            db_manager, db_type = DatabaseSelector.get_database_manager()
+            db_info['status'] = 'connected'
+            db_info['message'] = f"Successfully connected to {db_type}"
+        except Exception as e:
+            db_info['status'] = 'error'
+            db_info['message'] = str(e)
+        
+        return output_json(db_info)
+    except Exception as e:
+        return output_error(f"Failed to check database: {e}")
+
+@cli.command('database-info')
+def database_info():
+    """Get database configuration information"""
+    try:
+        if not DatabaseSelector:
+            return output_json({
+                'error': 'Database selector not available',
+                'help': 'PostgreSQL may not be installed. The application can use SQLite as an alternative.'
+            })
+        
+        info = DatabaseSelector.get_connection_info()
+        
+        # Add helpful information for Windows users
+        if sys.platform == "win32" and info.get('type') == 'sqlite':
+            info['note'] = 'Using SQLite database. PostgreSQL is optional on Windows.'
+            info['location'] = info.get('path', 'Unknown')
+        
+        return output_json(info)
+    except Exception as e:
+        return output_error(f"Failed to get database info: {e}")
