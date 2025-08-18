@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { TransferCard } from '../components/progress/TransferCard';
 import { ConnectionPoolVisualization } from '../components/ConnectionPoolVisualization';
-import { ContextMenu, useContextMenu } from '../components/ContextMenu';
+import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { getSystemStats } from '../lib';
 import { useNavigate } from 'react-router-dom';
@@ -51,7 +51,16 @@ export const Dashboard: React.FC = () => {
   useKeyboardShortcuts();
   
   // Context menu setup
-  const { menuState: contextMenu, openContextMenu: handleContextMenu, closeContextMenu } = useContextMenu();
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+  
+  const closeContextMenu = () => {
+    setContextMenu(null);
+  };
   
   const dashboardContextMenuItems: ContextMenuItem[] = [
     {
