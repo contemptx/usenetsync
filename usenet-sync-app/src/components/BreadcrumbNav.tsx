@@ -105,7 +105,7 @@ export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({
             )}
             
             {!isLast && index < displayItems.length - 1 && (
-              <span className="text-gray-400 dark:text-gray-600">{separator}</span>
+              <span key={`separator-${item.id}`} className="text-gray-400 dark:text-gray-600">{separator}</span>
             )}
           </React.Fragment>
         );

@@ -208,6 +208,13 @@ pub async fn set_bandwidth_limit(
     state: tauri::State<'_, SystemState>,
 ) -> Result<(), String> {
     // Apply to Python backend
+    let workspace_dir = std::env::current_dir()
+        .map_err(|e| e.to_string())?
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    
     let output = ProcessCommand::new("python3")
         .args(&[
             "-c",
@@ -219,7 +226,7 @@ pub async fn set_bandwidth_limit(
                 if enabled { download_kbps * 1024 } else { 0 }
             )
         ])
-        .current_dir("/workspace")
+        .current_dir(&workspace_dir)
         .output()
         .map_err(|e| e.to_string())?;
     
