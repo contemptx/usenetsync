@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
-use sysinfo::{System, SystemExt};
+use sysinfo::System;
 
 // Error codes
 pub const TA_OK: i32 = 0;

@@ -157,8 +157,8 @@ struct NetworkSpeed {
 #[tauri::command]
 async fn activate_license(state: State<'_, AppState>, key: String) -> Result<bool, String> {
     let license = state.license.lock().unwrap();
-    match license.activate(&key) {
-        Ok(result) => Ok(result),
+    match license.activate(&key, None) {
+        Ok(_) => Ok(true),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -167,11 +167,11 @@ async fn activate_license(state: State<'_, AppState>, key: String) -> Result<boo
 async fn check_license(state: State<'_, AppState>) -> Result<LicenseStatus, String> {
     let license = state.license.lock().unwrap();
     
-    let activated = license.is_activated();
-    let genuine = license.is_genuine();
+    let activated = license.is_activated().unwrap_or(false);
+    let genuine = license.is_genuine().unwrap_or(false);
     let hardware_id = license.get_hardware_id().unwrap_or_else(|_| "unknown".to_string());
     
-    let (trial, trial_days) = if !activated {
+    let (trial, trial_days) = if !activated.unwrap_or(false) {
         let days = license.get_trial_days_remaining().unwrap_or(0);
         (days > 0, Some(days))
     } else {
@@ -206,7 +206,7 @@ async fn start_trial(state: State<'_, AppState>) -> Result<u32, String> {
 #[tauri::command]
 async fn deactivate_license(state: State<'_, AppState>) -> Result<(), String> {
     let license = state.license.lock().unwrap();
-    license.deactivate()
+    license.deactivate(false)
         .map_err(|e| e.to_string())
 }
 
