@@ -13,7 +13,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import psycopg2
 from psycopg2 import pool
-import pynntp as nntp
+try:
+    import nntp  # pynntp provides the nntp module
+except ImportError:
+    nntp = None  # Handle gracefully if not available
 
 logger = logging.getLogger(__name__)
 
