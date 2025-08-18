@@ -547,6 +547,130 @@ async fn get_share_details(share_id: String) -> Result<Share, String> {
     Ok(share)
 }
 
+// Folder Management Commands
+#[tauri::command]
+async fn add_folder(path: String, name: Option<String>) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("add-folder").arg("--path").arg(&path);
+    if let Some(n) = name {
+        cmd.arg("--name").arg(&n);
+    }
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn index_folder_full(folder_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("index-folder").arg("--folder-id").arg(&folder_id)
+        .output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn segment_folder(folder_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("segment-folder").arg("--folder-id").arg(&folder_id)
+        .output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn upload_folder(folder_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("upload-folder").arg("--folder-id").arg(&folder_id)
+        .output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn publish_folder(folder_id: String, access_type: Option<String>) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("publish-folder").arg("--folder-id").arg(&folder_id);
+    if let Some(at) = access_type {
+        cmd.arg("--access-type").arg(&at);
+    }
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_folders() -> Result<Vec<serde_json::Value>, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("list-folders").output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    let folders: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(folders)
+}
+
 // Transfer Operations
 #[tauri::command]
 async fn pause_transfer(state: State<'_, AppState>, transfer_id: String) -> Result<(), String> {
@@ -748,6 +872,12 @@ fn main() {
             get_shares,
             download_share,
             get_share_details,
+            add_folder,
+            index_folder_full,
+            segment_folder,
+            upload_folder,
+            publish_folder,
+            get_folders,
             pause_transfer,
             resume_transfer,
             cancel_transfer,
