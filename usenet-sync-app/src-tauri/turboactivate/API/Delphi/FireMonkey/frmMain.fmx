@@ -1,0 +1,65 @@
+object Form1: TForm1
+  Left = 0
+  Top = 0
+  BorderStyle = Single
+  Caption = 'Text Editor Plus'
+  ClientHeight = 231
+  ClientWidth = 450
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object txtMain: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    TextSettings.WordWrap = True
+    Position.X = 8.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 433.000000000000000000
+    Size.Height = 153.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    Viewport.Width = 429.000000000000000000
+    Viewport.Height = 149.000000000000000000
+  end
+  object lblTrialMessage: TLabel
+    Position.X = 16.000000000000000000
+    Position.Y = 184.000000000000000000
+    Size.Width = 313.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'lblTrialMessage'
+    TabOrder = 2
+  end
+  object btnExtendTrial: TButton
+    Position.X = 352.000000000000000000
+    Position.Y = 184.000000000000000000
+    TabOrder = 3
+    Text = 'Extend trial'
+    OnClick = btnExtendTrialClick
+  end
+  object MainMenu1: TMainMenu
+    Left = 48
+    Top = 64
+    object MenuItem1: TMenuItem
+      Text = 'File'
+      object MenuItem2: TMenuItem
+        Locked = True
+        Text = 'New'
+      end
+    end
+    object MenuItem3: TMenuItem
+      Text = 'Help'
+      object MenuItem4: TMenuItem
+        Locked = True
+        Text = 'Help Contents'
+      end
+      object mnuActDeact: TMenuItem
+        Locked = True
+        Text = 'Deactivate...'
+        OnClick = mnuActDeactClick
+      end
+    end
+  end
+end

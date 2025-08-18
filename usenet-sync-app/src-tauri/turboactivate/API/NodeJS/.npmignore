@@ -1,0 +1,5 @@
+native
+.vscode
+*.code-workspace
+main.js
+test.js

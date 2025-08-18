@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Window xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx" systemChrome="standard" width="412" height="183" layout="absolute" showStatusBar="false" minimizable="false" maximizable="false" resizable="false" title="Trial extension" closing="closingHandler(event)">
+	<fx:Script>
+		<![CDATA[
+			public var okClicked:Boolean = false;
+
+			protected function btnOK_clickHandler(event:MouseEvent):void
+			{
+				okClicked = true;
+				this.close();
+			}
+
+			protected function btnCancel_clickHandler(event:MouseEvent):void
+			{
+				this.close();
+			}
+
+			public function ShowError(err:String):void
+			{
+				lblErr.text = err;
+			}
+
+			protected function closingHandler(event:Event):void
+			{
+				// if we're currently extending the trial then wait for the
+				// response before allowing the user to close the window
+				if (!this.enabled)
+				{
+					event.preventDefault();
+				}
+			}
+
+			protected function txtTrialExt_changeHandler(event:Event):void
+			{
+				lblErr.text = "";
+			}
+		]]>
+	</fx:Script>
+	<mx:Label x="10" y="10" text="Paste your trial extension here:" id="lblDescr"/>
+	<mx:TextArea x="10" y="30" width="390" height="110" id="txtTrialExt" change="txtTrialExt_changeHandler(event)"/>
+	<mx:Button x="9" y="150" label="OK" width="80" id="btnOK" click="btnOK_clickHandler(event)"/>
+	<mx:Button x="95" y="150" label="Cancel" width="80" id="btnCancel" click="btnCancel_clickHandler(event)"/>
+	<mx:Label x="190" y="153" text="" id="lblErr" fontWeight="bold"/>
+</mx:Window>

@@ -1,0 +1,13 @@
+The "stdcall" version of TurboActivate uses the "stdcall" calling convention
+for all the TurboActivate functions, as opposed to the "regular" version of
+TurboActivate which uses the "cdecl" calling convention for all the
+TurboActivate functions.
+
+
+
+*When should you use stdcall?*
+
+Almost never use the stdcall version of TurboActivate. The only time you might
+want to use it is if the programming language you're using doesn't allow or
+support the cdecl function calls. Examples of such languages are VBA (Visual
+Basic for Applications) and VB6 (Visual Basic 6).

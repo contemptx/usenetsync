@@ -171,7 +171,7 @@ async fn check_license(state: State<'_, AppState>) -> Result<LicenseStatus, Stri
     let genuine = license.is_genuine().unwrap_or(false);
     let hardware_id = license.get_hardware_id().unwrap_or_else(|_| "unknown".to_string());
     
-    let (trial, trial_days) = if !activated.unwrap_or(false) {
+    let (trial, trial_days) = if !activated {
         let days = license.get_trial_days_remaining().unwrap_or(0);
         (days > 0, Some(days))
     } else {
@@ -199,7 +199,7 @@ async fn check_license(state: State<'_, AppState>) -> Result<LicenseStatus, Stri
 #[tauri::command]
 async fn start_trial(state: State<'_, AppState>) -> Result<u32, String> {
     let license = state.license.lock().unwrap();
-    license.start_trial()
+    match license.start_trial() { Ok(_) => Ok(30), Err(e) => Err(e) }
         .map_err(|e| e.to_string())
 }
 

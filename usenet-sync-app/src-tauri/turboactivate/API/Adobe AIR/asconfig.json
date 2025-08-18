@@ -1,0 +1,20 @@
+{
+	"compilerOptions": {
+		"output": "bin-debug/AIRTester.swf",
+		"accessible": true,
+		"source-path": [
+			"src"
+		],
+		"theme": "${flexlib}/../frameworks/themes/Halo"
+	},
+	"files": [
+		"src/AIRTester.mxml"
+	],
+	"application": "src/AIRTester-app.xml",
+	"copySourcePathAssets": true,
+	"additionalOptions": "-locale en_US",
+	"airOptions": {
+		"output": "AIRTester.air"
+	},
+	"config": "air"
+}

@@ -1,0 +1,40 @@
+object frmReVerifyNow: TfrmReVerifyNow
+  Left = 0
+  Top = 0
+  Caption = 'Re-verify with the activation servers'
+  ClientHeight = 109
+  ClientWidth = 390
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object lblDescr: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 385.000000000000000000
+    Size.Height = 25.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'You have X days to re-verify with the activation servers.'
+    TabOrder = 1
+  end
+  object btnReverify: TButton
+    Position.X = 8.000000000000000000
+    Position.Y = 56.000000000000000000
+    Size.Width = 105.000000000000000000
+    Size.Height = 33.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    Text = 'Re-verify now'
+    OnClick = btnReverifyClick
+  end
+  object btnExit: TButton
+    Position.X = 256.000000000000000000
+    Position.Y = 56.000000000000000000
+    Size.Width = 113.000000000000000000
+    Size.Height = 33.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    Text = 'Exit application'
+    OnClick = btnExitClick
+  end
+end

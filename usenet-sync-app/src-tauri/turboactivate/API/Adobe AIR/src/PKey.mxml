@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Window xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx" systemChrome="standard" layout="absolute" width="324" height="110" showStatusBar="false" minimizable="false" maximizable="false" resizable="false" title="Enter your product key" closing="closingHandler(event)">
+	<fx:Script>
+		<![CDATA[
+			public var okClicked:Boolean = false;
+
+			protected function btnActivate_clickHandler(event:MouseEvent):void
+			{
+				okClicked = true;
+				this.close();
+			}
+
+			protected function btnCancel_clickHandler(event:MouseEvent):void
+			{
+				this.close();
+			}
+
+			public function ShowError(err:String):void
+			{
+				lblErr.text = err;
+			}
+
+			protected function closingHandler(event:Event):void
+			{
+				// if we're currently activating wait for a 
+				// response before allowing the user to close the window
+				if (!this.enabled)
+				{
+					event.preventDefault();
+				}
+			}
+
+			protected function txtPkey_changeHandler(event:Event):void
+			{
+				lblErr.text = "";
+			}
+		]]>
+	</fx:Script>
+	<mx:TextInput x="10" y="30" width="300" id="txtPkey" change="txtPkey_changeHandler(event)"/>
+	<mx:Label x="10" y="10" text="Enter your product key and click activate:"/>
+	<mx:Button x="241" y="70" label="Cancel" id="btnCancel" click="btnCancel_clickHandler(event)"/>
+	<mx:Button x="150" y="70" label="Activate" id="btnActivate" click="btnActivate_clickHandler(event)"/>
+	<mx:Label x="10" y="70" text="" id="lblErr" fontWeight="bold"/>
+</mx:Window>

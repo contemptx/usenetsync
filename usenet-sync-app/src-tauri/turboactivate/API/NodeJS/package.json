@@ -1,0 +1,24 @@
+{
+    "name": "turboactivate",
+    "version": "4.5.0",
+    "description": "Add TurboActivate to your app to sell copies of your software to your customers. TurboActivate is our premium, affordable, node-locked licensing (a.k.a. hardware-locked licensing) for macOS, Windows, Linux, and BSD. TurboActivate allows you to add timed-trials to your app as well. Also, see our 'turbofloat' package.",
+    "keywords": [
+        "turboactivate",
+        "licensing",
+        "node-locked licensing",
+        "hardware-locked licensing",
+        "timed trials",
+        "verified trials",
+        "unverified trials",
+        "saas",
+        "software as a service",
+        "limelm",
+        "wyday"
+    ],
+    "main" : "turboactivate.js",
+    "author": "wyDay, LLC",
+	"bugs": {
+      "url": "https://wyday.com/forum/"
+    },
+    "homepage": "https://wyday.com/limelm/help/using-turboactivate-with-electron-nodejs/"
+}

@@ -1,0 +1,5 @@
+ÿThis is a simple Text Editor app that demonstrates how to use TurboActivate in 
+your application.
+
+The one "feature" of this app is this text editor. This will be disabled when the user 
+is not activated and the trial is expired. All other times this text box will be enabled.
