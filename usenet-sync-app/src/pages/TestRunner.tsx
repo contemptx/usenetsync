@@ -271,9 +271,14 @@ export const TestRunner: React.FC = () => {
           break;
           
         case 'system-2':
-          await tauriCommands.setBandwidthLimit(1000, 5000, true);
-          const limits = await tauriCommands.getBandwidthLimit();
-          setTestResults(prev => ({ ...prev, [testCase.id]: limits }));
+          try {
+            await tauriCommands.setBandwidthLimit(1000, 5000, true);
+            const limits = await tauriCommands.getBandwidthLimit();
+            setTestResults(prev => ({ ...prev, [testCase.id]: limits }));
+          } catch (error) {
+            console.error('Bandwidth limit test failed:', error);
+            throw error;
+          }
           break;
           
         case 'system-3':
