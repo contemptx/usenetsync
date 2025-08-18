@@ -32,7 +32,7 @@ echo
 echo "Step 3: Building Tauri application..."
 cd usenet-sync-app
 npm install
-npm run tauri build || {
+TAURI_CONFIG=tauri.conf.prod.json npm run tauri build -- --config tauri.conf.prod.json || {
     echo "Failed to build Tauri application"
     exit 1
 }

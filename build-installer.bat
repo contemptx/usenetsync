@@ -28,7 +28,8 @@ echo.
 echo Step 3: Building Tauri application...
 cd usenet-sync-app
 call npm install
-call npm run tauri build
+set TAURI_CONFIG=tauri.conf.prod.json
+call npm run tauri build -- --config tauri.conf.prod.json
 if errorlevel 1 (
     echo Failed to build Tauri application
     exit /b 1

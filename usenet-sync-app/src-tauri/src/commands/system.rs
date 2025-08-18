@@ -7,32 +7,56 @@ use std::process::Command as ProcessCommand;
 use std::path::PathBuf;
 
 // Helper function to get the Python backend executable
-fn get_python_backend() -> Result<String, String> {
+fn get_python_backend() -> String {
     // First, try to use bundled backend executable
     if let Ok(exe_dir) = std::env::current_exe() {
-        let exe_dir = exe_dir.parent().ok_or("Failed to get exe directory")?;
-        
-        // Check for bundled backend
-        let backend_name = if cfg!(target_os = "windows") {
-            "usenetsync-backend.exe"
-        } else {
-            "usenetsync-backend"
-        };
-        
-        let bundled_backend = exe_dir.join(backend_name);
-        if bundled_backend.exists() {
-            return Ok(bundled_backend.to_string_lossy().to_string());
-        }
-        
-        // Check in resources folder
-        let resources_backend = exe_dir.join("resources").join(backend_name);
-        if resources_backend.exists() {
-            return Ok(resources_backend.to_string_lossy().to_string());
+        if let Some(exe_dir) = exe_dir.parent() {
+            // Check for bundled backend
+            let backend_name = if cfg!(target_os = "windows") {
+                "usenetsync-backend.exe"
+            } else {
+                "usenetsync-backend"
+            };
+            
+            let bundled_backend = exe_dir.join(backend_name);
+            if bundled_backend.exists() {
+                return bundled_backend.to_string_lossy().to_string();
+            }
+            
+            // Check in resources folder
+            let resources_backend = exe_dir.join("resources").join(backend_name);
+            if resources_backend.exists() {
+                return resources_backend.to_string_lossy().to_string();
+            }
         }
     }
     
     // Fallback to system Python for development
-    Ok(get_python_command().to_string())
+    get_python_command().to_string()
+}
+
+// Helper function to check if using bundled backend
+fn is_bundled_backend() -> bool {
+    if let Ok(exe_dir) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_dir.parent() {
+            let backend_name = if cfg!(target_os = "windows") {
+                "usenetsync-backend.exe"
+            } else {
+                "usenetsync-backend"
+            };
+            
+            let bundled_backend = exe_dir.join(backend_name);
+            if bundled_backend.exists() {
+                return true;
+            }
+            
+            let resources_backend = exe_dir.join("resources").join(backend_name);
+            if resources_backend.exists() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 // Helper function to get the correct Python command for the OS (fallback)

@@ -38,32 +38,56 @@ fn get_workspace_dir() -> PathBuf {
 }
 
 // Helper function to get the Python backend executable
-fn get_python_backend() -> Result<String, String> {
+fn get_python_backend() -> String {
     // First, try to use bundled backend executable
     if let Ok(exe_dir) = std::env::current_exe() {
-        let exe_dir = exe_dir.parent().ok_or("Failed to get exe directory")?;
-        
-        // Check for bundled backend
-        let backend_name = if cfg!(target_os = "windows") {
-            "usenetsync-backend.exe"
-        } else {
-            "usenetsync-backend"
-        };
-        
-        let bundled_backend = exe_dir.join(backend_name);
-        if bundled_backend.exists() {
-            return Ok(bundled_backend.to_string_lossy().to_string());
-        }
-        
-        // Check in resources folder
-        let resources_backend = exe_dir.join("resources").join(backend_name);
-        if resources_backend.exists() {
-            return Ok(resources_backend.to_string_lossy().to_string());
+        if let Some(exe_dir) = exe_dir.parent() {
+            // Check for bundled backend
+            let backend_name = if cfg!(target_os = "windows") {
+                "usenetsync-backend.exe"
+            } else {
+                "usenetsync-backend"
+            };
+            
+            let bundled_backend = exe_dir.join(backend_name);
+            if bundled_backend.exists() {
+                return bundled_backend.to_string_lossy().to_string();
+            }
+            
+            // Check in resources folder
+            let resources_backend = exe_dir.join("resources").join(backend_name);
+            if resources_backend.exists() {
+                return resources_backend.to_string_lossy().to_string();
+            }
         }
     }
     
     // Fallback to system Python for development
-    Ok(get_python_command().to_string())
+    get_python_command().to_string()
+}
+
+// Helper function to check if using bundled backend
+fn is_bundled_backend() -> bool {
+    if let Ok(exe_dir) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_dir.parent() {
+            let backend_name = if cfg!(target_os = "windows") {
+                "usenetsync-backend.exe"
+            } else {
+                "usenetsync-backend"
+            };
+            
+            let bundled_backend = exe_dir.join(backend_name);
+            if bundled_backend.exists() {
+                return true;
+            }
+            
+            let resources_backend = exe_dir.join("resources").join(backend_name);
+            if resources_backend.exists() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 // Helper function to get the correct Python command for the OS (fallback)
@@ -397,9 +421,15 @@ async fn create_share(
     password: Option<String>,
 ) -> Result<Share, String> {
     // Call Python backend to create share
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
-    let output = Command::new(&python_cmd)
-        .arg(get_workspace_dir().join("src").join("cli.py"))
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    // Only add cli.py path if not using bundled backend
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd
         .arg("create-share")
         .arg("--files")
         .args(&files)
@@ -431,9 +461,15 @@ async fn download_share(
     selected_files: Option<Vec<String>>,
 ) -> Result<(), String> {
     // Call Python backend to download share
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let python_cmd = get_python_backend();
     let mut cmd = Command::new(&python_cmd);
-    cmd.arg("/workspace/src/cli.py")
+    
+    // Only add cli.py path if not using bundled backend
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd
         .arg("download-share")
         .arg("--share-id")
         .arg(&share_id)
@@ -457,9 +493,15 @@ async fn download_share(
 #[tauri::command]
 async fn get_share_details(share_id: String) -> Result<Share, String> {
     // Call Python backend to get share details
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
-    let output = Command::new(&python_cmd)
-        .arg(get_workspace_dir().join("src").join("cli.py"))
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    // Only add cli.py path if not using bundled backend
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd
         .arg("share-details")
         .arg("--share-id")
         .arg(&share_id)
@@ -516,9 +558,15 @@ async fn cancel_transfer(state: State<'_, AppState>, transfer_id: String) -> Res
 #[tauri::command]
 async fn test_server_connection(config: ServerConfig) -> Result<bool, String> {
     // Call Python backend to test connection
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
-    let output = Command::new(&python_cmd)
-        .arg(get_workspace_dir().join("src").join("cli.py"))
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    // Only add cli.py path if not using bundled backend
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd
         .arg("test-connection")
         .arg("--hostname")
         .arg(&config.hostname)
