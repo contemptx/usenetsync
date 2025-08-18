@@ -138,21 +138,47 @@ class ServerRotationManager:
         Returns:
             True if server is healthy
         """
-        # This would normally do actual health check
-        # For now, simulate with random success
+        # Perform actual health check on NNTP server
         health = self.server_health[server_id]
+        server = self.servers.get(server_id)
         
-        # Test actual connection
+        if not server:
+            health.is_alive = False
+            return False
+        
+        # Test actual NNTP connection
+        import socket
+        start_time = time.time()
+        
         try:
-            import socket
+            # Create socket with timeout
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5.0)
-            sock.connect((self.servers.get(server_id).host, self.servers.get(server_id).port))
+            
+            # Attempt connection to NNTP server
+            sock.connect((server.host, server.port))
+            
+            # Read server greeting (NNTP servers send greeting on connect)
+            greeting = sock.recv(1024)
+            
+            # Check if greeting indicates server is ready
+            # NNTP response codes: 200 = posting allowed, 201 = no posting
+            if greeting and (b'200' in greeting or b'201' in greeting):
+                # Send QUIT command to close cleanly
+                sock.send(b"QUIT\r\n")
+                sock.recv(1024)  # Read response
+                is_healthy = True
+            else:
+                is_healthy = False
+            
             sock.close()
-            is_healthy = True
-        except:
+            response_time = time.time() - start_time
+            
+        except (socket.timeout, socket.error, ConnectionError) as e:
+            # Connection failed
             is_healthy = False
-        response_time = random.uniform(0.1, 2.0) if is_healthy else 5.0
+            response_time = 5.0
+            logger.debug(f"Health check failed for {server.host}:{server.port}: {e}")
         
         health.last_check = datetime.now()
         

@@ -369,38 +369,3 @@ if __name__ == "__main__":
     retry_system = EnhancedNNTPRetry(config)
     
     # Simulate NNTP operations
-    def simulate_upload(data):
-        """Simulate an upload that might fail"""
-        import random
-        
-        # Simulate different failure scenarios
-        rand = random.random()
-        if rand < 0.3:  # 30% chance of rate limiting
-            raise Exception("502 (max number of simultaneous IP addresses reached: 2)")
-        elif rand < 0.4:  # 10% chance of article refused
-            raise Exception("441 Posting Failed. Article refused")
-        elif rand < 0.5:  # 10% chance of other error
-            raise Exception("500 Internal Server Error")
-        else:  # 50% success
-            return f"Success: {data}"
-            
-    # Test retry system
-    print("Testing Enhanced NNTP Retry System")
-    print("-" * 40)
-    
-    for i in range(3):
-        try:
-            result = retry_system.execute_with_retry(
-                simulate_upload,
-                f"test_data_{i}",
-                on_retry=lambda a, d, e: print(f"  Retry {a+1}: {e}")
-            )
-            print(f"✓ Upload {i}: {result}")
-        except Exception as e:
-            print(f"✗ Upload {i} failed: {e}")
-            
-    # Show statistics
-    print("\nStatistics:")
-    stats = retry_system.get_statistics()
-    for key, value in stats.items():
-        print(f"  {key}: {value}")

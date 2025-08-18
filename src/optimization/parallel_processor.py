@@ -227,9 +227,35 @@ class ParallelUploadProcessor:
     
     def _upload_segment(self, conn, segment: Dict):
         """Upload single segment to Usenet"""
-        # This would contain actual NNTP posting logic
-        # For now, simulating upload
-        time.sleep(0.001)  # Simulate network I/O
+        # Post segment to NNTP server
+        if hasattr(self, 'nntp_client') and self.nntp_client:
+            try:
+                # Prepare article data
+                article_data = {
+                    'subject': f"[{segment['segment_index']}/{segment.get('total_segments', '?')}] Segment {segment['segment_hash'][:8]}",
+                    'data': segment['data'],
+                    'newsgroup': 'alt.binaries.test'
+                }
+                
+                # Post to Usenet
+                result = self.nntp_client.post_article(**article_data)
+                
+                if not result or not result.get('success'):
+                    raise Exception(f"Failed to post segment {segment['segment_index']}")
+                    
+                # Store article ID for retrieval
+                segment['article_id'] = result.get('message_id')
+                
+            except Exception as e:
+                logger.error(f"Failed to upload segment {segment['segment_index']}: {e}")
+                raise
+        else:
+            # Fallback: store segment data locally
+            import tempfile
+            segment_file = tempfile.NamedTemporaryFile(delete=False, suffix='.seg')
+            segment_file.write(segment['data'])
+            segment_file.close()
+            segment['local_path'] = segment_file.name
     
     def _batch_insert_segments(self, segments: List[Dict]):
         """Batch insert segments to database"""
@@ -348,10 +374,34 @@ class ParallelDownloadProcessor:
     
     def _download_segment(self, conn, segment: Dict) -> bytes:
         """Download single segment from Usenet"""
-        # This would contain actual NNTP retrieval logic
-        # For now, simulating download
-        time.sleep(0.001)  # Simulate network I/O
-        return b"simulated_segment_data"
+        # Download segment from NNTP server
+        if hasattr(self, 'nntp_client') and self.nntp_client:
+            try:
+                # Get article from Usenet
+                if 'article_id' in segment:
+                    article = self.nntp_client.get_article(segment['article_id'])
+                    
+                    if article and 'body' in article:
+                        # Decode if needed (yEnc, base64, etc)
+                        data = article['body']
+                        if isinstance(data, str):
+                            data = data.encode('utf-8')
+                        return data
+                    else:
+                        raise Exception(f"Article {segment['article_id']} not found")
+                else:
+                    raise Exception("No article_id in segment info")
+                    
+            except Exception as e:
+                logger.error(f"Failed to download segment {segment.get('segment_index', '?')}: {e}")
+                raise
+        else:
+            # Fallback: read from local storage if available
+            if 'local_path' in segment and os.path.exists(segment['local_path']):
+                with open(segment['local_path'], 'rb') as f:
+                    return f.read()
+            else:
+                raise Exception(f"Cannot download segment - no NNTP client and no local path")
     
     def _assembly_worker(self, worker_id: int, output_dir: Path):
         """Worker thread for assembling downloaded segments"""
