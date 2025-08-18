@@ -482,9 +482,14 @@ export const Settings: React.FC = () => {
                           Host: {databaseStatus?.host || 'localhost'} | 
                           Port: {databaseStatus?.port || '5432'}
                         </p>
-                        {databaseStatus?.schema_status && (
+                        {databaseStatus?.schema_status && !databaseStatus?.schema_error && (
                           <p className="text-xs text-green-600 dark:text-green-400 mt-1">
                             ✓ {databaseStatus.schema_status}
+                          </p>
+                        )}
+                        {databaseStatus?.schema_error && (
+                          <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                            ⚠ {databaseStatus.schema_error}
                           </p>
                         )}
                       </div>
