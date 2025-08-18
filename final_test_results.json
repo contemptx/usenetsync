@@ -1,0 +1,167 @@
+{
+  "timestamp": "2025-08-18T00:36:42.273286",
+  "system_info": {
+    "python_version": "3.13.3",
+    "platform": "Linux-6.1.147-x86_64-with-glibc2.41",
+    "processor": "x86_64",
+    "cwd": "/workspace"
+  },
+  "components": {
+    "cli": {
+      "status": "FAILED",
+      "error": "CLI not working",
+      "type": "Integration"
+    },
+    "core.integrated_backend": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "networking.bandwidth_controller": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "security.enhanced_security_system": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "core.version_control": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "networking.server_rotation": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "networking.retry_manager": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "core.log_manager": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "core.data_management": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "upload.enhanced_upload": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "download.enhanced_download": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "publishing.publishing_system": {
+      "status": "FAILED",
+      "error": "No module named 'publishing.publishing_system'",
+      "type": "Python Module"
+    },
+    "networking.production_nntp_client": {
+      "status": "WORKING",
+      "type": "Python Module"
+    },
+    "encryption": {
+      "status": "FAILED",
+      "error": "Failed to install PostgreSQL",
+      "type": "Security"
+    },
+    "bandwidth_control": {
+      "status": "WORKING",
+      "type": "Networking",
+      "data": {
+        "upload": {
+          "current_speed": 0,
+          "limit": 1048576,
+          "enabled": true,
+          "bytes_sent": 1024,
+          "start_time": 1755477402.5842717
+        },
+        "download": {
+          "current_speed": 0,
+          "limit": 2097152,
+          "enabled": true,
+          "bytes_received": 2048,
+          "start_time": 1755477402.584272
+        }
+      }
+    },
+    "upload_download": {
+      "status": "WORKING",
+      "type": "File Transfer",
+      "data": {
+        "test_size": 8500,
+        "chunks": 1,
+        "yenc_encoded_size": 8620,
+        "yenc_works": true
+      }
+    },
+    "react_app": {
+      "status": "WORKING",
+      "type": "Frontend",
+      "data": {
+        "name": "usenet-sync-app",
+        "version": "0.1.0",
+        "build": "SUCCESS"
+      }
+    },
+    "tauri_backend": {
+      "status": "WORKING",
+      "type": "Backend",
+      "data": {
+        "rust": "Compiles",
+        "warnings": true
+      }
+    }
+  },
+  "metrics": {
+    "performance": [
+      {
+        "size": 1024,
+        "hash_time": 5.1975250244140625e-05,
+        "throughput_mbps": 18.788990825688074
+      },
+      {
+        "size": 10240,
+        "hash_time": 1.2159347534179688e-05,
+        "throughput_mbps": 803.1372549019608
+      },
+      {
+        "size": 102400,
+        "hash_time": 5.412101745605469e-05,
+        "throughput_mbps": 1804.4052863436123
+      },
+      {
+        "size": 1024000,
+        "hash_time": 0.0005433559417724609,
+        "throughput_mbps": 1797.2795085563844
+      }
+    ]
+  },
+  "data_samples": {
+    "files": [
+      {
+        "name": "sample_0.dat",
+        "size": 1700,
+        "hash": "dd6a948081d21ad6"
+      },
+      {
+        "name": "sample_1.dat",
+        "size": 1700,
+        "hash": "826f165e197233a7"
+      },
+      {
+        "name": "sample_2.dat",
+        "size": 1700,
+        "hash": "987d0529fe17bdc7"
+      }
+    ]
+  },
+  "summary": {
+    "total_components": 19,
+    "working_components": 16,
+    "failed_components": 3,
+    "success_rate": 84.21052631578947,
+    "status": "NEEDS_FIXES"
+  }
+}

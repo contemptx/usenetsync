@@ -269,7 +269,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
     
     let mut total_disk = 0u64;
     let mut used_disk = 0u64;
-    for disk in sys.disks() {
+    for disk in sys.disks().list() {
         total_disk += disk.total_space();
         used_disk += disk.total_space() - disk.available_space();
     }

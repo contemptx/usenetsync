@@ -9,7 +9,10 @@ from nntp import NNTPClient
 import time
 import logging
 import threading
-import queue
+try:
+    import queue
+except:
+    from multiprocessing import Queue as queue
 import socket
 import ssl
 from datetime import datetime
