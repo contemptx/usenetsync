@@ -39,49 +39,32 @@ export const ConnectionPoolVisualization: React.FC<ConnectionPoolVisualizationPr
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Simulate connection pool data
+  // Initialize with empty data - will be populated when real connections are established
   useEffect(() => {
-    const generateConnections = () => {
-      const mockConnections: PoolConnection[] = [];
-      const numConnections = Math.floor(Math.random() * 8) + 2;
-      
-      for (let i = 0; i < numConnections; i++) {
-        const statuses: Array<'active' | 'idle' | 'connecting' | 'error'> = ['active', 'idle', 'connecting', 'error'];
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        
-        mockConnections.push({
-          id: `conn-${i}`,
-          status,
-          server: `news${Math.floor(Math.random() * 3) + 1}.provider.com`,
-          duration: Math.floor(Math.random() * 3600),
-          bytesTransferred: Math.floor(Math.random() * 1000000000),
-          lastActivity: new Date(Date.now() - Math.random() * 3600000)
-        });
-      }
-      
-      setConnections(mockConnections);
-      
-      // Update stats
-      const active = mockConnections.filter(c => c.status === 'active').length;
-      const idle = mockConnections.filter(c => c.status === 'idle').length;
-      const failed = mockConnections.filter(c => c.status === 'error').length;
-      
-      setStats({
-        totalConnections: mockConnections.length,
-        activeConnections: active,
-        idleConnections: idle,
-        failedConnections: failed,
-        totalBytesTransferred: mockConnections.reduce((sum, c) => sum + c.bytesTransferred, 0),
-        avgResponseTime: Math.random() * 500 + 50,
-        connectionLimit: 10,
-        uptime: Date.now() - (Date.now() - 86400000)
-      });
-    };
+    // Set initial empty state
+    setConnections([]);
+    setStats({
+      totalConnections: 0,
+      activeConnections: 0,
+      idleConnections: 0,
+      failedConnections: 0,
+      totalBytesTransferred: 0,
+      avgResponseTime: 0,
+      connectionLimit: 10,
+      uptime: Date.now()
+    });
     
-    generateConnections();
-    const interval = setInterval(generateConnections, 5000);
-    
-    return () => clearInterval(interval);
+    // TODO: Fetch real connection pool data from backend
+    // This would be implemented when the backend API is ready
+    // Example:
+    // const fetchConnectionPool = async () => {
+    //   const data = await getConnectionPool();
+    //   setConnections(data.connections);
+    //   setStats(data.stats);
+    // };
+    // fetchConnectionPool();
+    // const interval = setInterval(fetchConnectionPool, 5000);
+    // return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = async () => {

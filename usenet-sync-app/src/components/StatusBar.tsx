@@ -36,9 +36,9 @@ interface StorageStatus {
 
 export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
   const [connectionStatus] = useState<ConnectionStatus>({
-    isConnected: true,
-    serverName: 'news.provider.com',
-    latency: 45
+    isConnected: false,
+    serverName: 'Not configured',
+    latency: 0
   });
   
   const [transferStatus, setTransferStatus] = useState<TransferStatus>({
