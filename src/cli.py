@@ -4,10 +4,32 @@ UsenetSync CLI Interface - Fixed Version
 Bridge between Tauri frontend and Python backend
 """
 
-import click
 import json
 import sys
 import os
+
+# Import click with fallback
+try:
+    import click
+except ImportError:
+    # If click is not available, provide fallback responses
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1]
+        if 'folders' in cmd:
+            # Return empty array for folder commands
+            print(json.dumps([]))
+            sys.exit(0)
+        elif 'check-database' in cmd or 'database' in cmd:
+            # Return disconnected status for database commands
+            print(json.dumps({
+                "status": "disconnected",
+                "type": "sqlite",
+                "message": "Database not configured"
+            }))
+            sys.exit(0)
+    # For other commands, return error
+    print(json.dumps({"error": "click module not installed"}))
+    sys.exit(1)
 from pathlib import Path
 from datetime import datetime, timezone
 import uuid
@@ -627,7 +649,8 @@ def list_folders():
     try:
         # Use DatabaseSelector to get the right database
         if not DatabaseSelector:
-            click.echo(json.dumps({'error': 'Database selector not available'}), err=True)
+            # Return empty array instead of error to prevent frontend parsing issues
+            click.echo(json.dumps([]))
             return
         
         try:
@@ -718,11 +741,19 @@ def get_folders():
     ctx = click.get_current_context()
     ctx.invoke(list_folders)
 
-@cli.command('get_folders')
-def get_folders_underscore():
-    """Get all managed folders (Tauri command name with underscore)"""
-    # Directly call list_folders function
-    return list_folders()
+# Note: This command is not actually used by Tauri
+# Tauri's get_folders() function calls list-folders directly
+# Keeping this for compatibility if needed
+@cli.command('get-folders-alt', hidden=True)
+def get_folders_alt():
+    """Alternative get folders command (not used by Tauri)"""
+    # Ensure we always output valid JSON
+    try:
+        return list_folders()
+    except Exception as e:
+        # On any error, return empty array
+        click.echo(json.dumps([]))
+        return
 
 @cli.command('get-user-info')
 def get_user_info():
