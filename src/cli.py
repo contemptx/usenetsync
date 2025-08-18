@@ -785,9 +785,129 @@ def index_folder(path):
 
 # Add other commands as needed...
 
+def initialize_postgresql_schema(db_manager):
+    """Initialize PostgreSQL schema if needed"""
+    try:
+        # Check if tables exist
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if the files table exists
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'files'
+                )
+            """)
+            tables_exist = cursor.fetchone()[0]
+            
+            if not tables_exist:
+                # Create all required tables
+                schema_sql = """
+                -- Create folders table
+                CREATE TABLE IF NOT EXISTS folders (
+                    folder_id VARCHAR(255) PRIMARY KEY,
+                    path TEXT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    state VARCHAR(50) DEFAULT 'added',
+                    published BOOLEAN DEFAULT FALSE,
+                    share_id VARCHAR(255),
+                    access_type VARCHAR(50) DEFAULT 'public',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Create files table
+                CREATE TABLE IF NOT EXISTS files (
+                    file_id VARCHAR(255) PRIMARY KEY,
+                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                    filename TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    size BIGINT,
+                    mime_type VARCHAR(255),
+                    hash VARCHAR(255),
+                    encrypted BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Create segments table
+                CREATE TABLE IF NOT EXISTS segments (
+                    segment_id VARCHAR(255) PRIMARY KEY,
+                    file_id VARCHAR(255) REFERENCES files(file_id) ON DELETE CASCADE,
+                    segment_index INTEGER NOT NULL,
+                    size BIGINT,
+                    hash VARCHAR(255),
+                    message_id TEXT,
+                    uploaded BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Create shares table
+                CREATE TABLE IF NOT EXISTS shares (
+                    share_id VARCHAR(255) PRIMARY KEY,
+                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                    share_type VARCHAR(50) DEFAULT 'public',
+                    password_hash TEXT,
+                    metadata JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP
+                );
+
+                -- Create authorized_users table
+                CREATE TABLE IF NOT EXISTS authorized_users (
+                    id SERIAL PRIMARY KEY,
+                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                    user_id VARCHAR(255) NOT NULL,
+                    permissions VARCHAR(50) DEFAULT 'read',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(folder_id, user_id)
+                );
+
+                -- Create uploads table
+                CREATE TABLE IF NOT EXISTS uploads (
+                    upload_id VARCHAR(255) PRIMARY KEY,
+                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                    status VARCHAR(50) DEFAULT 'pending',
+                    progress INTEGER DEFAULT 0,
+                    total_segments INTEGER,
+                    uploaded_segments INTEGER DEFAULT 0,
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP
+                );
+
+                -- Create activity_log table
+                CREATE TABLE IF NOT EXISTS activity_log (
+                    id SERIAL PRIMARY KEY,
+                    folder_id VARCHAR(255),
+                    action VARCHAR(100),
+                    details JSONB,
+                    user_id VARCHAR(255),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Create indexes
+                CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);
+                CREATE INDEX IF NOT EXISTS idx_segments_file_id ON segments(file_id);
+                CREATE INDEX IF NOT EXISTS idx_shares_folder_id ON shares(folder_id);
+                CREATE INDEX IF NOT EXISTS idx_authorized_users_folder_id ON authorized_users(folder_id);
+                CREATE INDEX IF NOT EXISTS idx_uploads_folder_id ON uploads(folder_id);
+                CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id);
+                """
+                
+                cursor.execute(schema_sql)
+                conn.commit()
+                return True, "Database schema initialized successfully"
+            else:
+                return True, "Database schema already exists"
+                
+    except Exception as e:
+        return False, f"Failed to initialize schema: {str(e)}"
+
 @cli.command('check-database')
 def check_database():
-    """Check database connection status"""
+    """Check database connection status and initialize schema if needed"""
     try:
         if not DatabaseSelector:
             click.echo(json.dumps({"error": "Database selector not available"}), err=True)
@@ -798,6 +918,17 @@ def check_database():
         # Try to actually connect
         try:
             db_manager, db_type = DatabaseSelector.get_database_manager()
+            
+            # If PostgreSQL, check and initialize schema
+            if db_info.get('type') == 'postgresql':
+                schema_ok, schema_msg = initialize_postgresql_schema(db_manager)
+                if not schema_ok:
+                    db_info['status'] = 'error'
+                    db_info['message'] = schema_msg
+                    click.echo(json.dumps(db_info))
+                    return
+                db_info['schema_status'] = schema_msg
+            
             db_info['status'] = 'connected'
             # Use the actual database type from db_info, not the db_type variable
             actual_db_type = 'PostgreSQL' if db_info.get('type') == 'postgresql' else 'SQLite'
