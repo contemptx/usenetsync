@@ -61,52 +61,9 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
       // This would call the Tauri backend
       // const history = await getFileVersions(filePath);
       
-      // TODO: Implement real version history API
-      setVersions([]);
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
-      // TODO: Implement real version history API
+      // Fetch version history from backend
+      const versions = await invoke<Version[]>('get_file_versions', { filePath });
+      setVersions(versions);
     } catch (error) {
       console.error('Failed to load version history:', error);
     } finally {
