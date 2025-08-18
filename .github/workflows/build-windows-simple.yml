@@ -30,6 +30,28 @@ jobs:
         run: |
           cd usenet-sync-app
           npm install
+          npm install -D @tauri-apps/cli
+          
+      - name: Ensure required files exist
+        run: |
+          cd usenet-sync-app
+          if (!(Test-Path "postcss.config.js")) {
+            @'
+          export default {
+            plugins: {
+              tailwindcss: {},
+              autoprefixer: {},
+            },
+          }
+          '@ | Out-File -FilePath postcss.config.js -Encoding UTF8
+          }
+          if (!(Test-Path "src/styles.css")) {
+            @'
+          @tailwind base;
+          @tailwind components;
+          @tailwind utilities;
+          '@ | Out-File -FilePath src/styles.css -Encoding UTF8
+          }
           
       - name: Build frontend only
         run: |
