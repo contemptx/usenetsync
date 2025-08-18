@@ -625,42 +625,76 @@ def ensure_tables_exist(conn):
 def list_folders():
     """List all managed folders"""
     try:
-        from folder_management.folder_manager import FolderManager, FolderConfig
+        # Use DatabaseSelector to get the right database
+        if not DatabaseSelector:
+            click.echo(json.dumps({'error': 'Database selector not available'}), err=True)
+            return
         
-        config = FolderConfig()
-        manager = FolderManager(config)
-        
-        with manager.db.get_connection() as conn:
-            cursor = conn.cursor()
+        try:
+            db_manager, db_type = DatabaseSelector.get_database_manager()
             
-            # Query the folders table
-            cursor.execute("""
-                SELECT folder_id, name, path, state, total_files, total_size,
-                       total_segments, share_id, published, created_at
-                FROM folders
-                ORDER BY created_at DESC
-            """)
-            
-            folders = []
-            for row in cursor.fetchall():
-                folders.append({
-                    'folder_id': row[0],
-                    'name': row[1],
-                    'path': row[2],
-                    'state': row[3],
-                    'total_files': row[4] or 0,
-                    'total_size': row[5] or 0,
-                    'total_segments': row[6] or 0,
-                    'share_id': row[7],
-                    'published': row[8] or False,
-                    'created_at': row[9].isoformat() if row[9] else None
-                })
-            
+            with db_manager.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # First ensure the folders table exists
+                try:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS folders (
+                            folder_id VARCHAR(255) PRIMARY KEY,
+                            path TEXT NOT NULL,
+                            name VARCHAR(255) NOT NULL,
+                            state VARCHAR(50) DEFAULT 'added',
+                            published BOOLEAN DEFAULT FALSE,
+                            share_id VARCHAR(255),
+                            access_type VARCHAR(50) DEFAULT 'public',
+                            total_files INTEGER DEFAULT 0,
+                            total_size BIGINT DEFAULT 0,
+                            total_segments INTEGER DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+                    conn.commit()
+                except:
+                    pass  # Table might already exist
+                
+                # Query the folders table
+                cursor.execute("""
+                    SELECT folder_id, name, path, state, total_files, total_size,
+                           total_segments, share_id, published, created_at
+                    FROM folders
+                    ORDER BY created_at DESC
+                """)
+                
+                folders = []
+                for row in cursor.fetchall():
+                    folders.append({
+                        'folder_id': row[0],
+                        'name': row[1],
+                        'path': row[2],
+                        'state': row[3],
+                        'total_files': row[4] or 0,
+                        'total_size': row[5] or 0,
+                        'total_segments': row[6] or 0,
+                        'share_id': row[7],
+                        'published': row[8] or False,
+                        'created_at': row[9].isoformat() if row[9] else None
+                    })
+                
             click.echo(json.dumps(folders))
+        except Exception as e:
+            click.echo(json.dumps({'error': str(e)}), err=True)
             
     except Exception as e:
         click.echo(json.dumps({'error': str(e)}), err=True)
         sys.exit(1)
+
+@cli.command('get-folders')
+def get_folders():
+    """Get all managed folders (alias for list-folders)"""
+    # Call list_folders directly
+    ctx = click.get_current_context()
+    ctx.invoke(list_folders)
 
 @cli.command('get-user-info')
 def get_user_info():
