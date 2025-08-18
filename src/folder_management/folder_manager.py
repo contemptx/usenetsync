@@ -29,7 +29,7 @@ from indexing.versioned_core_index_system import VersionedCoreIndexSystem
 from indexing.parallel_indexer import ParallelIndexer
 from indexing.simplified_binary_index import SimplifiedBinaryIndex
 from upload.enhanced_upload_system import EnhancedUploadSystem, UploadTask, UploadPriority
-from upload.publishing_system import PublishingSystem, IndexBuilder
+from upload.publishing_system import PublishingSystem
 from optimization.parallel_processor import ParallelUploadProcessor
 from optimization.memory_mapped_file_handler import OptimizedSegmentPacker
 from optimization.bulk_database_operations import BulkDatabaseOperations

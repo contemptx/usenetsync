@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Import all core modules
 from database.production_db_wrapper import ProductionDatabaseManager
+from database.enhanced_database_manager import DatabaseConfig
 from security.enhanced_security_system import EnhancedSecuritySystem, ShareType
 from security.user_management import UserManager
 from upload.enhanced_upload_system import EnhancedUploadSystem
@@ -58,8 +59,13 @@ class ComprehensiveE2ETest:
         try:
             # Create test database
             db_path = os.path.join(self.test_dir, "test.db")
-            self.systems['db'] = ProductionDatabaseManager(db_path)
-            self.systems['db'].initialize()
+            # ProductionDatabaseManager expects a DatabaseConfig object
+            db_config = DatabaseConfig()
+            db_config.path = db_path
+            db_config.pool_size = 5
+            db_config.timeout = 30
+            self.systems['db'] = ProductionDatabaseManager(db_config)
+            # Database is initialized automatically in constructor
             print("✓ Database initialized")
             
             # Initialize security system
@@ -74,12 +80,13 @@ class ComprehensiveE2ETest:
             print("✓ User manager initialized")
             
             # Initialize NNTP client (mock for testing)
-            self.systems['nntp'] = ProductionNNTPClient({
-                'primary_server': 'news.test.com',
-                'backup_servers': [],
-                'port': 119,
-                'use_ssl': False
-            })
+            self.systems['nntp'] = ProductionNNTPClient(
+                host='news.test.com',
+                port=119,
+                username='testuser',
+                password='testpass',
+                use_ssl=False
+            )
             print("✓ NNTP client initialized")
             
             # Initialize upload systems
