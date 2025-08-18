@@ -1,0 +1,43 @@
+--- a/src/turboactivate.rs
++++ b/src/turboactivate.rs
+@@ -8,6 +8,7 @@
+ use std::sync::Mutex;
+ 
+ // TurboActivate result codes
++#[allow(dead_code)]
+ pub const TA_OK: i32 = 0;
++#[allow(dead_code)]
+ pub const TA_FAIL: i32 = 1;
++#[allow(dead_code)]
+ pub const TA_E_PDETS: i32 = 2;
++#[allow(dead_code)]
+ pub const TA_E_ACTIVATE: i32 = 3;
++#[allow(dead_code)]
+ pub const TA_E_INET: i32 = 4;
++#[allow(dead_code)]
+ pub const TA_E_INUSE: i32 = 5;
++#[allow(dead_code)]
+ pub const TA_E_REVOKED: i32 = 6;
++#[allow(dead_code)]
+ pub const TA_E_INVALID_KEY: i32 = 7;
++#[allow(dead_code)]
+ pub const TA_E_EXPIRED: i32 = 8;
++#[allow(dead_code)]
+ pub const TA_E_TRIAL_EXPIRED: i32 = 9;
+
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -21,2 +21,3 @@
+ struct AppState {
+     license: Mutex<TurboActivate>,
++    #[allow(dead_code)]
+     python_process: Mutex<Option<std::process::Child>>,
+
+--- a/src/commands/system.rs
++++ b/src/commands/system.rs
+@@ -47,2 +47,3 @@
+ pub struct SystemState {
+     logs: Arc<Mutex<Vec<LogEntry>>>,
+     bandwidth: Arc<Mutex<BandwidthStats>>,
++    #[allow(dead_code)]
+     statistics: Arc<Mutex<HashMap<String, f64>>>,

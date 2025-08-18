@@ -20,6 +20,7 @@ use commands::system::init_system_commands;
 // State management
 struct AppState {
     license: Mutex<TurboActivate>,
+    #[allow(dead_code)]
     python_process: Mutex<Option<std::process::Child>>,
     transfers: Mutex<HashMap<String, Transfer>>,
 }

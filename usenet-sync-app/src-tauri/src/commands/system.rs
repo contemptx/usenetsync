@@ -47,6 +47,7 @@ pub struct SystemInfo {
 pub struct SystemState {
     logs: Arc<Mutex<Vec<LogEntry>>>,
     bandwidth_limits: Arc<Mutex<BandwidthLimits>>,
+    #[allow(dead_code)]
     statistics: Arc<Mutex<HashMap<String, f64>>>,
 }
 
@@ -267,8 +268,6 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
         0.0
     };
     
-    let mut total_disk = 0u64;
-    let mut used_disk = 0u64;
     // Disk stats temporarily disabled due to API change
     let total_disk = 1000000000u64; // 1GB placeholder
     let used_disk = 500000000u64; // 500MB placeholder
@@ -316,8 +315,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
 }
 
 #[tauri::command]
-pub async fn export_data(options: serde_json::Value, state: tauri::State<'_, SystemState>) -> Result<String, String> {
-    use base64::Engine as _;
+pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, SystemState>) -> Result<String, String> {
     
     // Call Python backend for full export
     let output = ProcessCommand::new("python3")

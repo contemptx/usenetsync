@@ -8,6 +8,7 @@ use once_cell::sync::Lazy;
 use sysinfo::System;
 
 // Error codes
+#[allow(dead_code)]
 pub const TA_OK: i32 = 0;
 pub const TA_FAIL: i32 = 1;
 pub const TA_E_PDETS: i32 = 2;
