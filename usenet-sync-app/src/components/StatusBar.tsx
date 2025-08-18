@@ -49,9 +49,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
   });
   
   const [storageStatus] = useState<StorageStatus>({
-    used: 45 * 1024 * 1024 * 1024, // 45 GB
-    total: 100 * 1024 * 1024 * 1024, // 100 GB
-    percentage: 45
+    used: 0,
+    total: 0,
+    percentage: 0
   });
   
   const [lastSync, setLastSync] = useState<Date>(new Date());
@@ -62,7 +62,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
     // Will be implemented when backend provides real transfer stats
   }, []);
 
-        uploadSpeed: 0,
+  const formatBytes = (bytes: number): string => {
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     let size = bytes;
     let unitIndex = 0;

@@ -92,46 +92,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         // Call search API
         onSearch?.(searchQuery, searchFilters);
         
-        // Mock results for demo
-        const mockResults: SearchResult[] = [
-          {
-            id: '1',
-            type: 'file' as const,
-            name: 'document.pdf',
-            path: '/documents/document.pdf',
-            size: 2048576,
-            modifiedAt: new Date().toISOString(),
-            createdBy: 'user@example.com',
-            matches: [
-              { field: 'name', snippet: '<mark>document</mark>.pdf' }
-            ]
-          },
-          {
-            id: '2',
-            type: 'folder' as const,
-            name: 'Documents',
-            path: '/documents',
-            modifiedAt: new Date().toISOString(),
-            matches: [
-              { field: 'name', snippet: '<mark>Document</mark>s' }
-            ]
-          },
-          {
-            id: '3',
-            type: 'share' as const,
-            name: 'Shared Document',
-            shareId: 'SHARE123',
-            size: 1048576,
-            createdBy: 'user@example.com',
-            matches: [
-              { field: 'name', snippet: 'Shared <mark>Document</mark>' }
-            ]
-          }
-        ].filter(r => 
-          r.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        // TODO: Implement real search API
+        // const results = await searchFiles(searchQuery, searchFilters);
+        // setResults(results);
         
-        setResults(mockResults);
+        // For now, show no results until backend is ready
+        setResults([]);
         setShowResults(true);
       } catch (error) {
         console.error('Search failed:', error);

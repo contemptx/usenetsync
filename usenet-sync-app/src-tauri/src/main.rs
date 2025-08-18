@@ -496,17 +496,54 @@ async fn save_server_config(config: ServerConfig) -> Result<(), String> {
 // System Operations
 #[tauri::command]
 async fn get_system_stats() -> Result<SystemStats, String> {
-    // Simplified mock implementation
+    use sysinfo::{System, SystemExt, CpuExt, DiskExt};
+    
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    
+    // Get real CPU usage
+    let cpu_usage = sys.global_cpu_info().cpu_usage() as f64;
+    
+    // Get real memory usage
+    let memory_usage = if sys.total_memory() > 0 {
+        (sys.used_memory() as f64 / sys.total_memory() as f64) * 100.0
+    } else {
+        0.0
+    };
+    
+    // Get disk usage for the first disk
+    let disk_usage = sys.disks()
+        .iter()
+        .map(|disk| {
+            if disk.total_space() > 0 {
+                let used = disk.total_space() - disk.available_space();
+                (used as f64 / disk.total_space() as f64) * 100.0
+            } else {
+                0.0
+            }
+        })
+        .next()
+        .unwrap_or(0.0);
+    
+    // Network speed and transfer counts would need to be tracked over time
+    // For now, return 0 instead of fake data
+    let network_speed = NetworkSpeed {
+        upload: 0.0,
+        download: 0.0,
+    };
+    
+    // Active transfers and shares should come from actual application state
+    // For now, return 0 instead of fake data
+    let active_transfers = 0;
+    let total_shares = 0;
+    
     Ok(SystemStats {
-        cpu_usage: 45.5,
-        memory_usage: 62.3,
-        disk_usage: 78.9,
-        network_speed: NetworkSpeed {
-            upload: 1024000.0,
-            download: 5120000.0,
-        },
-        active_transfers: 2,
-        total_shares: 15,
+        cpu_usage,
+        memory_usage,
+        disk_usage,
+        network_speed,
+        active_transfers,
+        total_shares,
     })
 }
 

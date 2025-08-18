@@ -61,51 +61,52 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
       // This would call the Tauri backend
       // const history = await getFileVersions(filePath);
       
-      // Mock data for now
-      const mockVersions: FileVersion[] = [
-        {
-          version_id: 'v3',
-          file_name: 'document.pdf',
-          file_path: filePath,
-          share_id: 'SHARE789',
-          file_hash: 'abc123def456',
-          file_size: 2048576,
-          version_number: 3,
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-          created_by: 'user@example.com',
-          changes_description: 'Updated section 3 with new data',
-          tags: ['latest', 'reviewed']
-        },
-        {
-          version_id: 'v2',
-          file_name: 'document.pdf',
-          file_path: filePath,
-          share_id: 'SHARE456',
-          file_hash: 'def456ghi789',
-          file_size: 1948576,
-          version_number: 2,
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          created_by: 'user@example.com',
-          parent_version_id: 'v1',
-          changes_description: 'Fixed typos and formatting',
-          tags: ['stable']
-        },
-        {
-          version_id: 'v1',
-          file_name: 'document.pdf',
-          file_path: filePath,
-          share_id: 'SHARE123',
-          file_hash: 'ghi789jkl012',
-          file_size: 1848576,
-          version_number: 1,
-          created_at: new Date(Date.now() - 172800000).toISOString(),
-          created_by: 'user@example.com',
-          changes_description: 'Initial version',
-          tags: ['initial']
-        }
-      ];
-      
-      setVersions(mockVersions);
+      // TODO: Implement real version history API
+      setVersions([]);
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
+      // TODO: Implement real version history API
     } catch (error) {
       console.error('Failed to load version history:', error);
     } finally {
