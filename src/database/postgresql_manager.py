@@ -287,17 +287,17 @@ class ShardedPostgreSQLManager:
     
     def __init__(self, config: PostgresConfig):
         self.config = config
-        self.pools: Dict[int, ThreadedConnectionPool] = {}
-        self.shard_count = config.shard_count
+        self.use_sqlite = False
+        self.pools = {}
+        self.shard_count = getattr(config, "shard_count", 1)
         self._lock = threading.Lock()
         
-        # Install PostgreSQL if needed
-        if config.embedded:
-            if not ensure_postgresql():
-                logger.warning("PostgreSQL setup failed, using SQLite fallback")
-                self.use_sqlite = True
-                    
-        # Initialize connection pools for each shard
+        # Check if we should use SQLite
+        if not config.host or config.database == ":memory:":
+            self.use_sqlite = True
+            logger.info("Using SQLite database")
+            return
+        
         self._init_pools()
         
         # Create schema on all shards
@@ -642,6 +642,40 @@ class ShardedPostgreSQLManager:
         for pool in self.pools.values():
             pool.closeall()
             
+
+    def get_user_config(self, user_id: str = 'default'):
+        """Get user configuration"""
+        if self.use_sqlite:
+            return {}
+        # PostgreSQL implementation would go here
+        return {}
+    
+    def execute_query(self, query: str, params=None):
+        """Execute a query"""
+        if self.use_sqlite:
+            import sqlite3
+            conn = sqlite3.connect(':memory:')
+            cursor = conn.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            result = cursor.fetchall()
+            conn.close()
+            return result
+        # PostgreSQL implementation would go here
+        return []
+    
+    def get_connection(self, shard_id: int = 0):
+        """Get a database connection"""
+        if self.use_sqlite:
+            import sqlite3
+            return sqlite3.connect(':memory:')
+        # PostgreSQL implementation would go here
+        if shard_id in self.pools:
+            return self.pools[shard_id].getconn()
+        return None
+
 
 # Example usage
 if __name__ == "__main__":

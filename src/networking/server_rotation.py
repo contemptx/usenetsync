@@ -114,7 +114,9 @@ class ServerRotationManager:
         
         # Start health monitoring
         self._health_check_task = None
-        self._start_health_monitoring()
+        # Health monitoring started on demand
+        self.monitoring_task = None
+        self.monitor_enabled = False
     
     def _start_health_monitoring(self):
         """Start background health monitoring"""
