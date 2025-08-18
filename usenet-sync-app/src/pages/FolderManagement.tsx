@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { PrivateShareManager } from '../components/PrivateShareManager';
+import { getAuthorizedUsers } from '../lib/tauri';
 import { 
   Folder, 
   FolderOpen, 
@@ -88,8 +89,8 @@ export const FolderManagement: React.FC = () => {
 
   const loadAuthorizedUsers = async (folderId: string) => {
     try {
-      const result = await invoke<{ users: any[] }>('get_authorized_users', { folderId });
-      const userIds = result.users.map(u => u.user_id);
+      const result = await getAuthorizedUsers(folderId);
+      const userIds = result.users.map((u: any) => u.user_id || u);
       setAuthorizedUsers(userIds);
     } catch (error) {
       console.error('Failed to load authorized users:', error);

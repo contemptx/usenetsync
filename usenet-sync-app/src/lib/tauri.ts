@@ -95,6 +95,19 @@ export async function isUserInitialized(): Promise<boolean> {
   return await invoke('is_user_initialized');
 }
 
+// Folder Management Operations
+export async function addAuthorizedUser(folderId: string, userId: string): Promise<any> {
+  return await invoke('add_authorized_user', { folderId, userId });
+}
+
+export async function removeAuthorizedUser(folderId: string, userId: string): Promise<any> {
+  return await invoke('remove_authorized_user', { folderId, userId });
+}
+
+export async function getAuthorizedUsers(folderId: string): Promise<{ users: any[] }> {
+  return await invoke('get_authorized_users', { folderId });
+}
+
 // System Operations
 export async function getSystemStats(): Promise<any> {
   return await invoke('get_system_stats');
