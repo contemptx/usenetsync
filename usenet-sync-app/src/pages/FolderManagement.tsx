@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { PrivateShareManager } from '../components/PrivateShareManager';
 import { 
   Folder, 
   FolderOpen, 
@@ -51,6 +52,11 @@ export const FolderManagement: React.FC = () => {
   const [activeOperations, setActiveOperations] = useState<Record<string, FolderOperation>>({});
   const [activeTab, setActiveTab] = useState<'overview' | 'access' | 'files' | 'actions'>('overview');
   const [loading, setLoading] = useState(false);
+  
+  // Access control state
+  const [selectedAccessType, setSelectedAccessType] = useState<'public' | 'private' | 'protected'>('public');
+  const [authorizedUsers, setAuthorizedUsers] = useState<string[]>([]);
+  const [protectedPassword, setProtectedPassword] = useState('');
 
   // Load folders on mount
   useEffect(() => {
@@ -60,12 +66,34 @@ export const FolderManagement: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Load authorized users when folder is selected
+  useEffect(() => {
+    if (selectedFolder && selectedFolder.access_type === 'private') {
+      loadAuthorizedUsers(selectedFolder.folder_id);
+      setSelectedAccessType('private');
+    } else if (selectedFolder) {
+      setSelectedAccessType(selectedFolder.access_type || 'public');
+      setAuthorizedUsers([]);
+    }
+  }, [selectedFolder]);
+
   const loadFolders = async () => {
     try {
       const result = await invoke<ManagedFolder[]>('get_folders');
       setFolders(result);
     } catch (error) {
       console.error('Failed to load folders:', error);
+    }
+  };
+
+  const loadAuthorizedUsers = async (folderId: string) => {
+    try {
+      const result = await invoke<{ users: any[] }>('get_authorized_users', { folderId });
+      const userIds = result.users.map(u => u.user_id);
+      setAuthorizedUsers(userIds);
+    } catch (error) {
+      console.error('Failed to load authorized users:', error);
+      setAuthorizedUsers([]);
     }
   };
 
@@ -160,17 +188,31 @@ export const FolderManagement: React.FC = () => {
     }
   };
 
-  const publishFolder = async (folderId: string, accessType: string = 'public') => {
+  const publishFolder = async (
+    folderId: string, 
+    accessType: string = 'public',
+    userIds?: string[],
+    password?: string
+  ) => {
     try {
       setActiveOperations(prev => ({
         ...prev,
         [folderId]: { operation: 'publishing', progress: 0 }
       }));
 
-      const result = await invoke('publish_folder', { 
-        folderId, 
-        accessType 
-      });
+      const params: any = { folderId, accessType };
+      
+      // Add user IDs for private shares
+      if (accessType === 'private' && userIds && userIds.length > 0) {
+        params.userIds = userIds;
+      }
+      
+      // Add password for protected shares
+      if (accessType === 'protected' && password) {
+        params.password = password;
+      }
+
+      const result = await invoke('publish_folder', params);
       
       toast.success('Publishing completed');
       await loadFolders();
@@ -210,7 +252,7 @@ export const FolderManagement: React.FC = () => {
       case 'segmented':
         return { label: 'Upload', action: () => uploadFolder(folder.folder_id), icon: <Upload className="w-4 h-4" /> };
       case 'uploaded':
-        return { label: 'Publish', action: () => publishFolder(folder.folder_id), icon: <Share2 className="w-4 h-4" /> };
+        return { label: 'Publish', action: () => publishFolder(folder.folder_id, selectedAccessType, authorizedUsers, protectedPassword), icon: <Share2 className="w-4 h-4" /> };
       case 'published':
         return { label: 'Re-sync', action: () => indexFolder(folder.folder_id), icon: <RefreshCw className="w-4 h-4" /> };
       default:
@@ -464,48 +506,93 @@ export const FolderManagement: React.FC = () => {
                       </label>
                       <div className="flex gap-4">
                         <label className="flex items-center">
-                          <input type="radio" name="access" value="public" defaultChecked className="mr-2" />
+                          <input 
+                            type="radio" 
+                            name="access" 
+                            value="public" 
+                            checked={selectedAccessType === 'public'}
+                            onChange={() => setSelectedAccessType('public')}
+                            className="mr-2" 
+                          />
                           <Unlock className="w-4 h-4 mr-1" />
                           Public
                         </label>
                         <label className="flex items-center">
-                          <input type="radio" name="access" value="private" className="mr-2" />
+                          <input 
+                            type="radio" 
+                            name="access" 
+                            value="private" 
+                            checked={selectedAccessType === 'private'}
+                            onChange={() => setSelectedAccessType('private')}
+                            className="mr-2" 
+                          />
                           <Lock className="w-4 h-4 mr-1" />
                           Private
                         </label>
                         <label className="flex items-center">
-                          <input type="radio" name="access" value="protected" className="mr-2" />
+                          <input 
+                            type="radio" 
+                            name="access" 
+                            value="protected" 
+                            checked={selectedAccessType === 'protected'}
+                            onChange={() => setSelectedAccessType('protected')}
+                            className="mr-2" 
+                          />
                           <Users className="w-4 h-4 mr-1" />
                           Protected
                         </label>
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Password (for protected access)
-                      </label>
-                      <input
-                        type="password"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg"
-                        placeholder="Enter password"
+                    {/* Show PrivateShareManager for private access */}
+                    {selectedAccessType === 'private' && (
+                      <PrivateShareManager
+                        authorizedUsers={authorizedUsers}
+                        onUsersChange={setAuthorizedUsers}
+                        disabled={!selectedFolder || selectedFolder.state !== 'uploaded'}
                       />
-                    </div>
+                    )}
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Max Downloads
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg"
-                        placeholder="Unlimited"
-                      />
-                    </div>
+                    {/* Show password field for protected access */}
+                    {selectedAccessType === 'protected' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Password
+                        </label>
+                        <input
+                          type="password"
+                          value={protectedPassword}
+                          onChange={(e) => setProtectedPassword(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg"
+                          placeholder="Enter password for protected access"
+                        />
+                      </div>
+                    )}
 
-                    <button className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors">
-                      Update Access Settings
-                    </button>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => {
+                          if (selectedFolder) {
+                            publishFolder(
+                              selectedFolder.folder_id, 
+                              selectedAccessType,
+                              selectedAccessType === 'private' ? authorizedUsers : undefined,
+                              selectedAccessType === 'protected' ? protectedPassword : undefined
+                            );
+                          }
+                        }}
+                        disabled={!selectedFolder || selectedFolder.state !== 'uploaded'}
+                        className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {selectedFolder?.published ? 'Update Access & Re-publish' : 'Publish with Access Settings'}
+                      </button>
+                      
+                      {selectedFolder?.published && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 self-center">
+                          Re-publishing only updates access control, not files
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
