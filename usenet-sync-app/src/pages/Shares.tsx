@@ -1,19 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { Share2, Copy, Trash2, Eye, Calendar, Users, History, X } from 'lucide-react';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import { VersionHistory } from '../components/VersionHistory';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { invoke } from '@tauri-apps/api/core';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
 export const Shares: React.FC = () => {
-  const { shares, removeShare } = useAppStore();
+  const { shares, addShare, removeShare } = useAppStore();
   const [selectedShare, setSelectedShare] = useState<string | null>(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Use keyboard shortcuts
   useKeyboardShortcuts();
+  
+  // Fetch shares from backend on mount
+  useEffect(() => {
+    const fetchShares = async () => {
+      try {
+        setLoading(true);
+        const fetchedShares = await invoke<any[]>('get_shares');
+        // Clear existing shares and add fetched ones
+        fetchedShares.forEach(share => {
+          if (!shares.find(s => s.id === share.id)) {
+            addShare(share);
+          }
+        });
+      } catch (error) {
+        console.error('Failed to fetch shares:', error);
+        toast.error('Failed to load shares');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchShares();
+  }, []);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -56,7 +81,12 @@ export const Shares: React.FC = () => {
         </p>
       </div>
 
-      {shares.length === 0 ? (
+      {loading ? (
+        <div className="bg-white dark:bg-dark-surface rounded-lg p-12 border border-gray-200 dark:border-dark-border text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading shares...</p>
+        </div>
+      ) : shares.length === 0 ? (
         <div className="bg-white dark:bg-dark-surface rounded-lg p-12 border border-gray-200 dark:border-dark-border text-center">
           <Share2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">

@@ -358,6 +358,63 @@ def test_connection(hostname, port, username, password, ssl):
         }), file=sys.stderr)
         sys.exit(1)
 
+@cli.command('list-shares')
+def list_shares():
+    """List all shares from database"""
+    try:
+        # Get database connection
+        from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
+        
+        config = PostgresConfig(
+            host='localhost',
+            port=5432,
+            database='usenetsync',
+            user='usenet',
+            password='usenet_secure_2024'
+        )
+        db = ShardedPostgreSQLManager(config)
+        
+        # Get all shares
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT share_id, type, name, size, file_count, folder_count, 
+                   created_at, expires_at, access_count, last_accessed
+            FROM shares 
+            ORDER BY created_at DESC
+        """)
+        
+        shares = []
+        for row in cursor.fetchall():
+            share = {
+                "id": row[0],  # Use share_id as id for frontend
+                "shareId": row[0],
+                "type": row[1],
+                "name": row[2] or f"Share {row[0][:8]}",
+                "size": row[3] or 0,
+                "fileCount": row[4] or 0,
+                "folderCount": row[5] or 0,
+                "createdAt": row[6].isoformat() if row[6] else None,
+                "expiresAt": row[7].isoformat() if row[7] else None,
+                "accessCount": row[8] or 0,
+                "lastAccessed": row[9].isoformat() if row[9] else None
+            }
+            shares.append(share)
+        
+        cursor.close()
+        conn.close()
+        
+        # Output as JSON
+        click.echo(json.dumps(shares))
+        
+    except ImportError:
+        # Database not available, return empty list
+        click.echo(json.dumps([]))
+    except Exception as e:
+        # Return empty list on error
+        click.echo(json.dumps([]))
+
 @cli.command('index-folder')
 @click.option('--path', required=True, help='Path to folder to index')
 def index_folder(path):
