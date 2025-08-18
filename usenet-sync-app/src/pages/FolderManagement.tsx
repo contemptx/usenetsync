@@ -61,6 +61,7 @@ export const FolderManagement: React.FC = () => {
   const [activeOperations, setActiveOperations] = useState<Record<string, FolderOperation>>({});
   const [activeTab, setActiveTab] = useState<'overview' | 'access' | 'files' | 'actions'>('overview');
   const [loading, setLoading] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
   
   // Access control state
   const [selectedAccessType, setSelectedAccessType] = useState<'public' | 'private' | 'protected'>('public');
@@ -70,10 +71,14 @@ export const FolderManagement: React.FC = () => {
   // Load folders on mount
   useEffect(() => {
     loadFolders();
-    // Set up interval to refresh folders
-    const interval = setInterval(loadFolders, 5000);
+    // Set up interval to refresh folders (only if no error)
+    const interval = setInterval(() => {
+      if (!dbError) {
+        loadFolders();
+      }
+    }, 10000); // Increased to 10 seconds to reduce load
     return () => clearInterval(interval);
-  }, []);
+  }, [dbError]);
 
   // Load authorized users when folder is selected
   useEffect(() => {
@@ -90,8 +95,19 @@ export const FolderManagement: React.FC = () => {
     try {
       const result = await getFolders();
       setFolders(result as ManagedFolder[]);
-    } catch (error) {
+      setDbError(null); // Clear any previous errors
+    } catch (error: any) {
       console.error('Failed to load folders:', error);
+      
+      // Check if it's a database connection error
+      if (error?.error?.includes('Connection refused') || error?.error?.includes('connection to server')) {
+        setDbError('Database connection failed. Please ensure PostgreSQL is running.');
+      } else {
+        setDbError('Failed to load folders. Please try again.');
+      }
+      
+      // Set empty folders array to prevent undefined errors
+      setFolders([]);
     }
   };
 
@@ -284,6 +300,31 @@ export const FolderManagement: React.FC = () => {
 
   return (
     <div className="flex h-full">
+      {/* Database Error Alert */}
+      {dbError && (
+        <div className="absolute top-4 right-4 left-4 z-50 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-red-800 dark:text-red-200 font-medium">{dbError}</p>
+            <button
+              onClick={() => {
+                setDbError(null);
+                loadFolders();
+              }}
+              className="mt-2 text-sm text-red-700 dark:text-red-300 hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+          <button
+            onClick={() => setDbError(null)}
+            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Folder List */}
       <div className="w-1/3 border-r border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface">
         <div className="p-4 border-b border-gray-200 dark:border-dark-border">
@@ -291,8 +332,8 @@ export const FolderManagement: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Managed Folders</h2>
             <button
               onClick={addFolder}
-              disabled={loading}
-              className="px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm flex items-center gap-2"
+              disabled={loading || !!dbError}
+              className="px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FolderOpen className="w-4 h-4" />
               Add Folder
@@ -301,7 +342,13 @@ export const FolderManagement: React.FC = () => {
         </div>
 
         <div className="overflow-y-auto" style={{ height: 'calc(100% - 88px)' }}>
-          {folders.length === 0 ? (
+          {dbError ? (
+            <div className="p-8 text-center text-gray-500">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
+              <p className="text-red-600 dark:text-red-400">Database Connection Error</p>
+              <p className="text-sm mt-2">Please check your database connection</p>
+            </div>
+          ) : folders.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <Folder className="w-12 h-12 mx-auto mb-4 text-gray-400" />
               <p>No folders added yet</p>
