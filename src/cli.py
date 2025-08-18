@@ -546,6 +546,81 @@ def list_authorized_users(folder_id):
         click.echo(json.dumps({'error': str(e)}), err=True)
         sys.exit(1)
 
+def ensure_tables_exist(conn):
+    """Ensure all required tables exist before querying"""
+    cursor = conn.cursor()
+    
+    # Create tables if they don't exist - PostgreSQL compatible
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS folders (
+            folder_id VARCHAR(255) PRIMARY KEY,
+            path TEXT NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            state VARCHAR(50) DEFAULT 'added',
+            published BOOLEAN DEFAULT FALSE,
+            share_id VARCHAR(255),
+            access_type VARCHAR(50) DEFAULT 'public',
+            total_files INTEGER DEFAULT 0,
+            total_size BIGINT DEFAULT 0,
+            total_segments INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS files (
+            file_id VARCHAR(255) PRIMARY KEY,
+            folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+            filename TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            size BIGINT,
+            mime_type VARCHAR(255),
+            hash VARCHAR(255),
+            encrypted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS segments (
+            segment_id VARCHAR(255) PRIMARY KEY,
+            file_id VARCHAR(255) REFERENCES files(file_id) ON DELETE CASCADE,
+            segment_index INTEGER NOT NULL,
+            size BIGINT,
+            hash VARCHAR(255),
+            message_id TEXT,
+            uploaded BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS shares (
+            share_id VARCHAR(255) PRIMARY KEY,
+            folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+            share_type VARCHAR(50) DEFAULT 'public',
+            password_hash TEXT,
+            metadata JSONB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS authorized_users (
+            id SERIAL PRIMARY KEY,
+            folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+            user_id VARCHAR(255) NOT NULL,
+            permissions VARCHAR(50) DEFAULT 'read',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(folder_id, user_id)
+        )
+    """)
+    
+    conn.commit()
+
 @cli.command('list-folders')
 def list_folders():
     """List all managed folders"""
@@ -556,13 +631,27 @@ def list_folders():
         manager = FolderManager(config)
         
         with manager.db.get_connection() as conn:
+            # Ensure tables exist
+            ensure_tables_exist(conn)
+            
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT folder_id, name, path, state, total_files, total_size,
-                       total_segments, share_id, published, created_at
-                FROM managed_folders
-                ORDER BY created_at DESC
-            """)
+            
+            # Try both table names for compatibility
+            try:
+                cursor.execute("""
+                    SELECT folder_id, name, path, state, total_files, total_size,
+                           total_segments, share_id, published, created_at
+                    FROM folders
+                    ORDER BY created_at DESC
+                """)
+            except:
+                # Fallback to old table name
+                cursor.execute("""
+                    SELECT folder_id, name, path, state, total_files, total_size,
+                           total_segments, share_id, published, created_at
+                    FROM managed_folders
+                    ORDER BY created_at DESC
+                """)
             
             folders = []
             for row in cursor.fetchall():
