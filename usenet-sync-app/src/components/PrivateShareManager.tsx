@@ -59,8 +59,8 @@ export const PrivateShareManager: React.FC<PrivateShareManagerProps> = ({
         <div className="flex items-start gap-2">
           <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
           <div className="text-sm text-blue-700 dark:text-blue-300">
-            <p className="font-medium mb-1">Private Share Access</p>
-            <p>Add User IDs of people who should have access to this private share.</p>
+            <p className="font-medium mb-1">Private Share Access Control</p>
+            <p>Add User IDs to grant access. You can update this list and re-publish anytime without re-uploading files.</p>
           </div>
         </div>
       </div>
@@ -93,6 +93,9 @@ export const PrivateShareManager: React.FC<PrivateShareManagerProps> = ({
             Add
           </button>
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Users must share their User ID with you first (found in their Profile page)
+        </p>
       </div>
 
       {/* Authorized Users List */}
