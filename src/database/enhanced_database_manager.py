@@ -332,7 +332,7 @@ CREATE TABLE IF NOT EXISTS segments (
     segment_hash TEXT NOT NULL,
     segment_size INTEGER NOT NULL,
     offset INTEGER DEFAULT 0,
-                    offset INTEGER DEFAULT 0,
+    data_offset INTEGER DEFAULT 0,
     subject_hash TEXT NOT NULL,
     message_id TEXT,
     newsgroup TEXT NOT NULL,

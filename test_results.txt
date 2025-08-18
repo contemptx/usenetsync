@@ -1,0 +1,89 @@
+User already initialized
+Error packing file /tmp/e2e_test_4oum8qg3/test_file_0.txt: table segments has no column named data_offset
+
+======================================================================
+COMPREHENSIVE END-TO-END SYSTEM TEST
+======================================================================
+Test directory: /tmp/e2e_test_4oum8qg3
+
+======================================================================
+INITIALIZING TEST ENVIRONMENT
+======================================================================
+✓ Database initialized
+✓ Security system initialized
+✓ User manager initialized
+✓ NNTP client initialized
+✓ Segment packing system initialized
+✓ Upload system initialized
+✓ Publishing system initialized
+✓ Download system initialized
+✓ Segment retrieval system initialized
+✓ Folder manager skipped (uses own DB)
+✓ Indexing system initialized
+
+======================================================================
+TEST 1: USER MANAGEMENT
+======================================================================
+✓ User initialized with ID: 12e7cbc1d5919b02...
+✓ User ID format validated
+✓ Single user constraint verified
+✓ User cannot be re-initialized
+✓ User config exported successfully
+
+======================================================================
+TEST 2: FOLDER SECURITY
+======================================================================
+✓ Created folder with UUID: 5fb6ba12...
+✓ Generated Ed25519 key pair
+DEBUG: Saving keys to folder DB_ID: 1
+DEBUG: Key bytes - Private: 32 bytes, Public: 32 bytes
+SUCCESS: Keys saved to folder 1 - verified in database
+✓ Saved folder keys to database
+✓ Loaded and verified folder keys
+✓ Folder keys stored securely
+
+======================================================================
+TEST 3: FILE UPLOAD SYSTEM
+======================================================================
+✓ Created 3 test files
+Database error: table segments has no column named data_offset
+✗ File upload test failed: table segments has no column named data_offset
+
+======================================================================
+TEST 6: DOWNLOAD SYSTEM
+======================================================================
+✓ Created 5 segment requests
+✗ Download system test failed: 'TestSegmentRequest' object has no attribute 'primary_message_id'
+
+======================================================================
+TEST 7: CLI/FRONTEND INTEGRATION
+======================================================================
+✓ CLI get-user-info command works
+⚠ CLI command returned error: {"error": "relation \"files\" does not exist\n"}
+
+✓ CLI list-authorized-users command tested
+
+======================================================================
+TEST 8: FRONTEND FEATURES
+======================================================================
+✓ User management Tauri commands present
+✓ Folder management Tauri commands present
+✓ Publish command supports user IDs
+✓ UserProfile component exists
+✓ PrivateShareManager component exists
+
+======================================================================
+TEST SUMMARY
+======================================================================
+✓ PASS   | User Management           | 12e7cbc1d5919b02f95584c932a5e206d0551a7ade4e7cd473fb811bde1069da
+✓ PASS   | Folder Security           | 5fb6ba12-0a82-4e9d-99a0-c05cff98d175
+✗ FAIL   | File Upload               | table segments has no column named data_offset
+✗ FAIL   | Download System           | 'TestSegmentRequest' object has no attribute 'primary_message_id'
+✓ PASS   | CLI Integration           | Commands tested
+✓ PASS   | Frontend Features         | Components verified
+----------------------------------------------------------------------
+Results: 4/6 tests passed
+
+⚠ 2 test(s) failed. Review the output above.
+
+✓ Cleaned up test directory: /tmp/e2e_test_4oum8qg3

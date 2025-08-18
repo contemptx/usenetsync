@@ -578,6 +578,106 @@ def list_folders():
         click.echo(json.dumps({'error': str(e)}), err=True)
         sys.exit(1)
 
+@cli.command('get-user-info')
+def get_user_info():
+    """Get current user information"""
+    try:
+        from security.user_management import UserManager
+        from security.enhanced_security_system import EnhancedSecuritySystem
+        from database.enhanced_database_manager import DatabaseConfig
+        from database.production_db_wrapper import ProductionDatabaseManager
+        
+        # Initialize database
+        db_config = DatabaseConfig()
+        db_config.path = "data/usenetsync.db"
+        db = ProductionDatabaseManager(db_config)
+        
+        # Initialize security and user manager
+        security = EnhancedSecuritySystem(db)
+        user_manager = UserManager(db, security)
+        
+        # Get user info
+        if user_manager.is_initialized():
+            user_id = user_manager.get_user_id()
+            config = user_manager.export_config()
+            
+            click.echo(json.dumps({
+                'user_id': user_id,
+                'display_name': config.get('display_name', 'User'),
+                'created_at': config.get('created_at', datetime.now().isoformat()),
+                'initialized': True
+            }))
+        else:
+            click.echo(json.dumps({
+                'initialized': False,
+                'message': 'User not initialized'
+            }))
+            
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('initialize-user')
+@click.option('--display-name', help='Display name for the user')
+def initialize_user(display_name):
+    """Initialize user profile"""
+    try:
+        from security.user_management import UserManager
+        from security.enhanced_security_system import EnhancedSecuritySystem
+        from database.enhanced_database_manager import DatabaseConfig
+        from database.production_db_wrapper import ProductionDatabaseManager
+        
+        # Initialize database
+        db_config = DatabaseConfig()
+        db_config.path = "data/usenetsync.db"
+        db = ProductionDatabaseManager(db_config)
+        
+        # Initialize security and user manager
+        security = EnhancedSecuritySystem(db)
+        user_manager = UserManager(db, security)
+        
+        # Initialize user
+        user_id = user_manager.initialize(display_name)
+        
+        click.echo(json.dumps({
+            'success': True,
+            'user_id': user_id,
+            'message': 'User initialized successfully'
+        }))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('is-user-initialized')
+def is_user_initialized():
+    """Check if user is initialized"""
+    try:
+        from security.user_management import UserManager
+        from security.enhanced_security_system import EnhancedSecuritySystem
+        from database.enhanced_database_manager import DatabaseConfig
+        from database.production_db_wrapper import ProductionDatabaseManager
+        
+        # Initialize database
+        db_config = DatabaseConfig()
+        db_config.path = "data/usenetsync.db"
+        db = ProductionDatabaseManager(db_config)
+        
+        # Initialize security and user manager
+        security = EnhancedSecuritySystem(db)
+        user_manager = UserManager(db, security)
+        
+        # Check if initialized
+        initialized = user_manager.is_initialized()
+        
+        click.echo(json.dumps({
+            'initialized': initialized
+        }))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
 @cli.command('list-shares')
 def list_shares():
     """List all shares from database"""
