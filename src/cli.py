@@ -1046,34 +1046,34 @@ def check_database():
         try:
             db_manager, db_type = DatabaseSelector.get_database_manager()
             
-            # Initialize schema for both SQLite and PostgreSQL
+            # First set the connection status
+            db_info['status'] = 'connected'
+            actual_db_type_display = 'PostgreSQL' if db_info.get('type') == 'postgresql' else 'SQLite'
+            db_info['message'] = f"Successfully connected to {actual_db_type_display}"
+            
+            # Then try to initialize schema (non-blocking for connection status)
             actual_db_type = db_info.get('type', db_type)
             # Add debug info
             db_info['detected_type'] = actual_db_type
             db_info['db_type_param'] = db_type
             
-            if actual_db_type in ['postgresql', 'sqlite']:
-                schema_ok, schema_msg = initialize_database_schema(db_manager, actual_db_type)
-                if not schema_ok:
-                    db_info['status'] = 'error'
-                    db_info['message'] = schema_msg
-                    click.echo(json.dumps(db_info))
-                    return
-                db_info['schema_status'] = schema_msg
-            else:
-                # If type is not recognized, try with sqlite as default
-                schema_ok, schema_msg = initialize_database_schema(db_manager, 'sqlite')
-                if not schema_ok:
-                    db_info['status'] = 'error'
-                    db_info['message'] = schema_msg
-                    click.echo(json.dumps(db_info))
-                    return
-                db_info['schema_status'] = schema_msg
-            
-            db_info['status'] = 'connected'
-            # Use the actual database type from db_info, not the db_type variable
-            actual_db_type = 'PostgreSQL' if db_info.get('type') == 'postgresql' else 'SQLite'
-            db_info['message'] = f"Successfully connected to {actual_db_type}"
+            try:
+                if actual_db_type in ['postgresql', 'sqlite']:
+                    schema_ok, schema_msg = initialize_database_schema(db_manager, actual_db_type)
+                    db_info['schema_status'] = schema_msg
+                    if not schema_ok:
+                        # Don't fail the whole connection, just note the schema issue
+                        db_info['schema_error'] = schema_msg
+                else:
+                    # If type is not recognized, try with sqlite as default
+                    schema_ok, schema_msg = initialize_database_schema(db_manager, 'sqlite')
+                    db_info['schema_status'] = schema_msg
+                    if not schema_ok:
+                        db_info['schema_error'] = schema_msg
+            except Exception as schema_ex:
+                # Schema initialization failed, but connection is still valid
+                db_info['schema_error'] = f"Schema initialization error: {str(schema_ex)}"
+                db_info['schema_status'] = "Schema check failed (connection still active)"
         except Exception as e:
             db_info['status'] = 'error'
             db_info['message'] = str(e)
