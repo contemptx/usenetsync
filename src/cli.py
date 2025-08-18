@@ -18,7 +18,7 @@ from security.enhanced_security_system import EnhancedSecuritySystem
 from indexing.share_id_generator import ShareIDGenerator
 from upload.enhanced_upload import EnhancedUploadSystem
 from download.enhanced_download import EnhancedDownloadSystem
-from upload.publishing_system import PublishingSystem
+from upload.enhanced_upload import EnhancedUploadSystem
 from core.integrated_backend import IntegratedBackend, create_integrated_backend
 
 class UsenetSyncCLI:

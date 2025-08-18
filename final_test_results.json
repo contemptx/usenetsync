@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-08-18T00:36:42.273286",
+  "timestamp": "2025-08-18T00:45:04.819031",
   "system_info": {
     "python_version": "3.13.3",
     "platform": "Linux-6.1.147-x86_64-with-glibc2.41",
@@ -8,8 +8,7 @@
   },
   "components": {
     "cli": {
-      "status": "FAILED",
-      "error": "CLI not working",
+      "status": "WORKING",
       "type": "Integration"
     },
     "core.integrated_backend": {
@@ -53,8 +52,7 @@
       "type": "Python Module"
     },
     "publishing.publishing_system": {
-      "status": "FAILED",
-      "error": "No module named 'publishing.publishing_system'",
+      "status": "WORKING",
       "type": "Python Module"
     },
     "networking.production_nntp_client": {
@@ -63,7 +61,7 @@
     },
     "encryption": {
       "status": "FAILED",
-      "error": "Failed to install PostgreSQL",
+      "error": "connection to server at \"localhost\" (::1), port 5432 failed: FATAL:  password authentication failed for user \"test\"\nconnection to server at \"localhost\" (::1), port 5432 failed: FATAL:  password authentication failed for user \"test\"\n",
       "type": "Security"
     },
     "bandwidth_control": {
@@ -75,14 +73,14 @@
           "limit": 1048576,
           "enabled": true,
           "bytes_sent": 1024,
-          "start_time": 1755477402.5842717
+          "start_time": 1755477904.993091
         },
         "download": {
           "current_speed": 0,
           "limit": 2097152,
           "enabled": true,
           "bytes_received": 2048,
-          "start_time": 1755477402.584272
+          "start_time": 1755477904.9930913
         }
       }
     },
@@ -118,23 +116,23 @@
     "performance": [
       {
         "size": 1024,
-        "hash_time": 5.1975250244140625e-05,
-        "throughput_mbps": 18.788990825688074
+        "hash_time": 3.6716461181640625e-05,
+        "throughput_mbps": 26.5974025974026
       },
       {
         "size": 10240,
-        "hash_time": 1.2159347534179688e-05,
-        "throughput_mbps": 803.1372549019608
+        "hash_time": 7.152557373046875e-06,
+        "throughput_mbps": 1365.3333333333333
       },
       {
         "size": 102400,
-        "hash_time": 5.412101745605469e-05,
-        "throughput_mbps": 1804.4052863436123
+        "hash_time": 5.364418029785156e-05,
+        "throughput_mbps": 1820.4444444444443
       },
       {
         "size": 1024000,
-        "hash_time": 0.0005433559417724609,
-        "throughput_mbps": 1797.2795085563844
+        "hash_time": 0.0005714893341064453,
+        "throughput_mbps": 1708.802670004172
       }
     ]
   },
@@ -159,9 +157,9 @@
   },
   "summary": {
     "total_components": 19,
-    "working_components": 16,
-    "failed_components": 3,
-    "success_rate": 84.21052631578947,
-    "status": "NEEDS_FIXES"
+    "working_components": 18,
+    "failed_components": 1,
+    "success_rate": 94.73684210526315,
+    "status": "PRODUCTION_READY"
   }
 }

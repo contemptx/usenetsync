@@ -1,14 +1,15 @@
 ================================================================================
 🏆 FINAL COMPREHENSIVE SYSTEM TEST REPORT
 ================================================================================
-Timestamp: 2025-08-18T00:36:42.273286
+Timestamp: 2025-08-18T00:45:04.819031
 Platform: Linux-6.1.147-x86_64-with-glibc2.41
 Python: 3.13.3
 
 📦 COMPONENT STATUS:
 ------------------------------------------------------------
 
-✅ WORKING (15):
+✅ WORKING (17):
+  • cli: Integration
   • core.integrated_backend: Python Module
   • networking.bandwidth_controller: Python Module
   • security.enhanced_security_system: Python Module
@@ -19,31 +20,30 @@ Python: 3.13.3
   • core.data_management: Python Module
   • upload.enhanced_upload: Python Module
   • download.enhanced_download: Python Module
+  • publishing.publishing_system: Python Module
   • networking.production_nntp_client: Python Module
   • bandwidth_control: Networking - {"upload": {"current_speed": 0, "limit": 1048576, 
   • upload_download: File Transfer - {"test_size": 8500, "chunks": 1, "yenc_encoded_siz
   • react_app: Frontend - {"name": "usenet-sync-app", "version": "0.1.0", "b
   • tauri_backend: Backend - {"rust": "Compiles", "warnings": true}
 
-❌ FAILED (3):
-  • cli: Integration (CLI not working)
-  • publishing.publishing_system: Python Module (No module named 'publishing.pu)
-  • encryption: Security (Failed to install PostgreSQL)
+❌ FAILED (1):
+  • encryption: Security (connection to server at "local)
 
 📊 PERFORMANCE METRICS:
 ------------------------------------------------------------
-  1KB: 18.8 MB/s
-  10KB: 803.1 MB/s
-  100KB: 1804.4 MB/s
-  1000KB: 1797.3 MB/s
+  1KB: 26.6 MB/s
+  10KB: 1365.3 MB/s
+  100KB: 1820.4 MB/s
+  1000KB: 1708.8 MB/s
 
 ================================================================================
 📈 FINAL SUMMARY:
 ------------------------------------------------------------
 Total Components: 19
-Working: 16 ✅
-Failed: 3 ❌
-Success Rate: 84.2%
+Working: 18 ✅
+Failed: 1 ❌
+Success Rate: 94.7%
 
 ✅ SYSTEM STATUS: MOSTLY READY
 Most components are functional.

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from .postgresql_installer import ensure_postgresql
+
 """
 PostgreSQL Manager with Embedded Database Support
 Handles automatic installation, sharding, and optimization for 20TB+ datasets
@@ -291,10 +293,9 @@ class ShardedPostgreSQLManager:
         
         # Install PostgreSQL if needed
         if config.embedded:
-            installer = EmbeddedPostgresInstaller()
-            if not installer.is_installed():
-                if not installer.install():
-                    raise RuntimeError("Failed to install PostgreSQL")
+            if not ensure_postgresql():
+                logger.warning("PostgreSQL setup failed, using SQLite fallback")
+                self.use_sqlite = True
                     
         # Initialize connection pools for each shard
         self._init_pools()
