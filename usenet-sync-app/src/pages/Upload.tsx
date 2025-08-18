@@ -32,7 +32,7 @@ export const Upload: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [currentPath, setCurrentPath] = useState<string[]>(['Home', 'Uploads']);
   
-  const { selectedFiles, addUpload, clearSelection } = useAppStore();
+  const { selectedFiles, setSelectedFiles, addUpload, clearSelection } = useAppStore();
   
   // Use keyboard shortcuts
   useKeyboardShortcuts();
