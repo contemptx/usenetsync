@@ -115,7 +115,21 @@ export const Settings: React.FC = () => {
       setSetupProgress(100);
       
       toast.success('PostgreSQL setup completed successfully!');
+      
+      // Automatically switch to advanced mode after successful setup
+      setDatabaseMode('advanced');
+      localStorage.setItem('database_mode', 'advanced');
+      
+      // Check the database status to confirm it's working
       await checkDatabaseStatus();
+      
+      // If PostgreSQL is now connected, show additional success message
+      setTimeout(async () => {
+        const status = await checkDbStatus();
+        if (status?.type === 'postgresql' && status?.status === 'connected') {
+          toast.success('Successfully switched to PostgreSQL!');
+        }
+      }, 1000);
       
     } catch (error) {
       toast.error(`PostgreSQL setup failed: ${error}`);
@@ -440,12 +454,57 @@ export const Settings: React.FC = () => {
                 </details>
               </div>
             ) : (
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  <p className="font-medium text-green-900 dark:text-green-100">
-                    PostgreSQL is configured and running
-                  </p>
+              <div className="space-y-3">
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      <div>
+                        <p className="font-medium text-green-900 dark:text-green-100">
+                          PostgreSQL is active
+                        </p>
+                        <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                          Database: {databaseStatus?.database || 'usenet'} | 
+                          Host: {databaseStatus?.host || 'localhost'} | 
+                          Port: {databaseStatus?.port || '5432'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await checkDatabaseStatus();
+                        const status = await checkDbStatus();
+                        if (status?.status === 'connected') {
+                          toast.success('PostgreSQL connection verified!');
+                        } else {
+                          toast.error('PostgreSQL connection failed');
+                        }
+                      } catch (error) {
+                        toast.error('Failed to test connection');
+                      }
+                    }}
+                    className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Database className="w-4 h-4" />
+                    Test Connection
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setDatabaseMode('simple');
+                      localStorage.setItem('database_mode', 'simple');
+                      toast.success('Switched to SQLite (Simple Mode)');
+                    }}
+                    className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <HardDrive className="w-4 h-4" />
+                    Switch to SQLite
+                  </button>
                 </div>
               </div>
             )}
