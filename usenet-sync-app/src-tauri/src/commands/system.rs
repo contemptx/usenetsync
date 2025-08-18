@@ -35,29 +35,7 @@ fn get_python_backend() -> String {
     get_python_command().to_string()
 }
 
-// Helper function to check if using bundled backend
-fn is_bundled_backend() -> bool {
-    if let Ok(exe_dir) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_dir.parent() {
-            let backend_name = if cfg!(target_os = "windows") {
-                "usenetsync-backend.exe"
-            } else {
-                "usenetsync-backend"
-            };
-            
-            let bundled_backend = exe_dir.join(backend_name);
-            if bundled_backend.exists() {
-                return true;
-            }
-            
-            let resources_backend = exe_dir.join("resources").join(backend_name);
-            if resources_backend.exists() {
-                return true;
-            }
-        }
-    }
-    false
-}
+
 
 // Helper function to get the correct Python command for the OS (fallback)
 fn get_python_command() -> &'static str {
@@ -223,7 +201,7 @@ pub async fn get_logs(
     // First try to get logs from Python backend
     let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
-        .args(&[
+        .args([
             "-c",
             "from src.cli import UsenetSyncCLI; \
              cli = UsenetSyncCLI(); \
@@ -231,7 +209,7 @@ pub async fn get_logs(
              logs = cli.integrated_backend.log_manager.get_logs(); \
              print(json.dumps([log.to_dict() for log in logs]))"
         ])
-        .current_dir(&get_workspace_dir())
+        .current_dir(get_workspace_dir())
         .output();
     
     if let Ok(output) = output {
@@ -294,7 +272,7 @@ pub async fn set_bandwidth_limit(
     // Apply to Python backend
     let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
-        .args(&[
+        .args([
             "-c",
             &format!(
                 "from src.cli import UsenetSyncCLI; \
@@ -304,7 +282,7 @@ pub async fn set_bandwidth_limit(
                 if enabled { download_kbps * 1024 } else { 0 }
             )
         ])
-        .current_dir(&get_workspace_dir())
+        .current_dir(get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -364,7 +342,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
     
     // Get network stats from Python backend
     let network_speed = if let Ok(output) = ProcessCommand::new(get_python_command())
-        .args(&[
+        .args([
             "-c",
             "from src.cli import UsenetSyncCLI; \
              cli = UsenetSyncCLI(); \
@@ -375,7 +353,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
                  'download': stats['download']['current_speed']\
              }))"
         ])
-        .current_dir(&get_workspace_dir())
+        .current_dir(get_workspace_dir())
         .output() 
     {
         if output.status.success() {
@@ -405,7 +383,7 @@ pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, Sy
     // Call Python backend for full export
     let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
-        .args(&[
+        .args([
             "-c",
             &format!(
                 "from src.cli import UsenetSyncCLI; \
@@ -419,7 +397,7 @@ pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, Sy
                 options.get("encrypt").and_then(|v| v.as_bool()).unwrap_or(false)
             )
         ])
-        .current_dir(&get_workspace_dir())
+        .current_dir(get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -435,7 +413,7 @@ pub async fn import_data(data: String, options: serde_json::Value, state: tauri:
     // Call Python backend for import
     let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
-        .args(&[
+        .args([
             "-c",
             &format!(
                 "from src.cli import UsenetSyncCLI; \
@@ -450,7 +428,7 @@ pub async fn import_data(data: String, options: serde_json::Value, state: tauri:
                 options.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false)
             )
         ])
-        .current_dir(&get_workspace_dir())
+        .current_dir(get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -486,14 +464,14 @@ pub async fn clear_cache(state: tauri::State<'_, SystemState>) -> Result<(), Str
     // Clear Python backend cache
     let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
-        .args(&[
+        .args([
             "-c",
             "from src.cli import UsenetSyncCLI; \
              cli = UsenetSyncCLI(); \
              cli.integrated_backend.data_manager.clear_cache(); \
              cli.integrated_backend.cleanup_old_data(days=0)"
         ])
-        .current_dir(&get_workspace_dir())
+        .current_dir(get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -531,12 +509,12 @@ pub async fn restart_services(state: tauri::State<'_, SystemState>) -> Result<()
     #[cfg(not(target_os = "windows"))]
     {
         ProcessCommand::new("pkill")
-            .args(&["-f", "usenet_sync"])
+            .args(["-f", "usenet_sync"])
             .output()
             .ok();
         
         ProcessCommand::new("pkill")
-            .args(&["-f", "cli.py"])
+            .args(["-f", "cli.py"])
             .output()
             .ok();
         
@@ -544,8 +522,8 @@ pub async fn restart_services(state: tauri::State<'_, SystemState>) -> Result<()
         
         // Start Python backend service
         ProcessCommand::new(get_python_command())
-            .args(&["src/cli.py", "--daemon"])
-            .current_dir(&get_workspace_dir())
+            .args(["src/cli.py", "--daemon"])
+            .current_dir(get_workspace_dir())
             .spawn()
             .map_err(|e| format!("Failed to start service: {}", e))?;
     }
