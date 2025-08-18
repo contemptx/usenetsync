@@ -134,7 +134,7 @@ class CLIDatabaseTester:
             },
             {
                 'name': 'Private share with multiple files',
-                'args': ['create-share', '--files'] + self.test_files[:2] + ['--type', 'private'],
+                'args': ['create-share'] + ['--files', self.test_files[0], '--files', self.test_files[1]] + ['--type', 'private'],
                 'expected_type': 'private'
             },
             {
