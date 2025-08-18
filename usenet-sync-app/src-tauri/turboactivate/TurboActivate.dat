@@ -1,0 +1,4 @@
+# Dummy TurboActivate.dat file for development
+# Replace with your actual TurboActivate.dat from LimeLM
+PRODUCT_ID=USENET_SYNC_V1
+VERSION_GUID=12345678-1234-1234-1234-123456789012
