@@ -221,7 +221,7 @@ pub async fn get_logs(
     state: tauri::State<'_, SystemState>,
 ) -> Result<Vec<LogEntry>, String> {
     // First try to get logs from Python backend
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
@@ -292,7 +292,7 @@ pub async fn set_bandwidth_limit(
     state: tauri::State<'_, SystemState>,
 ) -> Result<(), String> {
     // Apply to Python backend
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
@@ -403,7 +403,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
 pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, SystemState>) -> Result<String, String> {
     
     // Call Python backend for full export
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
@@ -433,7 +433,7 @@ pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, Sy
 #[tauri::command]
 pub async fn import_data(data: String, options: serde_json::Value, state: tauri::State<'_, SystemState>) -> Result<bool, String> {
     // Call Python backend for import
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
@@ -484,7 +484,7 @@ pub async fn clear_cache(state: tauri::State<'_, SystemState>) -> Result<(), Str
     }
     
     // Clear Python backend cache
-    let python_cmd = get_python_backend().map_err(|e| e.to_string())?;
+    let python_cmd = get_python_backend();
     let output = ProcessCommand::new(&python_cmd)
         .args(&[
             "-c",
