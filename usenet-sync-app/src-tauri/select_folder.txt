@@ -1,0 +1,16 @@
+#[tauri::command]
+async fn select_folder(app: tauri::AppHandle) -> Result<FileNode, String> {
+    use tauri_plugin_dialog::DialogExt;
+    
+    let folder = app.dialog()
+        .file()
+        .set_title("Select Folder")
+        .blocking_pick_folder()
+        .ok_or_else(|| "No folder selected".to_string())?;
+    
+    let path = folder.as_path()
+        .ok_or_else(|| "Invalid folder path".to_string())?;
+    
+    index_folder_recursive(&path.to_path_buf())
+}
+

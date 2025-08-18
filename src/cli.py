@@ -69,7 +69,7 @@ def cli():
     """UsenetSync Command Line Interface"""
     pass
 
-@cli.command()
+@cli.command('create-share')
 @click.option('--files', multiple=True, required=True, help='Files to share')
 @click.option('--type', 'share_type', type=click.Choice(['public', 'private', 'protected']), required=True)
 @click.option('--password', help='Password for protected shares')
@@ -120,7 +120,7 @@ def create_share(files, share_type, password):
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
 
-@cli.command()
+@cli.command('create-share')
 @click.option('--share-id', required=True, help='Share ID to download')
 @click.option('--destination', required=True, help='Destination directory')
 @click.option('--files', multiple=True, help='Specific files to download')
@@ -165,7 +165,7 @@ def download_share(share_id, destination, files):
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
 
-@cli.command()
+@cli.command('create-share')
 @click.option('--share-id', required=True, help='Share ID')
 def share_details(share_id):
     """Get share details"""
@@ -199,7 +199,7 @@ def share_details(share_id):
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
 
-@cli.command()
+@cli.command('test-connection')
 @click.option('--hostname', required=True)
 @click.option('--port', type=int, required=True)
 @click.option('--username', required=True)
