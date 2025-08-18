@@ -3,7 +3,6 @@ import { useDropzone } from 'react-dropzone';
 import { FileTree } from '../components/FileTree';
 import { FileGridView } from '../components/FileGridView';
 import { BreadcrumbNav } from '../components/BreadcrumbNav';
-import { BatchOperations } from '../components/BatchOperations';
 import { useAppStore } from '../stores/useAppStore';
 import { selectFiles, selectFolder, indexFolder, createShare } from '../lib';
 import { FileNode, Transfer } from '../types';
@@ -75,6 +74,7 @@ export const Upload: React.FC = () => {
     try {
       const rootNode = await selectFolder();
       if (rootNode) {
+        setFiles(rootNode);
       }
     } catch (error) {
       console.error('Failed to select folder:', error);
@@ -276,21 +276,6 @@ export const Upload: React.FC = () => {
           </div>
 
           {/* Batch Operations */}
-          {selectedFiles.length > 0 && files?.children && (
-            <BatchOperations 
-              items={files.children}
-              selectedIds={new Set(selectedFiles.map(f => f.id))}
-              onSelectionChange={(ids) => {
-                const selected = files.children?.filter(f => ids.has(f.id)) || [];
-                setSelectedFiles(selected);
-              }}
-              onBatchAction={(action, items) => {
-                console.log('Batch action:', action, items);
-                // TODO: Implement batch actions
-              }}
-            />
-          )}
-
           {/* Share Options */}
           <div className="bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border p-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">

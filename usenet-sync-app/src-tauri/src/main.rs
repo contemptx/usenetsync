@@ -37,6 +37,15 @@ fn get_workspace_dir() -> PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
+// Helper function to get the correct Python command for the OS
+fn get_python_command() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    }
+}
+
 // State management
 struct AppState {
     license: Mutex<TurboActivate>,

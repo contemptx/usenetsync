@@ -34,7 +34,7 @@ export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({
     
     return [
       ...firstItems,
-      { id: 'ellipsis', label: '...', path: '', isEllipsis: true },
+      { id: 'ellipsis-' + Date.now(), label: '...', path: '', isEllipsis: true },
       ...lastItems
     ];
   };
