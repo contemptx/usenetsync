@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { useAppStore } from './stores/useAppStore';
-import { checkLicense, onTransferProgress, onTransferComplete, onTransferError, onLicenseExpired } from './lib/tauri';
+import { checkLicense, onTransferProgress, onTransferComplete, onTransferError, onLicenseExpired } from './lib';
 
 // Components
 import { LicenseActivation } from './components/LicenseActivation';

@@ -15,7 +15,7 @@ import {
   Copy,
   ChevronDown
 } from 'lucide-react';
-import { getLogs } from '../lib/tauri';
+import { getLogs } from '../lib';
 
 interface LogEntry {
   id: string;

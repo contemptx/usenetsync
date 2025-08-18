@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
-import { testServerConnection, saveServerConfig, deactivateLicense } from '../lib/tauri';
+import { testServerConnection, saveServerConfig, deactivateLicense } from '../lib';
 import { Server, Check, X, AlertCircle, Key, LogOut, Gauge, Upload, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
