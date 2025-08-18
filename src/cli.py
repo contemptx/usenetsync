@@ -20,15 +20,33 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-# Import backend modules
-from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
-from networking.production_nntp_client import ProductionNNTPClient
-from security.enhanced_security_system import EnhancedSecuritySystem
-from indexing.share_id_generator import ShareIDGenerator
-from upload.enhanced_upload import EnhancedUploadSystem
-from download.enhanced_download import EnhancedDownloadSystem
-from upload.enhanced_upload import EnhancedUploadSystem
-from core.integrated_backend import IntegratedBackend, create_integrated_backend
+# Try to import backend modules with error handling
+try:
+    # Try importing from current directory structure
+    from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
+    from networking.production_nntp_client import ProductionNNTPClient
+    from security.enhanced_security_system import EnhancedSecuritySystem
+    from indexing.share_id_generator import ShareIDGenerator
+    from upload.enhanced_upload import EnhancedUploadSystem
+    from download.enhanced_download import EnhancedDownloadSystem
+    from core.integrated_backend import IntegratedBackend, create_integrated_backend
+except ImportError as e:
+    # If that fails, try importing from src directory
+    try:
+        from src.database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
+        from src.networking.production_nntp_client import ProductionNNTPClient
+        from src.security.enhanced_security_system import EnhancedSecuritySystem
+        from src.indexing.share_id_generator import ShareIDGenerator
+        from src.upload.enhanced_upload import EnhancedUploadSystem
+        from src.download.enhanced_download import EnhancedDownloadSystem
+        from src.core.integrated_backend import IntegratedBackend, create_integrated_backend
+    except ImportError:
+        # Last resort - print debug info and raise original error
+        print(f"Current directory: {current_dir}", file=sys.stderr)
+        print(f"Parent directory: {parent_dir}", file=sys.stderr)
+        print(f"Python path: {sys.path}", file=sys.stderr)
+        print(f"Directory contents: {os.listdir(current_dir)}", file=sys.stderr)
+        raise e
 
 class UsenetSyncCLI:
     def __init__(self):
@@ -129,7 +147,7 @@ def create_share(files, share_type, password):
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
 
-@cli.command('create-share')
+@cli.command('download-share')
 @click.option('--share-id', required=True, help='Share ID to download')
 @click.option('--destination', required=True, help='Destination directory')
 @click.option('--files', multiple=True, help='Specific files to download')
@@ -174,7 +192,7 @@ def download_share(share_id, destination, files):
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
 
-@cli.command('create-share')
+@cli.command('share-details')
 @click.option('--share-id', required=True, help='Share ID')
 def share_details(share_id):
     """Get share details"""
@@ -218,7 +236,7 @@ def test_connection(hostname, port, username, password, ssl):
     """Test NNTP server connection"""
     try:
         client = ProductionNNTPClient(
-            hostname=hostname,
+            host=hostname,  # Changed from hostname to host
             port=port,
             username=username,
             password=password,
