@@ -496,28 +496,29 @@ async fn save_server_config(config: ServerConfig) -> Result<(), String> {
 // System Operations
 #[tauri::command]
 async fn get_system_stats() -> Result<SystemStats, String> {
-    use sysinfo::{System, SystemExt, CpuExt, DiskExt};
+    use sysinfo::{System, Disks};
     
     let mut sys = System::new_all();
     sys.refresh_all();
     
     // Get real CPU usage
-    let cpu_usage = sys.global_cpu_info().cpu_usage() as f64;
+    let cpu_usage = sys.global_cpu_info().cpu_usage();
     
     // Get real memory usage
     let memory_usage = if sys.total_memory() > 0 {
-        (sys.used_memory() as f64 / sys.total_memory() as f64) * 100.0
+        (sys.used_memory() as f32 / sys.total_memory() as f32) * 100.0
     } else {
         0.0
     };
     
-    // Get disk usage for the first disk
-    let disk_usage = sys.disks()
+    // Get disk usage
+    let disks = Disks::new_with_refreshed_list();
+    let disk_usage = disks.list()
         .iter()
         .map(|disk| {
             if disk.total_space() > 0 {
                 let used = disk.total_space() - disk.available_space();
-                (used as f64 / disk.total_space() as f64) * 100.0
+                (used as f32 / disk.total_space() as f32) * 100.0
             } else {
                 0.0
             }
