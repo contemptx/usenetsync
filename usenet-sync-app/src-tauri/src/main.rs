@@ -952,6 +952,10 @@ fn main() {
             upload_folder,
             publish_folder,
             get_folders,
+            // User management
+            get_user_info,
+            initialize_user,
+            is_user_initialized,
             pause_transfer,
             resume_transfer,
             cancel_transfer,
