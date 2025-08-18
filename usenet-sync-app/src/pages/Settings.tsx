@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { testServerConnection, saveServerConfig, deactivateLicense } from '../lib';
-import { Server, Check, X, AlertCircle, Key, LogOut, Gauge, Upload, Download } from 'lucide-react';
+import { Server, Check, X, AlertCircle, Key, LogOut, Gauge, Upload, Download, Database, HardDrive, Zap, Settings as SettingsIcon, RefreshCw, CheckCircle } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import toast from 'react-hot-toast';
 
 export const Settings: React.FC = () => {
@@ -26,6 +27,13 @@ export const Settings: React.FC = () => {
     uploadEnabled: false,
     downloadEnabled: false
   });
+
+  // Database settings state
+  const [databaseMode, setDatabaseMode] = useState<'simple' | 'advanced'>('simple');
+  const [databaseStatus, setDatabaseStatus] = useState<any>(null);
+  const [isCheckingDb, setIsCheckingDb] = useState(false);
+  const [isSettingUpDb, setIsSettingUpDb] = useState(false);
+  const [setupProgress, setSetupProgress] = useState<number>(0);
 
   const handleTestConnection = async () => {
     setIsTesting(true);
