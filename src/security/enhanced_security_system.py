@@ -1008,15 +1008,20 @@ class EnhancedSecuritySystem:
                         logger.warning("Invalid signature on index")
                         return None
                 
-                # Try owner access first (only if user created the folder)
-                # Check if this user is the folder owner by checking if they're in the authorized list
-                # or if they were the one who created the index
+                # Try owner access first (only if user created the folder AND the provided user_id matches)
+                # CRITICAL: Must verify BOTH that this system instance is the owner AND
+                # that the provided user_id parameter matches the owner
                 is_potential_owner = False
-                if 'created_by' in index_data and self._user_id:
-                    is_potential_owner = index_data['created_by'] == self._user_id[:16]
-                    logger.debug(f"Owner check: created_by={index_data.get('created_by')}, user={self._user_id[:16] if self._user_id else 'None'}, match={is_potential_owner}")
+                if 'created_by' in index_data and self._user_id and user_id:
+                    # Check if the PROVIDED user_id matches the creator
+                    # This prevents unauthorized access through owner privileges
+                    is_potential_owner = (
+                        index_data['created_by'] == self._user_id[:16] and
+                        user_id == self._user_id  # CRITICAL: user_id param must match system user
+                    )
+                    logger.debug(f"Owner check: created_by={index_data.get('created_by')}, system_user={self._user_id[:16] if self._user_id else 'None'}, provided_user={user_id[:16] if user_id else 'None'}, match={is_potential_owner}")
                 else:
-                    logger.debug(f"Owner check skipped: created_by={'created_by' in index_data}, has_user_id={bool(self._user_id)}")
+                    logger.debug(f"Owner check skipped: created_by={'created_by' in index_data}, has_user_id={bool(self._user_id)}, provided_user={bool(user_id)}")
                 
                 if is_potential_owner and 'owner_wrapped_key' in index_data:
                     folder_keys = self.load_folder_keys(folder_id)
