@@ -3,8 +3,9 @@ data/
 logs/
 temp/
 .temp/
-upload/
-download/
+# Temporary upload/download directories (not src modules)
+/upload/
+/download/
 *.backup*
 posted_files.json
 posting_history.log
