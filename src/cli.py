@@ -799,7 +799,9 @@ def check_database():
         try:
             db_manager, db_type = DatabaseSelector.get_database_manager()
             db_info['status'] = 'connected'
-            db_info['message'] = f"Successfully connected to {db_type}"
+            # Use the actual database type from db_info, not the db_type variable
+            actual_db_type = 'PostgreSQL' if db_info.get('type') == 'postgresql' else 'SQLite'
+            db_info['message'] = f"Successfully connected to {actual_db_type}"
         except Exception as e:
             db_info['status'] = 'error'
             db_info['message'] = str(e)
