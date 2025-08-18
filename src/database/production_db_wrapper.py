@@ -409,7 +409,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                     # Update with explicit commit
                     cursor = conn.execute("""
                         UPDATE folders 
-                        SET private_key = ?, public_key = ?, keys_updated_at = CURRENT_TIMESTAMP 
+                        SET private_key = ?, public_key = ?
                         WHERE rowid = ?
                     """, (private_key, public_key, folder_id))
                     
@@ -417,7 +417,7 @@ class ProductionDatabaseManager(EnhancedDatabaseManager):
                         # Try with id field instead of rowid
                         cursor = conn.execute("""
                             UPDATE folders 
-                            SET private_key = ?, public_key = ?, keys_updated_at = CURRENT_TIMESTAMP 
+                            SET private_key = ?, public_key = ?
                             WHERE id = ?
                         """, (private_key, public_key, folder_id))
                     
