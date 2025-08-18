@@ -108,9 +108,9 @@ class FolderManager:
             database='usenet',
             user='usenet',
             password='usenetsync',
-            pool_size=20,
-            max_overflow=40,
-            shard_count=16
+            pool_size=5,
+            max_overflow=10,
+            shard_count=4
         )
         self.db = ShardedPostgreSQLManager(self.db_config)
         

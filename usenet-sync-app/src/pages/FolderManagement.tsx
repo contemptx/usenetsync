@@ -75,12 +75,13 @@ export const FolderManagement: React.FC = () => {
     loadFolders();
     // Set up interval to refresh folders (only if no error)
     const interval = setInterval(() => {
-      if (!dbError) {
+      // Only refresh if not loading and no error
+      if (!dbError && !loading) {
         loadFolders();
       }
-    }, 10000); // Increased to 10 seconds to reduce load
+    }, 30000); // Increased to 30 seconds to reduce database load
     return () => clearInterval(interval);
-  }, [dbError]);
+  }, []); // Remove dbError dependency to avoid re-creating interval
 
   // Load authorized users when folder is selected
   useEffect(() => {
@@ -140,7 +141,7 @@ export const FolderManagement: React.FC = () => {
     }
   };
 
-  const addFolder = async () => {
+  const handleAddFolder = async () => {
     try {
       const selected = await open({
         directory: true,
@@ -165,7 +166,7 @@ export const FolderManagement: React.FC = () => {
     }
   };
 
-  const indexFolder = async (folderId: string) => {
+  const handleIndexFolder = async (folderId: string) => {
     try {
       setActiveOperations(prev => ({
         ...prev,
@@ -187,7 +188,7 @@ export const FolderManagement: React.FC = () => {
     }
   };
 
-  const segmentFolder = async (folderId: string) => {
+  const handleSegmentFolder = async (folderId: string) => {
     try {
       setActiveOperations(prev => ({
         ...prev,
@@ -209,7 +210,7 @@ export const FolderManagement: React.FC = () => {
     }
   };
 
-  const uploadFolder = async (folderId: string) => {
+  const handleUploadFolder = async (folderId: string) => {
     try {
       setActiveOperations(prev => ({
         ...prev,
@@ -356,7 +357,7 @@ export const FolderManagement: React.FC = () => {
               )}
             </div>
             <button
-              onClick={addFolder}
+              onClick={handleAddFolder}
               disabled={loading}
               className="px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -685,7 +686,7 @@ export const FolderManagement: React.FC = () => {
                   </p>
                   {selectedFolder.state === 'added' && (
                     <button
-                      onClick={() => indexFolder(selectedFolder.folder_id)}
+                      onClick={() => handleIndexFolder(selectedFolder.folder_id)}
                       className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
                     >
                       Index Folder to View Files
@@ -699,7 +700,7 @@ export const FolderManagement: React.FC = () => {
                   <h3 className="text-lg font-medium mb-4">Actions</h3>
                   <div className="space-y-3">
                     <button
-                      onClick={() => indexFolder(selectedFolder.folder_id)}
+                      onClick={() => handleIndexFolder(selectedFolder.folder_id)}
                       className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
                     >
                       <RefreshCw className="w-4 h-4" />
