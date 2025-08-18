@@ -9,7 +9,8 @@ import {
   segmentFolder, 
   uploadFolder, 
   publishFolder as publishFolderApi,
-  getAuthorizedUsers 
+  getAuthorizedUsers,
+  checkDatabaseStatus 
 } from '../lib/tauri';
 import { 
   Folder, 
@@ -62,6 +63,7 @@ export const FolderManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'access' | 'files' | 'actions'>('overview');
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
+  const [databaseType, setDatabaseType] = useState<'sqlite' | 'postgresql' | null>(null);
   
   // Access control state
   const [selectedAccessType, setSelectedAccessType] = useState<'public' | 'private' | 'protected'>('public');
@@ -93,21 +95,37 @@ export const FolderManagement: React.FC = () => {
 
   const loadFolders = async () => {
     try {
+      // First check database status
+      try {
+        const dbStatus = await checkDatabaseStatus();
+        if (dbStatus?.type) {
+          setDatabaseType(dbStatus.type);
+        }
+      } catch (dbError) {
+        console.log('Could not check database status:', dbError);
+      }
+      
       const result = await getFolders();
       setFolders(result as ManagedFolder[]);
       setDbError(null); // Clear any previous errors
     } catch (error: any) {
       console.error('Failed to load folders:', error);
       
-      // Check if it's a database connection error
-      if (error?.error?.includes('Connection refused') || error?.error?.includes('connection to server')) {
-        setDbError('Database connection failed. Please ensure PostgreSQL is running.');
-      } else {
-        setDbError('Failed to load folders. Please try again.');
-      }
+      // Don't show error popup, just log it
+      // The UI will show an appropriate message based on the database type
       
       // Set empty folders array to prevent undefined errors
       setFolders([]);
+      
+      // Still set database type if possible
+      try {
+        const dbStatus = await checkDatabaseStatus();
+        if (dbStatus?.type) {
+          setDatabaseType(dbStatus.type);
+        }
+      } catch (dbError) {
+        console.log('Could not check database status:', dbError);
+      }
     }
   };
 
@@ -329,10 +347,17 @@ export const FolderManagement: React.FC = () => {
       <div className="w-1/3 border-r border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface">
         <div className="p-4 border-b border-gray-200 dark:border-dark-border">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Managed Folders</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Managed Folders</h2>
+              {databaseType && (
+                <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                  {databaseType === 'postgresql' ? 'PostgreSQL' : 'SQLite'}
+                </span>
+              )}
+            </div>
             <button
               onClick={addFolder}
-              disabled={loading || !!dbError}
+              disabled={loading}
               className="px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FolderOpen className="w-4 h-4" />
@@ -342,13 +367,7 @@ export const FolderManagement: React.FC = () => {
         </div>
 
         <div className="overflow-y-auto" style={{ height: 'calc(100% - 88px)' }}>
-          {dbError ? (
-            <div className="p-8 text-center text-gray-500">
-              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
-              <p className="text-red-600 dark:text-red-400">Database Connection Error</p>
-              <p className="text-sm mt-2">Please check your database connection</p>
-            </div>
-          ) : folders.length === 0 ? (
+          {folders.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <Folder className="w-12 h-12 mx-auto mb-4 text-gray-400" />
               <p>No folders added yet</p>
