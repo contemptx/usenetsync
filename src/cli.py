@@ -904,11 +904,11 @@ def initialize_database_schema(db_manager, db_type='postgresql'):
             
             # Don't check if tables exist - just try to create them
             # CREATE TABLE IF NOT EXISTS handles existing tables gracefully
-            tables_exist = False  # Always try to create
-                # Create all required tables - use compatible SQL for both databases
-                if db_type == 'sqlite':
-                    # SQLite-compatible schema
-                    schema_sql = """
+            
+            # Create all required tables - use compatible SQL for both databases
+            if db_type == 'sqlite':
+                # SQLite-compatible schema
+                schema_sql = """
                     -- Create folders table
                     CREATE TABLE IF NOT EXISTS folders (
                         folder_id TEXT PRIMARY KEY,
@@ -997,11 +997,11 @@ def initialize_database_schema(db_manager, db_type='postgresql'):
                     CREATE INDEX IF NOT EXISTS idx_shares_folder_id ON shares(folder_id);
                     CREATE INDEX IF NOT EXISTS idx_authorized_users_folder_id ON authorized_users(folder_id);
                     CREATE INDEX IF NOT EXISTS idx_uploads_folder_id ON uploads(folder_id);
-                    CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id);
-                    """
-                else:
-                    # PostgreSQL schema - execute each statement separately
-                    schema_statements = [
+                CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id);
+                """
+            else:
+                # PostgreSQL schema - execute each statement separately
+                schema_statements = [
                         """CREATE TABLE IF NOT EXISTS folders (
                             folder_id VARCHAR(255) PRIMARY KEY,
                             path TEXT NOT NULL,
@@ -1080,20 +1080,20 @@ def initialize_database_schema(db_manager, db_type='postgresql'):
                         """CREATE INDEX IF NOT EXISTS idx_uploads_folder_id ON uploads(folder_id)""",
                         """CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id)"""
                     ]
-                
-                if db_type == 'sqlite':
-                    # SQLite requires executing statements one at a time
-                    statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
-                    for statement in statements:
-                        if statement:
-                            cursor.execute(statement)
-                else:
-                    # PostgreSQL - execute each statement separately
-                    for statement in schema_statements:
+            
+            if db_type == 'sqlite':
+                # SQLite requires executing statements one at a time
+                statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
+                for statement in statements:
+                    if statement:
                         cursor.execute(statement)
-                
-                conn.commit()
-                return True, "Database schema initialized successfully"
+            else:
+                # PostgreSQL - execute each statement separately
+                for statement in schema_statements:
+                    cursor.execute(statement)
+            
+            conn.commit()
+            return True, "Database schema initialized successfully"
                 
     except Exception as e:
         return False, f"Failed to initialize schema: {str(e)}"
