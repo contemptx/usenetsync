@@ -1,39 +1,15 @@
 {
   "servers": [
     {
-      "name": "NewsHosting",
+      "name": "newshosting_primary",
       "hostname": "news.newshosting.com",
       "port": 563,
       "username": "contemptx",
       "password": "Kia211101#",
       "use_ssl": true,
-      "max_connections": 30,
-      "enabled": true,
+      "max_connections": 10,
       "priority": 1,
-      "posting_group": "alt.binaries.test"
+      "enabled": true
     }
-  ],
-  "storage": {
-    "database_path": "data/usenetsync.db",
-    "temp_directory": "temp",
-    "log_directory": "logs"
-  },
-  "security": {
-    "encryption_algorithm": "AES-256-GCM",
-    "key_derivation": "PBKDF2",
-    "iterations": 100000,
-    "message_id_domain": null,
-    "obfuscate_headers": true
-  },
-  "performance": {
-    "max_upload_threads": 4,
-    "max_download_threads": 4,
-    "segment_size": 768000,
-    "compression_enabled": true
-  },
-  "logging": {
-    "level": "INFO",
-    "max_log_size": 10485760,
-    "backup_count": 5
-  }
+  ]
 }
