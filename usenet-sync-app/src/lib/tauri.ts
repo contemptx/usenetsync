@@ -178,6 +178,36 @@ export function onLicenseExpired(callback: () => void) {
     callback();
   });
 }
+// Folder Management
+export async function getFolders(): Promise<any[]> {
+  return await invoke('get_folders');
+}
+
+export async function addFolder(path: string, name?: string): Promise<any> {
+  return await invoke('add_folder', { path, name });
+}
+
+export async function indexFolderFull(folderId: string): Promise<any> {
+  return await invoke('index_folder_full', { folderId });
+}
+
+export async function segmentFolder(folderId: string): Promise<any> {
+  return await invoke('segment_folder', { folderId });
+}
+
+export async function uploadFolder(folderId: string): Promise<any> {
+  return await invoke('upload_folder', { folderId });
+}
+
+export async function publishFolder(
+  folderId: string, 
+  accessType?: string,
+  userIds?: string[],
+  password?: string
+): Promise<any> {
+  return await invoke('publish_folder', { folderId, accessType, userIds, password });
+}
+
 // Additional API functions for full integration
 export async function uploadFile(filePath: string, shareId: string, password?: string): Promise<boolean> {
   // @ts-ignore
@@ -212,4 +242,9 @@ export async function updateSettings(settings: any): Promise<boolean> {
 export async function getServerStatus(): Promise<any> {
   // @ts-ignore
   return await invoke('get_server_status');
+}
+
+// Network Testing
+export async function testConnection(hostname: string, port: number, username: string, password: string, ssl: boolean): Promise<any> {
+  return await invoke('test_server_connection', { hostname, port, username, password, ssl });
 }

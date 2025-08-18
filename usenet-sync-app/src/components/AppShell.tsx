@@ -35,6 +35,7 @@ export const AppShell: React.FC = () => {
     { icon: FileText, label: 'Logs', path: '/logs' },
     { icon: Settings, label: 'Settings', path: '/settings' },
     { icon: FlaskConical, label: 'Test Runner', path: '/test' },
+    { icon: FlaskConical, label: 'System Test', path: '/system-test' },
   ];
 
   return (

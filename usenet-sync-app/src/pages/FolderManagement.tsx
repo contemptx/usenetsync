@@ -2,7 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { PrivateShareManager } from '../components/PrivateShareManager';
-import { getAuthorizedUsers } from '../lib/tauri';
+import { 
+  getFolders, 
+  addFolder, 
+  indexFolderFull, 
+  segmentFolder, 
+  uploadFolder, 
+  publishFolder as publishFolderApi,
+  getAuthorizedUsers 
+} from '../lib/tauri';
 import { 
   Folder, 
   FolderOpen, 
@@ -80,8 +88,8 @@ export const FolderManagement: React.FC = () => {
 
   const loadFolders = async () => {
     try {
-      const result = await invoke<ManagedFolder[]>('get_folders');
-      setFolders(result);
+      const result = await getFolders();
+      setFolders(result as ManagedFolder[]);
     } catch (error) {
       console.error('Failed to load folders:', error);
     }
@@ -108,10 +116,10 @@ export const FolderManagement: React.FC = () => {
 
       if (selected) {
         setLoading(true);
-        const result = await invoke('add_folder', {
-          path: selected,
-          name: selected.split('/').pop() || 'Unnamed Folder'
-        });
+        const result = await addFolder(
+          selected,
+          selected.split('/').pop() || 'Unnamed Folder'
+        );
         
         toast.success('Folder added successfully');
         await loadFolders();
@@ -130,7 +138,7 @@ export const FolderManagement: React.FC = () => {
         [folderId]: { operation: 'indexing', progress: 0 }
       }));
 
-      const result = await invoke('index_folder_full', { folderId });
+      const result = await indexFolderFull(folderId);
       
       toast.success('Indexing completed');
       await loadFolders();
@@ -152,7 +160,7 @@ export const FolderManagement: React.FC = () => {
         [folderId]: { operation: 'segmenting', progress: 0 }
       }));
 
-      const result = await invoke('segment_folder', { folderId });
+      const result = await segmentFolder(folderId);
       
       toast.success('Segmentation completed');
       await loadFolders();
@@ -174,7 +182,7 @@ export const FolderManagement: React.FC = () => {
         [folderId]: { operation: 'uploading', progress: 0 }
       }));
 
-      const result = await invoke('upload_folder', { folderId });
+      const result = await uploadFolder(folderId);
       
       toast.success('Upload completed');
       await loadFolders();
@@ -213,7 +221,12 @@ export const FolderManagement: React.FC = () => {
         params.password = password;
       }
 
-      const result = await invoke('publish_folder', params);
+      const result = await publishFolderApi(
+        folderId,
+        accessType,
+        userIds,
+        password
+      );
       
       toast.success('Publishing completed');
       await loadFolders();
