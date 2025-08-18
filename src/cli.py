@@ -721,9 +721,8 @@ def get_folders():
 @cli.command('get_folders')
 def get_folders_underscore():
     """Get all managed folders (Tauri command name with underscore)"""
-    # Call list_folders directly
-    ctx = click.get_current_context()
-    ctx.invoke(list_folders)
+    # Directly call list_folders function
+    return list_folders()
 
 @cli.command('get-user-info')
 def get_user_info():
