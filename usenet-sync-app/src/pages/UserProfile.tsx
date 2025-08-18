@@ -7,7 +7,6 @@ export default function UserProfile() {
   const [userInfo, setUserInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [showFullId, setShowFullId] = useState(false);
 
   useEffect(() => {
     loadUserInfo();
@@ -29,8 +28,7 @@ export default function UserProfile() {
 
   const handleInitialize = async () => {
     try {
-      const displayName = prompt('Enter your display name (optional):');
-      const userId = await initializeUser(displayName || undefined);
+      const userId = await initializeUser();
       toast.success('User profile initialized successfully');
       await loadUserInfo();
     } catch (error) {
@@ -49,9 +47,8 @@ export default function UserProfile() {
 
   const formatUserId = (userId: string) => {
     if (!userId) return '';
-    if (showFullId) return userId;
-    // Show first 8 and last 8 characters
-    return `${userId.slice(0, 8)}...${userId.slice(-8)}`;
+    // Always show full ID
+    return userId;
   };
 
   if (loading) {
@@ -78,7 +75,7 @@ export default function UserProfile() {
               </p>
               <button
                 onClick={handleInitialize}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md hover:shadow-lg"
               >
                 Initialize User Profile
               </button>
@@ -100,45 +97,40 @@ export default function UserProfile() {
       {/* User Info Card */}
       <div className="bg-white dark:bg-dark-surface rounded-lg shadow-lg p-6">
         <div className="space-y-6">
-          {/* Display Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-              Display Name
-            </label>
-            <div className="text-lg font-medium">
-              {userInfo.display_name || 'Anonymous User'}
-            </div>
-          </div>
-
           {/* User ID */}
           <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-              User ID
+            <label className="block text-base font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Your Unique User ID
             </label>
             <div className="flex items-center gap-3">
-              <div className="flex-1 font-mono text-sm bg-gray-100 dark:bg-dark-bg rounded-lg px-4 py-3 flex items-center justify-between">
+              <div className="flex-1 font-mono bg-gray-50 dark:bg-gray-800 rounded-lg px-4 py-4 flex items-center justify-between border border-gray-300 dark:border-gray-600">
                 <span 
-                  className="cursor-pointer select-all"
-                  onClick={() => setShowFullId(!showFullId)}
-                  title="Click to toggle full ID"
+                  className="text-base text-gray-900 dark:text-gray-100 select-all break-all font-medium"
+                  title="Your unique User ID"
                 >
                   {formatUserId(userInfo.user_id)}
                 </span>
                 <button
                   onClick={copyUserId}
-                  className="ml-3 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                  title="Copy User ID"
+                  className="ml-3 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-2"
+                  title="Copy User ID to clipboard"
                 >
                   {copied ? (
-                    <Check className="w-4 h-4 text-green-500" />
+                    <>
+                      <Check className="w-4 h-4 text-green-500" />
+                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">Copied!</span>
+                    </>
                   ) : (
-                    <Copy className="w-4 h-4 text-gray-500" />
+                    <>
+                      <Copy className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                      <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Copy</span>
+                    </>
                   )}
                 </button>
               </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Click the ID to show/hide full value. Share this ID with folder owners to get access to their private shares.
+              Share this ID with folder owners to get access to their private shares. This ID is permanent and cannot be regenerated.
             </p>
           </div>
 
