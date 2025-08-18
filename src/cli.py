@@ -206,11 +206,23 @@ def create_share(files, share_type, password):
             try:
                 with app.db_manager.get_connection() as conn:
                     cursor = conn.cursor()
+                    # Insert share
                     cursor.execute("""
                         INSERT INTO shares (id, share_id, type, name, size, file_count, folder_count, created_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """, (share['id'], share['shareId'], share['type'], share['name'],
                           share['size'], share['fileCount'], share['folderCount'], share['createdAt']))
+                    
+                    # Insert files
+                    for file_path in existing_files:
+                        file_id = str(uuid.uuid4())
+                        file_name = Path(file_path).name
+                        file_size = Path(file_path).stat().st_size
+                        cursor.execute("""
+                            INSERT INTO files (id, share_id, file_name, file_path, file_size, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, (file_id, share['shareId'], file_name, file_path, file_size, share['createdAt']))
+                    
                     conn.commit()
             except Exception as e:
                 print(f"Warning: Failed to save to database: {e}", file=sys.stderr)
@@ -300,20 +312,29 @@ def share_details(share_id):
                 with app.db_manager.get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute("""
-                        SELECT id, share_id as "shareId", type, name, size, 
-                               file_count as "fileCount", folder_count as "folderCount",
-                               created_at as "createdAt", expires_at as "expiresAt",
-                               access_count as "accessCount", last_accessed as "lastAccessed"
+                        SELECT id, share_id, type, name, size, 
+                               file_count, folder_count,
+                               created_at, expires_at,
+                               access_count, last_accessed
                         FROM shares WHERE share_id = %s
                     """, (share_id,))
                     
                     share = cursor.fetchone()
                     if share:
-                        # Convert to dict and handle datetime serialization
-                        share_dict = dict(share)
-                        for key in ['createdAt', 'expiresAt', 'lastAccessed']:
-                            if share_dict.get(key):
-                                share_dict[key] = share_dict[key].isoformat()
+                        # Convert to dict with proper keys
+                        share_dict = {
+                            'id': share[0],
+                            'shareId': share[1],
+                            'type': share[2],
+                            'name': share[3],
+                            'size': share[4],
+                            'fileCount': share[5],
+                            'folderCount': share[6],
+                            'createdAt': share[7].isoformat() if share[7] else None,
+                            'expiresAt': share[8].isoformat() if share[8] else None,
+                            'accessCount': share[9],
+                            'lastAccessed': share[10].isoformat() if share[10] else None
+                        }
                         
                         print(json.dumps(share_dict))
                     else:
