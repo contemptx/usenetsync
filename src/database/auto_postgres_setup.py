@@ -118,10 +118,14 @@ class PostgreSQLAutoSetup:
                 if progress_callback:
                     progress_callback(percent, f"Downloading PostgreSQL... {percent:.1f}%")
                 else:
-                    print(f"\rDownloading PostgreSQL... {percent:.1f}%", end="")
+                    # Write to stderr to avoid corrupting JSON output
+                    sys.stderr.write(f"\rDownloading PostgreSQL... {percent:.1f}%")
+                    sys.stderr.flush()
             
             urllib.request.urlretrieve(self.POSTGRES_PORTABLE_URL, zip_path, download_hook)
-            print()  # New line after progress
+            if not progress_callback:
+                sys.stderr.write("\n")  # New line after progress
+                sys.stderr.flush()
             
             logger.info("Extracting PostgreSQL...")
             if progress_callback:
