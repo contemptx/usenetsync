@@ -816,7 +816,8 @@ def database_info():
             click.echo(json.dumps({
                 'error': 'Database selector not available',
                 'help': 'PostgreSQL may not be installed. The application can use SQLite as an alternative.'
-            })
+            }))
+            return
         
         info = DatabaseSelector.get_connection_info()
         
@@ -825,9 +826,9 @@ def database_info():
             info['note'] = 'Using SQLite database. PostgreSQL is optional on Windows.'
             info['location'] = info.get('path', 'Unknown')
         
-        click.echo(json.dumps(info)
+        click.echo(json.dumps(info))
     except Exception as e:
-        return output_error(f"Failed to get database info: {e}")
+        click.echo(json.dumps({"error": f"Failed to get database info: {e}"}), err=True)
 
 @cli.command('setup-postgresql')
 def setup_postgresql():
@@ -837,13 +838,15 @@ def setup_postgresql():
             click.echo(json.dumps({
                 'status': 'skipped',
                 'message': 'Automatic PostgreSQL setup is only available on Windows'
-            })
+            }))
+            return
         
         # Import the auto setup module
         try:
             from database.auto_postgres_setup import PostgreSQLAutoSetup
         except ImportError as e:
-            return output_error(f"PostgreSQL auto-setup module not available: {e}")
+            click.echo(json.dumps({"error": f"PostgreSQL auto-setup module not available: {e}"}), err=True)
+            return
         
         setup = PostgreSQLAutoSetup()
         
@@ -855,7 +858,8 @@ def setup_postgresql():
                     'status': 'already_installed',
                     'message': 'PostgreSQL is already installed and running',
                     'details': existing
-                })
+                }))
+                return
             else:
                 # Try to start it
                 if setup.start_postgres():
@@ -863,7 +867,8 @@ def setup_postgresql():
                         'status': 'started',
                         'message': 'PostgreSQL was installed but not running. Started successfully.',
                         'details': existing
-                    })
+                    }))
+                    return
         
         # Perform full setup
         success, message = setup.full_setup()
@@ -872,10 +877,10 @@ def setup_postgresql():
             'status': 'success' if success else 'error',
             'message': message,
             'installed': success
-        })
+        }))
         
     except Exception as e:
-        return output_error(f"Failed to setup PostgreSQL: {e}")
+        click.echo(json.dumps({"error": f"Failed to setup PostgreSQL: {e}"}), err=True)
 
 if __name__ == '__main__':
     cli()
