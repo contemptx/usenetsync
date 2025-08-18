@@ -450,7 +450,9 @@ def upload_folder(folder_id):
 @cli.command('publish-folder')
 @click.option('--folder-id', required=True, help='Folder ID')
 @click.option('--access-type', default='public', help='Access type: public, private, protected')
-def publish_folder(folder_id, access_type):
+@click.option('--user-ids', help='Comma-separated list of User IDs for private access')
+@click.option('--password', help='Password for protected access')
+def publish_folder(folder_id, access_type, user_ids, password):
     """Publish folder with core index"""
     try:
         import asyncio
@@ -459,13 +461,80 @@ def publish_folder(folder_id, access_type):
         config = FolderConfig()
         manager = FolderManager(config)
         
+        # Parse user IDs if provided
+        authorized_users = []
+        if user_ids:
+            authorized_users = [uid.strip() for uid in user_ids.split(',') if uid.strip()]
+        
         async def run():
-            result = await manager.publish_folder(folder_id, access_type)
+            # Pass authorized_users to the publish method
+            if access_type == 'private' and authorized_users:
+                result = await manager.publish_folder(folder_id, access_type, authorized_users=authorized_users)
+            elif access_type == 'protected' and password:
+                result = await manager.publish_folder(folder_id, access_type, password=password)
+            else:
+                result = await manager.publish_folder(folder_id, access_type)
             return result
         
         result = asyncio.run(run())
         click.echo(json.dumps(result))
         
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('add-authorized-user')
+@click.option('--folder-id', required=True, help='Folder ID')
+@click.option('--user-id', required=True, help='User ID to authorize')
+def add_authorized_user(folder_id, user_id):
+    """Add authorized user to folder"""
+    try:
+        from database.production_db_wrapper import ProductionDatabaseWrapper
+        
+        db = ProductionDatabaseWrapper()
+        success = db.add_folder_authorized_user(folder_id, user_id)
+        
+        if success:
+            click.echo(json.dumps({'success': True, 'message': 'User added successfully'}))
+        else:
+            click.echo(json.dumps({'success': False, 'message': 'Failed to add user'}))
+            
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('remove-authorized-user')
+@click.option('--folder-id', required=True, help='Folder ID')
+@click.option('--user-id', required=True, help='User ID to remove')
+def remove_authorized_user(folder_id, user_id):
+    """Remove authorized user from folder"""
+    try:
+        from database.production_db_wrapper import ProductionDatabaseWrapper
+        
+        db = ProductionDatabaseWrapper()
+        success = db.remove_folder_authorized_user(folder_id, user_id)
+        
+        if success:
+            click.echo(json.dumps({'success': True, 'message': 'User removed successfully'}))
+        else:
+            click.echo(json.dumps({'success': False, 'message': 'Failed to remove user'}))
+            
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('list-authorized-users')
+@click.option('--folder-id', required=True, help='Folder ID')
+def list_authorized_users(folder_id):
+    """List authorized users for a folder"""
+    try:
+        from database.production_db_wrapper import ProductionDatabaseWrapper
+        
+        db = ProductionDatabaseWrapper()
+        users = db.get_folder_authorized_users(folder_id)
+        
+        click.echo(json.dumps({'users': users}))
+            
     except Exception as e:
         click.echo(json.dumps({'error': str(e)}), err=True)
         sys.exit(1)

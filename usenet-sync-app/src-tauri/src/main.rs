@@ -628,7 +628,12 @@ async fn upload_folder(folder_id: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn publish_folder(folder_id: String, access_type: Option<String>) -> Result<serde_json::Value, String> {
+async fn publish_folder(
+    folder_id: String, 
+    access_type: Option<String>,
+    user_ids: Option<Vec<String>>,
+    password: Option<String>
+) -> Result<serde_json::Value, String> {
     let python_cmd = get_python_backend();
     let mut cmd = Command::new(&python_cmd);
     
@@ -640,6 +645,79 @@ async fn publish_folder(folder_id: String, access_type: Option<String>) -> Resul
     if let Some(at) = access_type {
         cmd.arg("--access-type").arg(&at);
     }
+    if let Some(ids) = user_ids {
+        if !ids.is_empty() {
+            cmd.arg("--user-ids").arg(ids.join(","));
+        }
+    }
+    if let Some(pwd) = password {
+        cmd.arg("--password").arg(pwd);
+    }
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn add_authorized_user(folder_id: String, user_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("add-authorized-user")
+        .arg("--folder-id").arg(&folder_id)
+        .arg("--user-id").arg(&user_id);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn remove_authorized_user(folder_id: String, user_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("remove-authorized-user")
+        .arg("--folder-id").arg(&folder_id)
+        .arg("--user-id").arg(&user_id);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_authorized_users(folder_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("list-authorized-users")
+        .arg("--folder-id").arg(&folder_id);
     
     let output = cmd.output().map_err(|e| e.to_string())?;
     
@@ -952,6 +1030,9 @@ fn main() {
             upload_folder,
             publish_folder,
             get_folders,
+            add_authorized_user,
+            remove_authorized_user,
+            get_authorized_users,
             // User management
             get_user_info,
             initialize_user,
