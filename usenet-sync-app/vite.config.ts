@@ -28,4 +28,10 @@ export default defineConfig(({ command, mode }) => ({
   define: {
     '__TAURI_ENV__': JSON.stringify(process.env.TAURI_ENV || false),
   },
+  
+  // Build optimization
+  build: {
+    // Increase chunk size warning limit to 1200kb (acceptable for desktop app)
+    chunkSizeWarningLimit: 1200,
+  },
 }));
