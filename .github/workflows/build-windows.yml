@@ -19,13 +19,25 @@ jobs:
         with:
           node-version: 18
           
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
         
       - name: Install frontend dependencies
         run: |
           cd usenet-sync-app
           npm install
+          
+      - name: Ensure lib directory exists
+        run: |
+          if (!(Test-Path "usenet-sync-app/src/lib")) {
+            New-Item -ItemType Directory -Path "usenet-sync-app/src/lib" -Force
+            Copy-Item "usenet-sync-app/src/lib/tauri.ts" "usenet-sync-app/src/lib/" -ErrorAction SilentlyContinue
+          }
           
       - name: Install Rust target for Windows
         run: |
