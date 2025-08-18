@@ -10,6 +10,8 @@ import {
   Clock
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useAppStore } from '../stores/useAppStore';
+import { testServerConnection } from '../lib';
 
 interface StatusBarProps {
   className?: string;
@@ -35,10 +37,11 @@ interface StorageStatus {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
-  const [connectionStatus] = useState<ConnectionStatus>({
-    isConnected: true,
-    serverName: 'news.example.com',
-    latency: 45
+  const { serverConfig } = useAppStore();
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+    isConnected: false,
+    serverName: serverConfig?.hostname || 'Not configured',
+    latency: 0
   });
   
   const [transferStatus, setTransferStatus] = useState<TransferStatus>({
@@ -56,11 +59,55 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
   
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [notifications] = useState<number>(0);
+  const [lastConnectionCheck, setLastConnectionCheck] = useState<number>(0);
 
-  // TODO: Replace with real transfer status from backend
+  // Check connection status when server config changes
   useEffect(() => {
-    // Will be implemented when backend provides real transfer stats
-  }, []);
+    const checkConnection = async () => {
+      if (serverConfig && serverConfig.hostname && serverConfig.username && serverConfig.password) {
+        // Prevent checking too frequently (minimum 10 seconds between checks)
+        const now = Date.now();
+        if (now - lastConnectionCheck < 10000) {
+          return;
+        }
+        setLastConnectionCheck(now);
+        
+        try {
+          const startTime = Date.now();
+          const result = await testServerConnection(serverConfig);
+          const latency = Date.now() - startTime;
+          
+          setConnectionStatus({
+            isConnected: result,
+            serverName: serverConfig.hostname,
+            latency: result ? latency : 0
+          });
+        } catch (error) {
+          setConnectionStatus({
+            isConnected: false,
+            serverName: serverConfig.hostname,
+            latency: 0
+          });
+        }
+      } else {
+        setConnectionStatus({
+          isConnected: false,
+          serverName: 'Not configured',
+          latency: 0
+        });
+      }
+    };
+
+    checkConnection();
+    // Check connection every 30 seconds if configured
+    const interval = setInterval(() => {
+      if (serverConfig) {
+        checkConnection();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [serverConfig, lastConnectionCheck]);
 
   const formatBytes = (bytes: number): string => {
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
