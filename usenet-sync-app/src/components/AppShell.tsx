@@ -14,7 +14,8 @@ import {
   User,
   FileText,
   Bell,
-  FlaskConical
+  FlaskConical,
+  FolderOpen
 } from 'lucide-react';
 import clsx from 'clsx';
 import { StatusBar } from './StatusBar';
@@ -29,6 +30,8 @@ export const AppShell: React.FC = () => {
     { icon: Upload, label: 'Upload', path: '/upload' },
     { icon: Download, label: 'Download', path: '/download' },
     { icon: Share2, label: 'Shares', path: '/shares' },
+    { icon: FolderOpen, label: 'Folders', path: '/folders' },
+    { icon: User, label: 'Profile', path: '/profile' },
     { icon: FileText, label: 'Logs', path: '/logs' },
     { icon: Settings, label: 'Settings', path: '/settings' },
     { icon: FlaskConical, label: 'Test Runner', path: '/test' },

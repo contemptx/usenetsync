@@ -77,6 +77,24 @@ export async function saveServerConfig(config: any): Promise<void> {
   return await invoke('save_server_config', { config });
 }
 
+// User Management
+export async function getUserInfo(): Promise<{
+  user_id: string;
+  display_name: string;
+  created_at: string;
+  initialized: boolean;
+}> {
+  return await invoke('get_user_info');
+}
+
+export async function initializeUser(displayName?: string): Promise<string> {
+  return await invoke('initialize_user', { displayName });
+}
+
+export async function isUserInitialized(): Promise<boolean> {
+  return await invoke('is_user_initialized');
+}
+
 // System Operations
 export async function getSystemStats(): Promise<any> {
   return await invoke('get_system_stats');

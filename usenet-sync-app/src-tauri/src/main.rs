@@ -671,6 +671,80 @@ async fn get_folders() -> Result<Vec<serde_json::Value>, String> {
     Ok(folders)
 }
 
+// User Management Commands
+#[tauri::command]
+async fn get_user_info() -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("get-user-info").output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn initialize_user(display_name: Option<String>) -> Result<String, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("initialize-user");
+    
+    if let Some(name) = display_name {
+        cmd.arg("--display-name").arg(name);
+    }
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    // Return the user ID
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| e.to_string())?;
+    
+    result.get("user_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Failed to get user ID".to_string())
+}
+
+#[tauri::command]
+async fn is_user_initialized() -> Result<bool, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("check-user").output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        // If command fails, assume user not initialized
+        return Ok(false);
+    }
+    
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(result.get("initialized")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
+}
+
 // Transfer Operations
 #[tauri::command]
 async fn pause_transfer(state: State<'_, AppState>, transfer_id: String) -> Result<(), String> {
@@ -878,6 +952,10 @@ fn main() {
             upload_folder,
             publish_folder,
             get_folders,
+            // User management
+            get_user_info,
+            initialize_user,
+            is_user_initialized,
             pause_transfer,
             resume_transfer,
             cancel_transfer,
