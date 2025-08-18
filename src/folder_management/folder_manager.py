@@ -105,9 +105,9 @@ class FolderManager:
         self.db_config = PostgresConfig(
             host='localhost',
             port=5432,
-            database='usenetsync',
+            database='usenet',
             user='usenet',
-            password='usenet_secure_2024',
+            password='usenetsync',
             pool_size=20,
             max_overflow=40,
             shard_count=16

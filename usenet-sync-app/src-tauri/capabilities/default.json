@@ -5,6 +5,19 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "shell:default"
+    "shell:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "dialog:allow-confirm",
+    "fs:default",
+    "fs:allow-read",
+    "fs:allow-write",
+    "fs:allow-exists",
+    "fs:allow-create",
+    "fs:allow-remove",
+    "path:default"
   ]
 }

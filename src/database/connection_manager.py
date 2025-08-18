@@ -24,9 +24,9 @@ class ConnectionManager:
             maxconn=20,
             host=self.config.get('host', 'localhost'),
             port=self.config.get('port', 5432),
-            database=self.config.get('database', 'usenetsync'),
+            database=self.config.get('database', 'usenet'),
             user=self.config.get('user', 'usenet'),
-            password=self.config.get('password', 'usenet_secure_2024')
+            password=self.config.get('password', 'usenetsync')
         )
     
     @contextmanager

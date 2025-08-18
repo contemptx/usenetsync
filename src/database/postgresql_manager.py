@@ -35,7 +35,7 @@ class PostgresConfig:
     port: int = 5432
     database: str = "usenet_sync"
     user: str = "usenet"
-    password: str = "usenet_secure_2024"
+    password: str = "usenetsync"
     pool_size: int = 20
     max_overflow: int = 40
     shard_count: int = 16
@@ -266,7 +266,7 @@ autovacuum = on
         
         # Create user and grant permissions
         sql = """
-        CREATE USER usenet WITH PASSWORD 'usenet_secure_2024';
+        CREATE USER usenet WITH PASSWORD 'usenetsync';
         GRANT ALL PRIVILEGES ON DATABASE usenet_sync TO usenet;
         ALTER DATABASE usenet_sync OWNER TO usenet;
         """

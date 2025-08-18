@@ -170,7 +170,7 @@ class UsenetSyncCLI:
                         port=db_config.get('port', 5432),
                         database=db_config.get('database', 'usenet'),
                         user=db_config.get('user', 'usenet'),
-                        password=db_config.get('password', 'usenet_secure_2024')
+                        password=db_config.get('password', 'usenetsync')
                     )
             else:
                 # Use environment variables or defaults
@@ -179,7 +179,7 @@ class UsenetSyncCLI:
                     port=int(os.environ.get('DB_PORT', 5432)),
                     database=os.environ.get('DB_NAME', 'usenet'),
                     user=os.environ.get('DB_USER', 'usenet'),
-                    password=os.environ.get('DB_PASSWORD', 'usenet_secure_2024')
+                    password=os.environ.get('DB_PASSWORD', 'usenetsync')
                 )
             
             db_manager = ShardedPostgreSQLManager(config)
@@ -697,7 +697,7 @@ def list_shares():
             port=5432,
             database='usenet',
             user='usenet',
-            password='usenet_secure_2024'
+            password='usenetsync'
         )
         db = ShardedPostgreSQLManager(config)
         
