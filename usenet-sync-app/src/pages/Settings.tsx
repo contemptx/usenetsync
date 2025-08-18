@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { testServerConnection, saveServerConfig, deactivateLicense } from '../lib';
+import { checkDatabaseStatus as checkDbStatus, setupPostgreSQL as setupPg } from '../lib/tauri';
 import { Server, Check, X, AlertCircle, Key, LogOut, Gauge, Upload, Download, Database, HardDrive, Zap, Settings as SettingsIcon, RefreshCw, CheckCircle } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
 import toast from 'react-hot-toast';
 
 export const Settings: React.FC = () => {
@@ -89,7 +89,7 @@ export const Settings: React.FC = () => {
   const checkDatabaseStatus = async () => {
     setIsCheckingDb(true);
     try {
-      const status = await invoke('check_database_status');
+      const status = await checkDbStatus();
       setDatabaseStatus(status);
     } catch (error) {
       console.error('Failed to check database status:', error);
@@ -109,7 +109,7 @@ export const Settings: React.FC = () => {
         setSetupProgress(prev => Math.min(prev + 10, 90));
       }, 500);
 
-      const result = await invoke('setup_postgresql');
+      const result = await setupPg();
       
       clearInterval(progressInterval);
       setSetupProgress(100);

@@ -248,3 +248,12 @@ export async function getServerStatus(): Promise<any> {
 export async function testConnection(hostname: string, port: number, username: string, password: string, ssl: boolean): Promise<any> {
   return await invoke('test_server_connection', { hostname, port, username, password, ssl });
 }
+
+// Database Management
+export async function checkDatabaseStatus(): Promise<any> {
+  return await invoke('check_database_status');
+}
+
+export async function setupPostgreSQL(): Promise<any> {
+  return await invoke('setup_postgresql');
+}

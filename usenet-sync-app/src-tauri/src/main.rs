@@ -859,6 +859,43 @@ async fn cancel_transfer(state: State<'_, AppState>, transfer_id: String) -> Res
     }
 }
 
+// Database Commands
+#[tauri::command]
+async fn check_database_status() -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("check-database").output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn setup_postgresql() -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd.arg("setup-postgresql").output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
 // Server Configuration
 #[tauri::command]
 async fn test_server_connection(config: ServerConfig) -> Result<bool, String> {
@@ -1040,6 +1077,8 @@ fn main() {
             pause_transfer,
             resume_transfer,
             cancel_transfer,
+            check_database_status,
+            setup_postgresql,
             test_server_connection,
             save_server_config,
             get_system_stats,

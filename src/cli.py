@@ -785,8 +785,6 @@ def index_folder(path):
 
 # Add other commands as needed...
 
-if __name__ == '__main__':
-    cli()
 @cli.command('check-database')
 def check_database():
     """Check database connection status"""
@@ -829,3 +827,54 @@ def database_info():
         return output_json(info)
     except Exception as e:
         return output_error(f"Failed to get database info: {e}")
+
+@cli.command('setup-postgresql')
+def setup_postgresql():
+    """Setup PostgreSQL automatically (Windows)"""
+    try:
+        if sys.platform != "win32":
+            return output_json({
+                'status': 'skipped',
+                'message': 'Automatic PostgreSQL setup is only available on Windows'
+            })
+        
+        # Import the auto setup module
+        try:
+            from database.auto_postgres_setup import PostgreSQLAutoSetup
+        except ImportError as e:
+            return output_error(f"PostgreSQL auto-setup module not available: {e}")
+        
+        setup = PostgreSQLAutoSetup()
+        
+        # Check if already installed
+        existing = setup.check_existing_postgres()
+        if existing:
+            if setup.is_postgres_running():
+                return output_json({
+                    'status': 'already_installed',
+                    'message': 'PostgreSQL is already installed and running',
+                    'details': existing
+                })
+            else:
+                # Try to start it
+                if setup.start_postgres():
+                    return output_json({
+                        'status': 'started',
+                        'message': 'PostgreSQL was installed but not running. Started successfully.',
+                        'details': existing
+                    })
+        
+        # Perform full setup
+        success, message = setup.full_setup()
+        
+        return output_json({
+            'status': 'success' if success else 'error',
+            'message': message,
+            'installed': success
+        })
+        
+    except Exception as e:
+        return output_error(f"Failed to setup PostgreSQL: {e}")
+
+if __name__ == '__main__':
+    cli()
