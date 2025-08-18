@@ -142,8 +142,16 @@ class ServerRotationManager:
         # For now, simulate with random success
         health = self.server_health[server_id]
         
-        # Simulate health check
-        is_healthy = random.random() > 0.1  # 90% success rate
+        # Test actual connection
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5.0)
+            sock.connect((self.servers.get(server_id).host, self.servers.get(server_id).port))
+            sock.close()
+            is_healthy = True
+        except:
+            is_healthy = False
         response_time = random.uniform(0.1, 2.0) if is_healthy else 5.0
         
         health.last_check = datetime.now()

@@ -150,8 +150,16 @@ def download_share(share_id, destination, files):
             security_system=app.security
         )
         
-        # Start download (mock for now)
-        print(json.dumps({"status": "success", "message": "Download started"}))
+        # Start actual download
+        import asyncio
+        loop = asyncio.new_event_loop()
+        success = loop.run_until_complete(download_system.download_file(share_id, destination))
+        loop.close()
+        if success:
+            print(json.dumps({"status": "success", "message": f"Downloaded to {destination}"}))
+        else:
+            print(json.dumps({"status": "error", "message": "Download failed"}), file=sys.stderr)
+            sys.exit(1)
         
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
