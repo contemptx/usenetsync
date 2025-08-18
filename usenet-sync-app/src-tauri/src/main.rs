@@ -255,6 +255,22 @@ async fn select_files(app: tauri::AppHandle) -> Result<Vec<FileNode>, String> {
 }
 
 #[tauri::command]
+async fn select_folder(app: tauri::AppHandle) -> Result<FileNode, String> {
+    use tauri_plugin_dialog::DialogExt;
+    
+    let folder = app.dialog()
+        .file()
+        .set_title("Select Folder")
+        .blocking_pick_folder()
+        .ok_or_else(|| "No folder selected".to_string())?;
+    
+    let path = folder.as_path()
+        .ok_or_else(|| "Invalid folder path".to_string())?;
+    
+    index_folder_recursive(&path.to_path_buf())
+}
+
+#[tauri::command]
 async fn index_folder(path: String) -> Result<FileNode, String> {
     let path = PathBuf::from(path);
     
@@ -549,6 +565,7 @@ fn main() {
             start_trial,
             deactivate_license,
             select_files,
+            select_folder,
             index_folder,
             create_share,
             download_share,

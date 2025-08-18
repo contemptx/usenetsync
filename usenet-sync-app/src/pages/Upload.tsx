@@ -5,7 +5,7 @@ import { FileGridView } from '../components/FileGridView';
 import { BreadcrumbNav } from '../components/BreadcrumbNav';
 import { BatchOperations } from '../components/BatchOperations';
 import { useAppStore } from '../stores/useAppStore';
-import { selectFiles, indexFolder, createShare } from '../lib';
+import { selectFiles, selectFolder, indexFolder, createShare } from '../lib';
 import { FileNode, Transfer } from '../types';
 import { useDragDrop } from '../hooks/useDragDrop';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -73,12 +73,8 @@ export const Upload: React.FC = () => {
 
   const handleSelectFolder = async () => {
     try {
-      const selectedFiles = await selectFiles();
-      if (selectedFiles.length > 0) {
-        // Build tree structure from selected files
-        const rootPath = selectedFiles[0].path.split('/').slice(0, -1).join('/');
-        const rootNode = await indexFolder(rootPath);
-        setFiles(rootNode);
+      const rootNode = await selectFolder();
+      if (rootNode) {
       }
     } catch (error) {
       console.error('Failed to select folder:', error);
@@ -268,7 +264,7 @@ export const Upload: React.FC = () => {
                 files={files?.children || []}
                 viewMode="grid"
                 onFileSelect={(file) => console.log('Selected:', file)}
-                onFileOpen={(file) => console.log('Open:', file)}
+                onFileOpen={(file) => { if (file.node_type === "folder" || file.type === "folder") { console.log("Navigate to folder:", file); } else { toast.info(`File: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`); } }}
               />
             ) : (
               <FileTree 

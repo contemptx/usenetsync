@@ -26,6 +26,10 @@ export async function selectFiles(): Promise<FileNode[]> {
   return await invoke('select_files');
 }
 
+export async function selectFolder(): Promise<FileNode> {
+  return await invoke('select_folder');
+}
+
 export async function indexFolder(path: string): Promise<FileNode> {
   return await invoke('index_folder', { path });
 }
