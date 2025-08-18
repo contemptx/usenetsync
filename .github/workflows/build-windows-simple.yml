@@ -1,0 +1,67 @@
+name: Simple Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          
+      - name: Install dependencies
+        run: |
+          cd usenet-sync-app
+          npm install
+          
+      - name: Build frontend only
+        run: |
+          cd usenet-sync-app
+          npm run build
+          
+      - name: Build Rust backend only
+        run: |
+          cd usenet-sync-app/src-tauri
+          cargo build --release
+          
+      - name: Check what was built
+        if: always()
+        run: |
+          echo "=== Checking build outputs ==="
+          echo ""
+          echo "Frontend dist:"
+          dir usenet-sync-app/dist
+          echo ""
+          echo "Rust target:"
+          dir usenet-sync-app/src-tauri/target/release/*.exe
+          
+      - name: Try Tauri build
+        run: |
+          cd usenet-sync-app
+          npx tauri build
+        continue-on-error: true
+          
+      - name: Upload any exe files
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-build-output
+          path: |
+            usenet-sync-app/src-tauri/target/release/*.exe
+            usenet-sync-app/src-tauri/target/release/bundle/**/*.exe
+            usenet-sync-app/src-tauri/target/release/bundle/**/*.msi
+          if-no-files-found: warn
