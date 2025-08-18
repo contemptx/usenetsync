@@ -379,7 +379,6 @@ export const Settings: React.FC = () => {
                 <li>✓ No setup required</li>
                 <li>✓ Zero maintenance</li>
                 <li>✓ Portable data file</li>
-                <li>✓ Perfect for single-user</li>
               </ul>
             </div>
           </div>
@@ -394,8 +393,6 @@ export const Settings: React.FC = () => {
               <ul className="mt-2 text-xs text-purple-700 dark:text-purple-300 space-y-1">
                 <li>✓ Better performance</li>
                 <li>✓ Handles large datasets</li>
-                <li>✓ Professional features</li>
-                <li>✓ Multi-user capable</li>
               </ul>
             </div>
 

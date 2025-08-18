@@ -8,7 +8,8 @@ import {
   Sun,
   LogOut,
   ChevronDown,
-  Command
+  Command,
+  Copy
 } from 'lucide-react';
 import {Bar } from './Bar';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -202,12 +203,22 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-dark-surface rounded-lg shadow-lg border border-gray-200 dark:border-dark-border z-50">
                   <div className="p-4 border-b border-gray-200 dark:border-dark-border">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {userName}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      user@example.com
-                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">User ID</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {userName}
+                      </p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(userName);
+                        }}
+                        className="p-1 hover:bg-gray-200 dark:hover:bg-dark-border rounded transition-colors"
+                        title="Copy User ID"
+                      >
+                        <Copy className="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                      </button>
+                    </div>
                   </div>
                   <div className="p-2">
                     <button
