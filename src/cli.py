@@ -658,13 +658,33 @@ def list_folders():
                 except:
                     pass  # Table might already exist
                 
-                # Query the folders table
-                cursor.execute("""
-                    SELECT folder_id, name, path, state, total_files, total_size,
-                           total_segments, share_id, published, created_at
-                    FROM folders
-                    ORDER BY created_at DESC
-                """)
+                # Query the folders table - handle different schemas
+                try:
+                    # Try the new schema first
+                    cursor.execute("""
+                        SELECT folder_id, name, path, state, total_files, total_size,
+                               total_segments, share_id, published, created_at
+                        FROM folders
+                        ORDER BY created_at DESC
+                    """)
+                    columns_type = 'new'
+                except:
+                    # Fall back to old schema
+                    try:
+                        cursor.execute("""
+                            SELECT folder_unique_id, display_name, folder_path, state, 
+                                   total_files, total_size, 0 as total_segments, 
+                                   NULL as share_id, 
+                                   CASE WHEN last_published IS NOT NULL THEN 1 ELSE 0 END as published,
+                                   created_at
+                            FROM folders
+                            ORDER BY created_at DESC
+                        """)
+                        columns_type = 'old'
+                    except Exception as e:
+                        # If both fail, return empty array
+                        click.echo(json.dumps([]))
+                        return
                 
                 folders = []
                 for row in cursor.fetchall():
