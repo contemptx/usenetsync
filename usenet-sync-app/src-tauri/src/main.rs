@@ -429,10 +429,12 @@ async fn create_share(
         cmd.arg(get_workspace_dir().join("src").join("cli.py"));
     }
     
+    // Add files with multiple --files flags
+    cmd.arg("create-share");
+    for file in &files {
+        cmd.arg("--files").arg(file);
+    }
     let output = cmd
-        .arg("create-share")
-        .arg("--files")
-        .args(&files)
         .arg("--type")
         .arg(&share_type)
         .args(if let Some(ref pwd) = password {
