@@ -14,6 +14,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Upload } from './pages/Upload';
 import { Download } from './pages/Download';
 import { Shares } from './pages/Shares';
+import { FolderManagement } from './pages/FolderManagement';
 import { Settings } from './pages/Settings';
 import { Logs } from './pages/Logs';
 import { TestRunner } from './pages/TestRunner';

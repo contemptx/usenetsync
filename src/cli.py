@@ -358,6 +358,157 @@ def test_connection(hostname, port, username, password, ssl):
         }), file=sys.stderr)
         sys.exit(1)
 
+@cli.command('add-folder')
+@click.option('--path', required=True, help='Path to folder')
+@click.option('--name', help='Friendly name for folder')
+def add_folder(path, name):
+    """Add a folder to management system"""
+    try:
+        import asyncio
+        from folder_management.folder_manager import FolderManager, FolderConfig
+        
+        config = FolderConfig()
+        manager = FolderManager(config)
+        
+        async def run():
+            result = await manager.add_folder(path, name)
+            return result
+        
+        result = asyncio.run(run())
+        click.echo(json.dumps(result))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('index-folder')
+@click.option('--folder-id', required=True, help='Folder ID')
+def index_folder(folder_id):
+    """Index files in a folder"""
+    try:
+        import asyncio
+        from folder_management.folder_manager import FolderManager, FolderConfig
+        
+        config = FolderConfig()
+        manager = FolderManager(config)
+        
+        async def run():
+            result = await manager.index_folder(folder_id)
+            return result
+        
+        result = asyncio.run(run())
+        click.echo(json.dumps(result))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('segment-folder')
+@click.option('--folder-id', required=True, help='Folder ID')
+def segment_folder(folder_id):
+    """Create segments for folder"""
+    try:
+        import asyncio
+        from folder_management.folder_manager import FolderManager, FolderConfig
+        
+        config = FolderConfig()
+        manager = FolderManager(config)
+        
+        async def run():
+            result = await manager.segment_folder(folder_id)
+            return result
+        
+        result = asyncio.run(run())
+        click.echo(json.dumps(result))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('upload-folder')
+@click.option('--folder-id', required=True, help='Folder ID')
+def upload_folder(folder_id):
+    """Upload folder to Usenet"""
+    try:
+        import asyncio
+        from folder_management.folder_manager import FolderManager, FolderConfig
+        
+        config = FolderConfig()
+        manager = FolderManager(config)
+        
+        async def run():
+            result = await manager.upload_folder(folder_id)
+            return result
+        
+        result = asyncio.run(run())
+        click.echo(json.dumps(result))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('publish-folder')
+@click.option('--folder-id', required=True, help='Folder ID')
+@click.option('--access-type', default='public', help='Access type: public, private, protected')
+def publish_folder(folder_id, access_type):
+    """Publish folder with core index"""
+    try:
+        import asyncio
+        from folder_management.folder_manager import FolderManager, FolderConfig
+        
+        config = FolderConfig()
+        manager = FolderManager(config)
+        
+        async def run():
+            result = await manager.publish_folder(folder_id, access_type)
+            return result
+        
+        result = asyncio.run(run())
+        click.echo(json.dumps(result))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
+@cli.command('list-folders')
+def list_folders():
+    """List all managed folders"""
+    try:
+        from folder_management.folder_manager import FolderManager, FolderConfig
+        
+        config = FolderConfig()
+        manager = FolderManager(config)
+        
+        with manager.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT folder_id, name, path, state, total_files, total_size,
+                       total_segments, share_id, published, created_at
+                FROM managed_folders
+                ORDER BY created_at DESC
+            """)
+            
+            folders = []
+            for row in cursor.fetchall():
+                folders.append({
+                    'folder_id': row[0],
+                    'name': row[1],
+                    'path': row[2],
+                    'state': row[3],
+                    'total_files': row[4] or 0,
+                    'total_size': row[5] or 0,
+                    'total_segments': row[6] or 0,
+                    'share_id': row[7],
+                    'published': row[8] or False,
+                    'created_at': row[9].isoformat() if row[9] else None
+                })
+            
+            click.echo(json.dumps(folders))
+            
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
 @cli.command('list-shares')
 def list_shares():
     """List all shares from database"""
