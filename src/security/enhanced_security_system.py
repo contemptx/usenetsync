@@ -1008,9 +1008,22 @@ class EnhancedSecuritySystem:
                         logger.warning("Invalid signature on index")
                         return None
                 
-                # Try owner access first
-                folder_keys = self.load_folder_keys(folder_id)
-                if folder_keys and 'owner_wrapped_key' in index_data:
+                # Try owner access first (only if user created the folder)
+                # Check if this user is the folder owner by checking if they're in the authorized list
+                # or if they were the one who created the index
+                is_potential_owner = False
+                if 'created_by' in index_data and self._user_id:
+                    is_potential_owner = index_data['created_by'] == self._user_id[:16]
+                    logger.debug(f"Owner check: created_by={index_data.get('created_by')}, user={self._user_id[:16] if self._user_id else 'None'}, match={is_potential_owner}")
+                else:
+                    logger.debug(f"Owner check skipped: created_by={'created_by' in index_data}, has_user_id={bool(self._user_id)}")
+                
+                if is_potential_owner and 'owner_wrapped_key' in index_data:
+                    folder_keys = self.load_folder_keys(folder_id)
+                else:
+                    folder_keys = None
+                    
+                if folder_keys and is_potential_owner:
                     try:
                         owner_wrapping_key = self._derive_folder_wrapping_key(folder_id, folder_keys)
                         wrapped_key = base64.b64decode(index_data['owner_wrapped_key'])
@@ -1035,7 +1048,9 @@ class EnhancedSecuritySystem:
                         wrapped_session_key=commitment_data.get('wrapped_key', '')
                     )
                     
-                    if self.verify_user_access(user_id, folder_id, commitment):
+                    verification_result = self.verify_user_access(user_id, folder_id, commitment)
+                    logger.debug(f"Verification for user {user_id[:16]}... against commitment {commitment.user_id_hash[:16]}...: {verification_result}")
+                    if verification_result:
                         try:
                             # Derive user's wrapping key
                             user_wrapping_key = self._derive_user_wrapping_key(user_id, folder_id)
