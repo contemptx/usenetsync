@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { TestDataGenerator } from '../test/test-data-generator';
 import { useAppStore } from '../stores/useAppStore';
-import * as tauriCommands from '../lib/tauri';
+import * as tauriCommands from '../lib/tauri.ts';
 import toast from 'react-hot-toast';
 
 interface TestCase {

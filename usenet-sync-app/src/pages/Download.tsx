@@ -12,7 +12,7 @@ import {
   List
 } from 'lucide-react';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { downloadShare, getShareDetails } from '../lib/tauri';
+import { downloadShare, getShareDetails } from '../lib/tauri.ts';
 import { useAppStore } from '../stores/useAppStore';
 import toast from 'react-hot-toast';
 import { FileNode, Transfer } from '../types';

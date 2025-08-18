@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Wifi, WifiOff, AlertCircle } from 'lucide-react';
-import { getSystemInfo } from '../lib/tauri';
+import { getSystemInfo } from '../lib/tauri.ts';
 
 interface ConnectionInfo {
   isConnected: boolean;

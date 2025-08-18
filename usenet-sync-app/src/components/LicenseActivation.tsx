@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { activateLicense, startTrial, checkLicense } from '../lib/tauri';
+import { activateLicense, startTrial, checkLicense } from '../lib/tauri.ts';
 import { useAppStore } from '../stores/useAppStore';
 import { AlertCircle, Key, Clock, CheckCircle } from 'lucide-react';
 

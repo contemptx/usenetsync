@@ -5,7 +5,7 @@ import { FileGridView } from '../components/FileGridView';
 import { BreadcrumbNav } from '../components/BreadcrumbNav';
 import { BatchOperations } from '../components/BatchOperations';
 import { useAppStore } from '../stores/useAppStore';
-import { selectFiles, indexFolder, createShare } from '../lib/tauri';
+import { selectFiles, indexFolder, createShare } from '../lib/tauri.ts';
 import { FileNode, Transfer } from '../types';
 import { useDragDrop } from '../hooks/useDragDrop';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
