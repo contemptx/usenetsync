@@ -7,9 +7,13 @@ Bridge between Tauri frontend and Python backend
 import click
 import json
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 import uuid
+
+# Add the src directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import backend modules
 from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig

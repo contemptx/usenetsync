@@ -73,8 +73,13 @@ export const Upload: React.FC = () => {
   const handleSelectFolder = async () => {
     try {
       const rootNode = await selectFolder();
+      console.log('Selected folder:', rootNode);
       if (rootNode) {
         setFiles(rootNode);
+        // If the root node has children, select them by default
+        if (rootNode.children && rootNode.children.length > 0) {
+          setSelectedFiles(rootNode.children);
+        }
       }
     } catch (error) {
       console.error('Failed to select folder:', error);
