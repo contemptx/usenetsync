@@ -199,8 +199,10 @@ async fn check_license(state: State<'_, AppState>) -> Result<LicenseStatus, Stri
 #[tauri::command]
 async fn start_trial(state: State<'_, AppState>) -> Result<u32, String> {
     let license = state.license.lock().unwrap();
-    match license.start_trial() { Ok(_) => Ok(30), Err(e) => Err(e) }
-        .map_err(|e| e.to_string())
+    match license.start_trial() {
+        Ok(_) => Ok(30),
+        Err(e) => Err(e)
+    }
 }
 
 #[tauri::command]
