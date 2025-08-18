@@ -76,6 +76,72 @@ export const Settings: React.FC = () => {
     }
   };
 
+  // Database functions
+  useEffect(() => {
+    checkDatabaseStatus();
+    // Load saved preference
+    const savedMode = localStorage.getItem('database_mode');
+    if (savedMode === 'simple' || savedMode === 'advanced') {
+      setDatabaseMode(savedMode);
+    }
+  }, []);
+
+  const checkDatabaseStatus = async () => {
+    setIsCheckingDb(true);
+    try {
+      const status = await invoke('check_database_status');
+      setDatabaseStatus(status);
+    } catch (error) {
+      console.error('Failed to check database status:', error);
+      setDatabaseStatus({ type: 'error', message: String(error) });
+    } finally {
+      setIsCheckingDb(false);
+    }
+  };
+
+  const setupPostgreSQL = async () => {
+    setIsSettingUpDb(true);
+    setSetupProgress(0);
+    
+    try {
+      // Simulate progress for now (in real implementation, this would come from backend)
+      const progressInterval = setInterval(() => {
+        setSetupProgress(prev => Math.min(prev + 10, 90));
+      }, 500);
+
+      const result = await invoke('setup_postgresql');
+      
+      clearInterval(progressInterval);
+      setSetupProgress(100);
+      
+      toast.success('PostgreSQL setup completed successfully!');
+      await checkDatabaseStatus();
+      
+    } catch (error) {
+      toast.error(`PostgreSQL setup failed: ${error}`);
+    } finally {
+      setIsSettingUpDb(false);
+      setSetupProgress(0);
+    }
+  };
+
+  const switchDatabaseMode = async (mode: 'simple' | 'advanced') => {
+    setDatabaseMode(mode);
+    localStorage.setItem('database_mode', mode);
+    
+    if (mode === 'simple') {
+      // Switch to SQLite
+      localStorage.setItem('use_sqlite', 'true');
+      toast.success('Switched to Simple mode (SQLite)');
+    } else {
+      // Switch to PostgreSQL
+      localStorage.removeItem('use_sqlite');
+      toast.success('Switched to Advanced mode (PostgreSQL)');
+    }
+    
+    await checkDatabaseStatus();
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div>
@@ -211,6 +277,183 @@ export const Settings: React.FC = () => {
             Save Settings
           </button>
         </div>
+      </div>
+
+      {/* Database Configuration */}
+      <div className="bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Database className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Database Configuration
+          </h2>
+        </div>
+
+        {/* Mode Selection */}
+        <div className="mb-6">
+          <div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <button
+              onClick={() => switchDatabaseMode('simple')}
+              className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+                databaseMode === 'simple'
+                  ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <HardDrive className="w-4 h-4" />
+                <span className="font-medium">Simple (SQLite)</span>
+              </div>
+            </button>
+            <button
+              onClick={() => switchDatabaseMode('advanced')}
+              className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+                databaseMode === 'advanced'
+                  ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Zap className="w-4 h-4" />
+                <span className="font-medium">Advanced (PostgreSQL)</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Database Status */}
+        <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            {databaseStatus?.status === 'connected' ? (
+              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
+            ) : databaseStatus?.status === 'error' ? (
+              <X className="w-5 h-5 text-red-500 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5" />
+            )}
+            <div className="flex-1">
+              <p className="font-medium text-gray-900 dark:text-gray-100">
+                {databaseStatus?.status === 'connected' 
+                  ? `Connected to ${databaseStatus?.type === 'postgresql' ? 'PostgreSQL' : 'SQLite'}`
+                  : databaseStatus?.status === 'error'
+                  ? 'Database Connection Error'
+                  : 'Database Not Configured'}
+              </p>
+              {databaseStatus?.message && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {databaseStatus.message}
+                </p>
+              )}
+              {databaseStatus?.type === 'sqlite' && databaseStatus?.path && (
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+                  Database file: {databaseStatus.path}
+                </p>
+              )}
+              {databaseStatus?.type === 'postgresql' && databaseStatus?.status === 'connected' && (
+                <div className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+                  <p>Host: {databaseStatus.host || 'localhost'}</p>
+                  <p>Port: {databaseStatus.port || 5432}</p>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={checkDatabaseStatus}
+              disabled={isCheckingDb}
+              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              title="Refresh status"
+            >
+              <RefreshCw className={`w-4 h-4 ${isCheckingDb ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Mode-specific content */}
+        {databaseMode === 'simple' ? (
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Simple Mode (Recommended)</h3>
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                SQLite is perfect for personal use. No installation or configuration required.
+                All data is stored locally in a single file.
+              </p>
+              <ul className="mt-2 text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                <li>✓ No setup required</li>
+                <li>✓ Zero maintenance</li>
+                <li>✓ Portable data file</li>
+                <li>✓ Perfect for single-user</li>
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <h3 className="font-medium text-purple-900 dark:text-purple-100 mb-2">Advanced Mode (PostgreSQL)</h3>
+              <p className="text-sm text-purple-800 dark:text-purple-200">
+                PostgreSQL provides better performance for large datasets and concurrent operations.
+                Requires installation and configuration.
+              </p>
+              <ul className="mt-2 text-xs text-purple-700 dark:text-purple-300 space-y-1">
+                <li>✓ Better performance</li>
+                <li>✓ Handles large datasets</li>
+                <li>✓ Professional features</li>
+                <li>✓ Multi-user capable</li>
+              </ul>
+            </div>
+
+            {/* PostgreSQL Setup */}
+            {databaseStatus?.type !== 'postgresql' || databaseStatus?.status !== 'connected' ? (
+              <div className="space-y-3">
+                <button
+                  onClick={setupPostgreSQL}
+                  disabled={isSettingUpDb}
+                  className="w-full py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isSettingUpDb ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Installing PostgreSQL... {setupProgress}%
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      Auto-Install PostgreSQL
+                    </>
+                  )}
+                </button>
+
+                {isSettingUpDb && (
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${setupProgress}%` }}
+                    />
+                  </div>
+                )}
+
+                <details className="text-xs text-gray-600 dark:text-gray-400">
+                  <summary className="cursor-pointer hover:text-gray-800 dark:hover:text-gray-200">
+                    Manual Setup Instructions
+                  </summary>
+                  <ol className="mt-2 ml-4 space-y-1">
+                    <li>1. Download PostgreSQL from postgresql.org</li>
+                    <li>2. Install with default settings</li>
+                    <li>3. Create user: usenet / password: usenetsync</li>
+                    <li>4. Create database: usenet</li>
+                    <li>5. Click refresh to verify connection</li>
+                  </ol>
+                </details>
+              </div>
+            ) : (
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <p className="font-medium text-green-900 dark:text-green-100">
+                    PostgreSQL is configured and running
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Bandwidth Control */}
