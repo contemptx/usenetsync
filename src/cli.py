@@ -683,15 +683,24 @@ def list_folders():
                 
             click.echo(json.dumps(folders))
         except Exception as e:
-            click.echo(json.dumps({'error': str(e)}), err=True)
+            # Return empty array on error instead of error object
+            # This prevents JSON parsing errors in the frontend
+            click.echo(json.dumps([]))
             
     except Exception as e:
-        click.echo(json.dumps({'error': str(e)}), err=True)
-        sys.exit(1)
+        # Return empty array on error
+        click.echo(json.dumps([]))
 
 @cli.command('get-folders')
 def get_folders():
     """Get all managed folders (alias for list-folders)"""
+    # Call list_folders directly
+    ctx = click.get_current_context()
+    ctx.invoke(list_folders)
+
+@cli.command('get_folders')
+def get_folders_underscore():
+    """Get all managed folders (Tauri command name with underscore)"""
     # Call list_folders directly
     ctx = click.get_current_context()
     ctx.invoke(list_folders)
