@@ -57,27 +57,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [notifications] = useState<number>(0);
 
-  // Update status periodically
+  // TODO: Replace with real transfer status from backend
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Simulate status updates
-      setTransferStatus({
-        uploadSpeed: Math.random() * 500,
-        downloadSpeed: Math.random() * 2000,
-        activeUploads: Math.floor(Math.random() * 3),
-        activeDownloads: Math.floor(Math.random() * 5)
-      });
-      
-      // Update last sync time
-      if (Math.random() > 0.8) {
-        setLastSync(new Date());
-      }
-    }, 2000);
-    
-    return () => clearInterval(interval);
+    // Will be implemented when backend provides real transfer stats
   }, []);
 
-  const formatBytes = (bytes: number): string => {
+        uploadSpeed: 0,
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     let size = bytes;
     let unitIndex = 0;
