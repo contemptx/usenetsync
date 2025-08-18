@@ -20,8 +20,20 @@ from typing import Dict, List, Optional, Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from networking.production_nntp_client import ProductionNNTPClient
-from upload.enhanced_upload_system import UploadTask, UploadPriority, UploadState
+# UploadTask is in queue_manager_module
+from queue_manager_module.persistent_queue import UploadTask, TaskStatus
 from indexing.simplified_binary_index import SimplifiedBinaryIndex
+
+# Define missing enums locally
+class UploadPriority:
+    LOW = 0
+    NORMAL = 1
+    HIGH = 2
+
+class UploadState:
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
 
 import logging
 logger = logging.getLogger(__name__)
