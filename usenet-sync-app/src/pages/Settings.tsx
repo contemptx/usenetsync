@@ -120,16 +120,30 @@ export const Settings: React.FC = () => {
       setDatabaseMode('advanced');
       localStorage.setItem('database_mode', 'advanced');
       
-      // Check the database status to confirm it's working
-      await checkDatabaseStatus();
+      // Wait a moment for PostgreSQL to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // If PostgreSQL is now connected, show additional success message
-      setTimeout(async () => {
-        const status = await checkDbStatus();
-        if (status?.type === 'postgresql' && status?.status === 'connected') {
-          toast.success('Successfully switched to PostgreSQL!');
-        }
-      }, 1000);
+      // Check the database status to confirm it's working
+      const status = await checkDbStatus();
+      
+      if (status?.type === 'postgresql' && status?.status === 'connected') {
+        toast.success('Successfully switched to PostgreSQL!');
+        // Update the database status
+        setDatabaseStatus(status);
+      } else if (status?.status === 'error' && status?.message?.includes('password authentication failed')) {
+        // PostgreSQL is installed but credentials are wrong
+        toast.error('PostgreSQL installed but authentication failed. The database may need manual configuration.');
+        toast.info('Database: usenet, User: usenet, Password: usenetsync', { duration: 8000 });
+      } else {
+        // Check status again after a longer delay
+        setTimeout(async () => {
+          const retryStatus = await checkDbStatus();
+          if (retryStatus?.type === 'postgresql' && retryStatus?.status === 'connected') {
+            toast.success('PostgreSQL is now active!');
+            setDatabaseStatus(retryStatus);
+          }
+        }, 3000);
+      }
       
     } catch (error) {
       toast.error(`PostgreSQL setup failed: ${error}`);
