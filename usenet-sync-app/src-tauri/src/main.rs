@@ -17,6 +17,26 @@ use turboactivate::TurboActivate;
 mod commands;
 use commands::system::init_system_commands;
 
+// Helper function to get the workspace directory
+fn get_workspace_dir() -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .and_then(|p| {
+            // Try to find the workspace root by looking for src/cli.py
+            let mut current = p.as_path();
+            loop {
+                if current.join("src").join("cli.py").exists() {
+                    return Some(current.to_path_buf());
+                }
+                match current.parent() {
+                    Some(parent) => current = parent,
+                    None => return None,
+                }
+            }
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
 // State management
 struct AppState {
     license: Mutex<TurboActivate>,
@@ -340,7 +360,7 @@ async fn create_share(
 ) -> Result<Share, String> {
     // Call Python backend to create share
     let output = Command::new("python3")
-        .arg("/workspace/src/cli.py")
+        .arg(get_workspace_dir().join("src").join("cli.py"))
         .arg("create-share")
         .arg("--files")
         .args(&files)
@@ -398,7 +418,7 @@ async fn download_share(
 async fn get_share_details(share_id: String) -> Result<Share, String> {
     // Call Python backend to get share details
     let output = Command::new("python3")
-        .arg("/workspace/src/cli.py")
+        .arg(get_workspace_dir().join("src").join("cli.py"))
         .arg("share-details")
         .arg("--share-id")
         .arg(&share_id)
@@ -456,7 +476,7 @@ async fn cancel_transfer(state: State<'_, AppState>, transfer_id: String) -> Res
 async fn test_server_connection(config: ServerConfig) -> Result<bool, String> {
     // Call Python backend to test connection
     let output = Command::new("python3")
-        .arg("/workspace/src/cli.py")
+        .arg(get_workspace_dir().join("src").join("cli.py"))
         .arg("test-connection")
         .arg("--hostname")
         .arg(&config.hostname)
@@ -580,7 +600,7 @@ async fn open_folder(path: String) -> Result<(), String> {
 fn main() {
     // Initialize TurboActivate
     let license = TurboActivate::new(None).unwrap_or_else(|_| {
-        TurboActivate::new(Some("/workspace/src/licensing/data/TurboActivate.dat"))
+        TurboActivate::new(Some(&get_workspace_dir().join("src").join("licensing").join("data").join("TurboActivate.dat").to_string_lossy()))
             .expect("Failed to initialize TurboActivate")
     });
     

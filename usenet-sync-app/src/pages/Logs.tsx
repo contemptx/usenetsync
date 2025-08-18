@@ -48,8 +48,8 @@ export const Logs: React.FC = () => {
   // Load logs on mount
   useEffect(() => {
     loadLogs();
-    // Set up real-time log updates
-    const interval = setInterval(loadNewLogs, 2000);
+    // Set up real-time log updates - check every 5 seconds
+    const interval = setInterval(loadNewLogs, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -99,21 +99,10 @@ export const Logs: React.FC = () => {
   };
 
   const loadNewLogs = async () => {
-    // Simulate new log entries
-    if (Math.random() > 0.7) {
-      const levels: LogEntry['level'][] = ['debug', 'info', 'warning', 'error'];
-      const categories = ['Upload', 'Download', 'Network', 'Share', 'Database'];
-      
-      const newLog: LogEntry = {
-        id: Date.now().toString(),
-        timestamp: new Date(),
-        level: levels[Math.floor(Math.random() * levels.length)],
-        category: categories[Math.floor(Math.random() * categories.length)],
-        message: `New log entry at ${new Date().toLocaleTimeString()}`
-      };
-      
-      setLogs(prev => [...prev, newLog]);
-    }
+    // TODO: Implement real-time log fetching from backend
+    // This would fetch only new logs since the last timestamp
+    // For now, just reload all logs
+    await loadLogs();
   };
 
   const filterLogs = () => {

@@ -4,6 +4,27 @@ use tokio::sync::Mutex;
 use std::collections::HashMap;
 use std::fs;
 use std::process::Command as ProcessCommand;
+use std::path::PathBuf;
+
+// Helper function to get the workspace directory
+fn get_workspace_dir() -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .and_then(|p| {
+            // Try to find the workspace root by looking for src/cli.py
+            let mut current = p.as_path();
+            loop {
+                if current.join("src").join("cli.py").exists() {
+                    return Some(current.to_path_buf());
+                }
+                match current.parent() {
+                    Some(parent) => current = parent,
+                    None => return None,
+                }
+            }
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
@@ -147,7 +168,7 @@ pub async fn get_logs(
              logs = cli.integrated_backend.log_manager.get_logs(); \
              print(json.dumps([log.to_dict() for log in logs]))"
         ])
-        .current_dir("/workspace")
+        .current_dir(&get_workspace_dir())
         .output();
     
     if let Ok(output) = output {
@@ -208,13 +229,6 @@ pub async fn set_bandwidth_limit(
     state: tauri::State<'_, SystemState>,
 ) -> Result<(), String> {
     // Apply to Python backend
-    let workspace_dir = std::env::current_dir()
-        .map_err(|e| e.to_string())?
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-    
     let output = ProcessCommand::new("python3")
         .args(&[
             "-c",
@@ -226,7 +240,7 @@ pub async fn set_bandwidth_limit(
                 if enabled { download_kbps * 1024 } else { 0 }
             )
         ])
-        .current_dir(&workspace_dir)
+        .current_dir(&get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -297,7 +311,7 @@ pub async fn get_statistics(_state: tauri::State<'_, SystemState>) -> Result<Sys
                  'download': stats['download']['current_speed']\
              }))"
         ])
-        .current_dir("/workspace")
+        .current_dir(&get_workspace_dir())
         .output() 
     {
         if output.status.success() {
@@ -340,7 +354,7 @@ pub async fn export_data(options: serde_json::Value, _state: tauri::State<'_, Sy
                 options.get("encrypt").and_then(|v| v.as_bool()).unwrap_or(false)
             )
         ])
-        .current_dir("/workspace")
+        .current_dir(&get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -370,7 +384,7 @@ pub async fn import_data(data: String, options: serde_json::Value, state: tauri:
                 options.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false)
             )
         ])
-        .current_dir("/workspace")
+        .current_dir(&get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -412,7 +426,7 @@ pub async fn clear_cache(state: tauri::State<'_, SystemState>) -> Result<(), Str
              cli.integrated_backend.data_manager.clear_cache(); \
              cli.integrated_backend.cleanup_old_data(days=0)"
         ])
-        .current_dir("/workspace")
+        .current_dir(&get_workspace_dir())
         .output()
         .map_err(|e| e.to_string())?;
     
@@ -464,7 +478,7 @@ pub async fn restart_services(state: tauri::State<'_, SystemState>) -> Result<()
         // Start Python backend service
         ProcessCommand::new("python3")
             .args(&["src/cli.py", "--daemon"])
-            .current_dir("/workspace")
+            .current_dir(&get_workspace_dir())
             .spawn()
             .map_err(|e| format!("Failed to start service: {}", e))?;
     }
