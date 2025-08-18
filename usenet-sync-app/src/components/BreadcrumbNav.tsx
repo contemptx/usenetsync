@@ -53,7 +53,9 @@ export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({
       </button>
       
       {displayItems.length > 0 && (
-        <span key="home-separator" className="text-gray-400 dark:text-gray-600">{separator}</span>
+        <React.Fragment key="home-separator">
+          <span className="text-gray-400 dark:text-gray-600">{separator}</span>
+        </React.Fragment>
       )}
       
       {displayItems.map((item, index) => {
