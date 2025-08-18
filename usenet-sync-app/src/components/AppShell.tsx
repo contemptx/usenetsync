@@ -15,8 +15,7 @@ import {
   FileText,
   Bell,
   FlaskConical,
-  FolderOpen,
-  Copy
+  FolderOpen
 } from 'lucide-react';
 import clsx from 'clsx';
 import { StatusBar } from './StatusBar';
@@ -104,22 +103,9 @@ export const AppShell: React.FC = () => {
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Profile</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    User ID: {user?.username || 'User'}
-                  </p>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      navigator.clipboard.writeText(user?.username || 'User');
-                    }}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-dark-border rounded transition-colors"
-                    title="Copy User ID"
-                  >
-                    <Copy className="w-3 h-3 text-gray-500 dark:text-gray-400" />
-                  </button>
-                </div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  User ID: {user?.username || ''}
+                </p>
               </div>
             </NavLink>
           </div>
