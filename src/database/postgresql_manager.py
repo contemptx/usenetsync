@@ -317,7 +317,7 @@ class ShardedPostgreSQLManager:
                 database=self.config.database,  # Use single DB with schemas
                 user=self.config.user,
                 password=self.config.password,
-                options=f'-c search_path=shard_{shard_id}'
+                options='-c search_path=public'
             )
             
     def _init_schema(self):

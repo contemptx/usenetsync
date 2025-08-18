@@ -90,21 +90,52 @@ class UsenetSyncCLI:
     def _init_database(self):
         """Initialize PostgreSQL connection"""
         try:
-            # Skip database if explicitly disabled
-            if os.environ.get('SKIP_DATABASE', 'false').lower() == 'true':
-                return None
-                
-            config = PostgresConfig(
-                host=os.environ.get('DB_HOST', 'localhost'),
-                port=int(os.environ.get('DB_PORT', 5432)),
-                database=os.environ.get('DB_NAME', 'usenetsync'),
-                user=os.environ.get('DB_USER', 'usenet'),
-                password=os.environ.get('DB_PASSWORD', 'usenet_secure_2024')
-            )
-            return ShardedPostgreSQLManager(config)
+            # Load config from file if it exists
+            config_file = Path(__file__).parent.parent / 'db_config.json'
+            if config_file.exists():
+                import json
+                with open(config_file) as f:
+                    db_config = json.load(f)
+                    config = PostgresConfig(
+                        host=db_config.get('host', 'localhost'),
+                        port=db_config.get('port', 5432),
+                        database=db_config.get('database', 'usenetsync'),
+                        user=db_config.get('user', 'usenet'),
+                        password=db_config.get('password', 'usenet_secure_2024')
+                    )
+            else:
+                # Use environment variables or defaults
+                config = PostgresConfig(
+                    host=os.environ.get('DB_HOST', 'localhost'),
+                    port=int(os.environ.get('DB_PORT', 5432)),
+                    database=os.environ.get('DB_NAME', 'usenetsync'),
+                    user=os.environ.get('DB_USER', 'usenet'),
+                    password=os.environ.get('DB_PASSWORD', 'usenet_secure_2024')
+                )
+            
+            db_manager = ShardedPostgreSQLManager(config)
+            
+            # Test connection
+            with db_manager.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            return db_manager
+            
         except Exception as e:
-            # Silently skip database - it's optional for most operations
-            return None
+            print(f"\n⚠ Database connection failed: {e}", file=sys.stderr)
+            print("\nPlease run the database setup:", file=sys.stderr)
+            print("  Windows: setup_database.bat", file=sys.stderr)
+            print("  Linux/Mac: ./setup_database.sh", file=sys.stderr)
+            print("  Or: python3 setup_database.py", file=sys.stderr)
+            
+            # For test-connection command, we don't need database
+            if len(sys.argv) > 1 and 'test-connection' in sys.argv:
+                return None
+            
+            # For other commands, database is required
+            sys.exit(1)
     
     def _init_nntp(self):
         """Initialize NNTP client"""
