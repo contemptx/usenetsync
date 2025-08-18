@@ -42,6 +42,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ items, position, onClo
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [submenuPosition, setSubmenuPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Safety check for position
+  if (!position) {
+    return null;
+  }
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {

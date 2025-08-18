@@ -337,8 +337,7 @@ export const Dashboard: React.FC = () => {
       {/* Context Menu */}
       {contextMenu && (
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
           items={dashboardContextMenuItems}
           onClose={closeContextMenu}
         />
