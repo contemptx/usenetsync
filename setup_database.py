@@ -282,7 +282,8 @@ def create_tables():
         """)
         print("✓ Created 'uploads' table")
         
-        # Create downloads table
+        # Create downloads table (LOCAL tracking only - Usenet doesn't track downloads)
+        # This is for the user's own download history and progress tracking
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS downloads (
                 id TEXT PRIMARY KEY,
@@ -296,7 +297,7 @@ def create_tables():
                 retry_count INTEGER DEFAULT 0
             )
         """)
-        print("✓ Created 'downloads' table")
+        print("✓ Created 'downloads' table (local tracking)")
         
         # Create indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_shares_share_id ON shares(share_id)")

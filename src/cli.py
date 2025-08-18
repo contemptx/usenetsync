@@ -252,21 +252,22 @@ def download_share(share_id, destination, files):
         dest_path = Path(destination)
         dest_path.mkdir(parents=True, exist_ok=True)
         
-        # Create download tracking record
+        # Create LOCAL download tracking record (for user's own tracking only)
+        # Note: This is local application tracking - Usenet doesn't track downloads
         download_id = str(uuid.uuid4())
         
-        # Get share details from database if available
+        # Get share details from LOCAL database if available
         share = None
         if app.db_manager:
             try:
                 with app.db_manager.get_connection() as conn:
                     cursor = conn.cursor()
                     
-                    # Check if share exists
+                    # Check if share exists in LOCAL database
                     cursor.execute("SELECT id, size FROM shares WHERE share_id = %s", (share_id,))
                     share = cursor.fetchone()
                     
-                    # Create download record
+                    # Create LOCAL download record for this user's tracking
                     cursor.execute("""
                         INSERT INTO downloads (id, share_id, destination, status, progress, started_at, retry_count)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
