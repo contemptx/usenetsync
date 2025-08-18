@@ -69,8 +69,9 @@ export const Logs: React.FC = () => {
     setIsLoading(true);
     try {
       // Try to get logs from Tauri backend
+      let logEntries: any[] = [];
       try {
-        const logEntries = await getLogs({
+        logEntries = await getLogs({
           level: filters.level !== 'all' ? filters.level : undefined,
           category: filters.category !== 'all' ? filters.category : undefined,
           search: searchQuery || undefined,

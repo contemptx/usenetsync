@@ -539,6 +539,8 @@ fn main() {
     let system_state = init_system_commands();
     
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
         .manage(app_state)
         .manage(system_state)
         .invoke_handler(tauri::generate_handler![
