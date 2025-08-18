@@ -631,27 +631,15 @@ def list_folders():
         manager = FolderManager(config)
         
         with manager.db.get_connection() as conn:
-            # Ensure tables exist
-            ensure_tables_exist(conn)
-            
             cursor = conn.cursor()
             
-            # Try both table names for compatibility
-            try:
-                cursor.execute("""
-                    SELECT folder_id, name, path, state, total_files, total_size,
-                           total_segments, share_id, published, created_at
-                    FROM folders
-                    ORDER BY created_at DESC
-                """)
-            except:
-                # Fallback to old table name
-                cursor.execute("""
-                    SELECT folder_id, name, path, state, total_files, total_size,
-                           total_segments, share_id, published, created_at
-                    FROM managed_folders
-                    ORDER BY created_at DESC
-                """)
+            # Query the folders table
+            cursor.execute("""
+                SELECT folder_id, name, path, state, total_files, total_size,
+                       total_segments, share_id, published, created_at
+                FROM folders
+                ORDER BY created_at DESC
+            """)
             
             folders = []
             for row in cursor.fetchall():
@@ -1010,98 +998,86 @@ def initialize_database_schema(db_manager, db_type='postgresql'):
                     CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id);
                     """
                 else:
-                    # PostgreSQL schema
-                    schema_sql = """
-                    -- Create folders table
-                    CREATE TABLE IF NOT EXISTS folders (
-                        folder_id VARCHAR(255) PRIMARY KEY,
-                        path TEXT NOT NULL,
-                        name VARCHAR(255) NOT NULL,
-                        state VARCHAR(50) DEFAULT 'added',
-                        published BOOLEAN DEFAULT FALSE,
-                        share_id VARCHAR(255),
-                        access_type VARCHAR(50) DEFAULT 'public',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                -- Create files table
-                CREATE TABLE IF NOT EXISTS files (
-                    file_id VARCHAR(255) PRIMARY KEY,
-                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
-                    filename TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
-                    size BIGINT,
-                    mime_type VARCHAR(255),
-                    hash VARCHAR(255),
-                    encrypted BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                -- Create segments table
-                CREATE TABLE IF NOT EXISTS segments (
-                    segment_id VARCHAR(255) PRIMARY KEY,
-                    file_id VARCHAR(255) REFERENCES files(file_id) ON DELETE CASCADE,
-                    segment_index INTEGER NOT NULL,
-                    size BIGINT,
-                    hash VARCHAR(255),
-                    message_id TEXT,
-                    uploaded BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                -- Create shares table
-                CREATE TABLE IF NOT EXISTS shares (
-                    share_id VARCHAR(255) PRIMARY KEY,
-                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
-                    share_type VARCHAR(50) DEFAULT 'public',
-                    password_hash TEXT,
-                    metadata JSONB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP
-                );
-
-                -- Create authorized_users table
-                CREATE TABLE IF NOT EXISTS authorized_users (
-                    id SERIAL PRIMARY KEY,
-                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
-                    user_id VARCHAR(255) NOT NULL,
-                    permissions VARCHAR(50) DEFAULT 'read',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(folder_id, user_id)
-                );
-
-                -- Create uploads table
-                CREATE TABLE IF NOT EXISTS uploads (
-                    upload_id VARCHAR(255) PRIMARY KEY,
-                    folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
-                    status VARCHAR(50) DEFAULT 'pending',
-                    progress INTEGER DEFAULT 0,
-                    total_segments INTEGER,
-                    uploaded_segments INTEGER DEFAULT 0,
-                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    completed_at TIMESTAMP
-                );
-
-                -- Create activity_log table
-                CREATE TABLE IF NOT EXISTS activity_log (
-                    id SERIAL PRIMARY KEY,
-                    folder_id VARCHAR(255),
-                    action VARCHAR(100),
-                    details JSONB,
-                    user_id VARCHAR(255),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                -- Create indexes
-                CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);
-                CREATE INDEX IF NOT EXISTS idx_segments_file_id ON segments(file_id);
-                CREATE INDEX IF NOT EXISTS idx_shares_folder_id ON shares(folder_id);
-                CREATE INDEX IF NOT EXISTS idx_authorized_users_folder_id ON authorized_users(folder_id);
-                CREATE INDEX IF NOT EXISTS idx_uploads_folder_id ON uploads(folder_id);
-                CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id);
-                """
+                    # PostgreSQL schema - execute each statement separately
+                    schema_statements = [
+                        """CREATE TABLE IF NOT EXISTS folders (
+                            folder_id VARCHAR(255) PRIMARY KEY,
+                            path TEXT NOT NULL,
+                            name VARCHAR(255) NOT NULL,
+                            state VARCHAR(50) DEFAULT 'added',
+                            published BOOLEAN DEFAULT FALSE,
+                            share_id VARCHAR(255),
+                            access_type VARCHAR(50) DEFAULT 'public',
+                            total_files INTEGER DEFAULT 0,
+                            total_size BIGINT DEFAULT 0,
+                            total_segments INTEGER DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )""",
+                        """CREATE TABLE IF NOT EXISTS files (
+                            file_id VARCHAR(255) PRIMARY KEY,
+                            folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                            filename TEXT NOT NULL,
+                            file_path TEXT NOT NULL,
+                            size BIGINT,
+                            mime_type VARCHAR(255),
+                            hash VARCHAR(255),
+                            encrypted BOOLEAN DEFAULT FALSE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )""",
+                        """CREATE TABLE IF NOT EXISTS segments (
+                            segment_id VARCHAR(255) PRIMARY KEY,
+                            file_id VARCHAR(255) REFERENCES files(file_id) ON DELETE CASCADE,
+                            segment_index INTEGER NOT NULL,
+                            size BIGINT,
+                            hash VARCHAR(255),
+                            message_id TEXT,
+                            uploaded BOOLEAN DEFAULT FALSE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )""",
+                        """CREATE TABLE IF NOT EXISTS shares (
+                            share_id VARCHAR(255) PRIMARY KEY,
+                            folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                            share_type VARCHAR(50) DEFAULT 'public',
+                            password_hash TEXT,
+                            metadata JSONB,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            expires_at TIMESTAMP
+                        )""",
+                        """CREATE TABLE IF NOT EXISTS authorized_users (
+                            id SERIAL PRIMARY KEY,
+                            folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                            user_id VARCHAR(255) NOT NULL,
+                            permissions VARCHAR(50) DEFAULT 'read',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE(folder_id, user_id)
+                        )""",
+                        """CREATE TABLE IF NOT EXISTS uploads (
+                            upload_id VARCHAR(255) PRIMARY KEY,
+                            folder_id VARCHAR(255) REFERENCES folders(folder_id) ON DELETE CASCADE,
+                            status VARCHAR(50) DEFAULT 'pending',
+                            progress INTEGER DEFAULT 0,
+                            total_segments INTEGER,
+                            uploaded_segments INTEGER DEFAULT 0,
+                            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            completed_at TIMESTAMP
+                        )""",
+                        """CREATE TABLE IF NOT EXISTS activity_log (
+                            id SERIAL PRIMARY KEY,
+                            folder_id VARCHAR(255),
+                            action VARCHAR(100),
+                            details JSONB,
+                            user_id VARCHAR(255),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )""",
+                        """CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id)""",
+                        """CREATE INDEX IF NOT EXISTS idx_segments_file_id ON segments(file_id)""",
+                        """CREATE INDEX IF NOT EXISTS idx_shares_folder_id ON shares(folder_id)""",
+                        """CREATE INDEX IF NOT EXISTS idx_authorized_users_folder_id ON authorized_users(folder_id)""",
+                        """CREATE INDEX IF NOT EXISTS idx_uploads_folder_id ON uploads(folder_id)""",
+                        """CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id)"""
+                    ]
                 
                 if db_type == 'sqlite':
                     # SQLite requires executing statements one at a time
@@ -1110,8 +1086,9 @@ def initialize_database_schema(db_manager, db_type='postgresql'):
                         if statement:
                             cursor.execute(statement)
                 else:
-                    # PostgreSQL can handle multiple statements
-                    cursor.execute(schema_sql)
+                    # PostgreSQL - execute each statement separately
+                    for statement in schema_statements:
+                        cursor.execute(statement)
                 
                 conn.commit()
                 return True, "Database schema initialized successfully"
