@@ -785,38 +785,141 @@ def index_folder(path):
 
 # Add other commands as needed...
 
-def initialize_postgresql_schema(db_manager):
-    """Initialize PostgreSQL schema if needed"""
+def initialize_database_schema(db_manager, db_type='postgresql'):
+    """Initialize database schema if needed"""
     try:
         # Check if tables exist
         with db_manager.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Check if the files table exists
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'files'
-                )
-            """)
-            tables_exist = cursor.fetchone()[0]
+            # Check if the files table exists - use different syntax for SQLite vs PostgreSQL
+            if db_type == 'sqlite':
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='files'
+                """)
+                result = cursor.fetchone()
+                tables_exist = result is not None
+            else:  # PostgreSQL
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'files'
+                    )
+                """)
+                tables_exist = cursor.fetchone()[0]
             
             if not tables_exist:
-                # Create all required tables
-                schema_sql = """
-                -- Create folders table
-                CREATE TABLE IF NOT EXISTS folders (
-                    folder_id VARCHAR(255) PRIMARY KEY,
-                    path TEXT NOT NULL,
-                    name VARCHAR(255) NOT NULL,
-                    state VARCHAR(50) DEFAULT 'added',
-                    published BOOLEAN DEFAULT FALSE,
-                    share_id VARCHAR(255),
-                    access_type VARCHAR(50) DEFAULT 'public',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
+                # Create all required tables - use compatible SQL for both databases
+                if db_type == 'sqlite':
+                    # SQLite-compatible schema
+                    schema_sql = """
+                    -- Create folders table
+                    CREATE TABLE IF NOT EXISTS folders (
+                        folder_id TEXT PRIMARY KEY,
+                        path TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        state TEXT DEFAULT 'added',
+                        published INTEGER DEFAULT 0,
+                        share_id TEXT,
+                        access_type TEXT DEFAULT 'public',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    -- Create files table
+                    CREATE TABLE IF NOT EXISTS files (
+                        file_id TEXT PRIMARY KEY,
+                        folder_id TEXT REFERENCES folders(folder_id) ON DELETE CASCADE,
+                        filename TEXT NOT NULL,
+                        file_path TEXT NOT NULL,
+                        size INTEGER,
+                        mime_type TEXT,
+                        hash TEXT,
+                        encrypted INTEGER DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    -- Create segments table
+                    CREATE TABLE IF NOT EXISTS segments (
+                        segment_id TEXT PRIMARY KEY,
+                        file_id TEXT REFERENCES files(file_id) ON DELETE CASCADE,
+                        segment_index INTEGER NOT NULL,
+                        size INTEGER,
+                        hash TEXT,
+                        message_id TEXT,
+                        uploaded INTEGER DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    -- Create shares table
+                    CREATE TABLE IF NOT EXISTS shares (
+                        share_id TEXT PRIMARY KEY,
+                        folder_id TEXT REFERENCES folders(folder_id) ON DELETE CASCADE,
+                        share_type TEXT DEFAULT 'public',
+                        password_hash TEXT,
+                        metadata TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        expires_at DATETIME
+                    );
+
+                    -- Create authorized_users table
+                    CREATE TABLE IF NOT EXISTS authorized_users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        folder_id TEXT REFERENCES folders(folder_id) ON DELETE CASCADE,
+                        user_id TEXT NOT NULL,
+                        permissions TEXT DEFAULT 'read',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(folder_id, user_id)
+                    );
+
+                    -- Create uploads table
+                    CREATE TABLE IF NOT EXISTS uploads (
+                        upload_id TEXT PRIMARY KEY,
+                        folder_id TEXT REFERENCES folders(folder_id) ON DELETE CASCADE,
+                        status TEXT DEFAULT 'pending',
+                        progress INTEGER DEFAULT 0,
+                        total_segments INTEGER,
+                        uploaded_segments INTEGER DEFAULT 0,
+                        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        completed_at DATETIME
+                    );
+
+                    -- Create activity_log table
+                    CREATE TABLE IF NOT EXISTS activity_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        folder_id TEXT,
+                        action TEXT,
+                        details TEXT,
+                        user_id TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    -- Create indexes
+                    CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);
+                    CREATE INDEX IF NOT EXISTS idx_segments_file_id ON segments(file_id);
+                    CREATE INDEX IF NOT EXISTS idx_shares_folder_id ON shares(folder_id);
+                    CREATE INDEX IF NOT EXISTS idx_authorized_users_folder_id ON authorized_users(folder_id);
+                    CREATE INDEX IF NOT EXISTS idx_uploads_folder_id ON uploads(folder_id);
+                    CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id);
+                    """
+                else:
+                    # PostgreSQL schema
+                    schema_sql = """
+                    -- Create folders table
+                    CREATE TABLE IF NOT EXISTS folders (
+                        folder_id VARCHAR(255) PRIMARY KEY,
+                        path TEXT NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        state VARCHAR(50) DEFAULT 'added',
+                        published BOOLEAN DEFAULT FALSE,
+                        share_id VARCHAR(255),
+                        access_type VARCHAR(50) DEFAULT 'public',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
 
                 -- Create files table
                 CREATE TABLE IF NOT EXISTS files (
@@ -896,7 +999,16 @@ def initialize_postgresql_schema(db_manager):
                 CREATE INDEX IF NOT EXISTS idx_activity_log_folder_id ON activity_log(folder_id);
                 """
                 
-                cursor.execute(schema_sql)
+                if db_type == 'sqlite':
+                    # SQLite requires executing statements one at a time
+                    statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
+                    for statement in statements:
+                        if statement:
+                            cursor.execute(statement)
+                else:
+                    # PostgreSQL can handle multiple statements
+                    cursor.execute(schema_sql)
+                
                 conn.commit()
                 return True, "Database schema initialized successfully"
             else:
@@ -919,9 +1031,10 @@ def check_database():
         try:
             db_manager, db_type = DatabaseSelector.get_database_manager()
             
-            # If PostgreSQL, check and initialize schema
-            if db_info.get('type') == 'postgresql':
-                schema_ok, schema_msg = initialize_postgresql_schema(db_manager)
+            # Initialize schema for both SQLite and PostgreSQL
+            actual_db_type = db_info.get('type', db_type)
+            if actual_db_type in ['postgresql', 'sqlite']:
+                schema_ok, schema_msg = initialize_database_schema(db_manager, actual_db_type)
                 if not schema_ok:
                     db_info['status'] = 'error'
                     db_info['message'] = schema_msg
