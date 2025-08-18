@@ -457,6 +457,33 @@ async fn create_share(
 }
 
 #[tauri::command]
+async fn get_shares() -> Result<Vec<Share>, String> {
+    // Call Python backend to get shares
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    // Only add cli.py path if not using bundled backend
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    let output = cmd
+        .arg("list-shares")
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    // Parse JSON response
+    let shares: Vec<Share> = serde_json::from_slice(&output.stdout)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(shares)
+}
+
+#[tauri::command]
 async fn download_share(
     share_id: String,
     destination: String,
@@ -718,6 +745,7 @@ fn main() {
             select_folder,
             index_folder,
             create_share,
+            get_shares,
             download_share,
             get_share_details,
             pause_transfer,
