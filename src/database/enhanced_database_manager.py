@@ -66,7 +66,8 @@ class ConnectionPool:
         conn.row_factory = sqlite3.Row
         
         # Enable foreign key constraints
-        conn.execute("PRAGMA foreign_keys=ON")
+        # Don't enable foreign keys as we've removed constraints
+        # conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA busy_timeout=5000")  # 5 second timeout
         
         # Enable optimizations
