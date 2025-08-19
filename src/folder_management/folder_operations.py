@@ -280,8 +280,10 @@ class FolderUploadManager:
                 article_lines.append(f"From: UsenetSync <usenet@sync.local>")
                 article_lines.append(f"Newsgroups: {newsgroup}")
                 article_lines.append(f"Subject: {subject}")
-                message_id = f"<{uuid.uuid4()}@usenetsync>"
-                article_lines.append(f"Message-ID: {message_id}")
+                # Let the server assign the message ID
+                # We can suggest one but server has final say
+                suggested_id = f"<{uuid.uuid4()}@usenetsync>"
+                article_lines.append(f"Message-ID: {suggested_id}")
                 
                 for key, value in headers.items():
                     if key not in ['From', 'Newsgroups', 'Subject', 'Message-ID']:
@@ -311,7 +313,18 @@ class FolderUploadManager:
                 conn.last_used = time.time()
                 conn.post_count += 1
                 
-                return message_id
+                # Extract the REAL message ID from server response
+                if isinstance(response, tuple) and len(response) >= 2:
+                    server_message_id = response[1]
+                    if server_message_id and server_message_id != '<posted>':
+                        # Use the server's actual message ID
+                        return server_message_id
+                    else:
+                        # Server didn't provide ID, use our suggested one
+                        return suggested_id
+                else:
+                    # Unexpected response format
+                    raise ValueError(f"Unexpected response from server: {response}")
                 
         except Exception as e:
             self.logger.error(f"Failed to post segment: {e}")
@@ -458,9 +471,8 @@ class FolderPublisher:
                     self.logger.info(f"Posted index segment {idx+1}/{len(index_segments)}: {message_id}")
                 except Exception as e:
                     self.logger.error(f"Failed to post index segment: {e}")
-                    # Use fallback for testing
-                    message_id = f"<index-{folder_id}-{idx}@usenetsync>"
-                    index_message_ids.append(message_id)
+                    # DO NOT use fake message IDs - fail properly
+                    raise ValueError(f"Failed to post index segment {idx+1}: {e}")
             
             # Generate share ID
             share_id = self._generate_share_id(folder)
