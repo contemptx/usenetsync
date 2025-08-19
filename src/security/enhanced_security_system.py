@@ -979,10 +979,33 @@ class EnhancedSecuritySystem:
                     encrypted_data = base64.b64decode(index_data['encrypted_data'])
                     
                     decrypted_data = self.decrypt_data(encrypted_data, encryption_key)
-                    decrypted_json = json.loads(decrypted_data.decode('utf-8'))
                     
-                    logger.info(f"Decrypted PUBLIC index")
-                    return decrypted_json
+                    # The decrypted data is a compressed USBI binary index
+                    # We need to decompress it and parse it
+                    import zlib
+                    try:
+                        # Try to decompress (USBI format is always compressed)
+                        decompressed = zlib.decompress(decrypted_data)
+                        
+                        # Check if it's USBI format
+                        if decompressed[:4] == b'USBI':
+                            # It's a binary index, parse it
+                            from indexing.simplified_binary_index import SimplifiedBinaryIndex
+                            indexer = SimplifiedBinaryIndex('')
+                            parsed_index = indexer.parse_binary_index(decrypted_data)  # Takes compressed data
+                            
+                            logger.info(f"Decrypted PUBLIC USBI index: {parsed_index.get('files', []).__len__()} files")
+                            return parsed_index
+                        else:
+                            # Try as JSON (legacy format)
+                            decrypted_json = json.loads(decompressed.decode('utf-8'))
+                            logger.info(f"Decrypted PUBLIC JSON index")
+                            return decrypted_json
+                    except zlib.error:
+                        # Not compressed, try as raw JSON
+                        decrypted_json = json.loads(decrypted_data.decode('utf-8'))
+                        logger.info(f"Decrypted PUBLIC index (uncompressed)")
+                        return decrypted_json
                 except Exception as e:
                     logger.error(f"Failed to decrypt public index: {e}")
                     return None

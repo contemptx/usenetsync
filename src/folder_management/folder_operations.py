@@ -553,7 +553,7 @@ class FolderPublisher:
                 'folder_id': folder_id,
                 'share_id': share_id,
                 'access_string': access_string,
-                'index_size': len(index_bytes),
+                'index_size': len(compressed_index),
                 'compressed_size': len(compressed_index),
                 'index_segments': len(index_segments),
                 'access_type': access_type
