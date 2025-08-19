@@ -421,7 +421,8 @@ class FolderPublisher:
         operation_id = await self.fm._start_operation(folder_id, 'publishing')
         
         try:
-            # Create binary index for this folder
+            # Use the REAL SimplifiedBinaryIndex system
+            from indexing.simplified_binary_index import SimplifiedBinaryIndex
             binary_index = SimplifiedBinaryIndex(folder_id)
             
             # Build core index with all metadata
@@ -430,8 +431,11 @@ class FolderPublisher:
             # Get all files and segments info
             index_data = await self._build_index_data(folder_id)
             
-            # Create binary index (already compressed by SimplifiedBinaryIndex)
-            compressed_index = self._create_binary_index(index_data)
+            # Create binary index using the REAL SimplifiedBinaryIndex system
+            # It returns already compressed data
+            files = index_data.get('files', [])
+            segments = index_data.get('segments', [])
+            compressed_index = binary_index.create_index_from_database(files, segments)
             
             # Calculate hash
             index_hash = hashlib.sha256(compressed_index).hexdigest()
@@ -635,57 +639,7 @@ class FolderPublisher:
                 }
             }
     
-    def _create_binary_index(self, data: Dict) -> bytes:
-        """Create optimized binary index from data"""
-        import struct
-        import zlib
-        import io
-        
-        # Build optimized binary format
-        buffer = io.BytesIO()
-        
-        # Header: magic + version + counts
-        buffer.write(b'USIDX')  # Magic bytes
-        buffer.write(struct.pack('<H', 2))  # Version 2
-        
-        files = data.get('files', [])
-        segments = data.get('segments', [])
-        
-        # Write counts
-        buffer.write(struct.pack('<I', len(files)))  # File count
-        buffer.write(struct.pack('<I', len(segments)))  # Segment count
-        buffer.write(struct.pack('<Q', sum(f.get('size', 0) for f in files)))  # Total size
-        
-        # Write files
-        for file in files:
-            path_bytes = file['path'].encode('utf-8')
-            buffer.write(struct.pack('<H', len(path_bytes)))  # Path length
-            buffer.write(path_bytes)  # Path
-            buffer.write(struct.pack('<Q', file.get('size', 0)))  # Size
-            hash_bytes = file.get('hash', '').encode('utf-8')
-            buffer.write(struct.pack('<B', len(hash_bytes)))  # Hash length
-            buffer.write(hash_bytes)  # Hash
-        
-        # Write segments
-        for segment in segments:
-            buffer.write(struct.pack('<I', segment.get('file_id', 0)))  # File ID
-            buffer.write(struct.pack('<H', segment.get('index', 0)))  # Segment index
-            msg_id = segment.get('message_id', '').encode('utf-8')
-            buffer.write(struct.pack('<H', len(msg_id)))  # Message ID length
-            buffer.write(msg_id)  # Message ID
-            buffer.write(struct.pack('<I', segment.get('size', 0)))  # Size
-        
-        # Get binary data
-        binary_data = buffer.getvalue()
-        
-        # Compress with maximum compression
-        compressed = zlib.compress(binary_data, level=9)
-        
-        # Log compression stats
-        self.logger.info(f"Index compression: {len(binary_data)} -> {len(compressed)} bytes")
-        self.logger.info(f"Compression ratio: {len(compressed)/len(binary_data)*100:.1f}%")
-        
-        return compressed
+    # Removed _create_binary_index - now using SimplifiedBinaryIndex.create_index_from_database
     
     def _segment_index(self, data: bytes, segment_size: int = 768000) -> List[bytes]:
         """Segment the index for upload"""

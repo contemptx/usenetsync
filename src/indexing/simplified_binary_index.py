@@ -432,3 +432,51 @@ class SimplifiedBinaryIndex:
             'compressed_size': len(compressed_index),
             'compression_ratio': len(compressed_index) / len(binary_data) * 100
         }
+    
+    def create_index_from_database(self, files: List[Dict], segments: List[Dict]) -> bytes:
+        """
+        Create binary index from database data (files and segments)
+        This is used when publishing folders that are already indexed
+        """
+        self.logger.info(f"Creating binary index from database data")
+        
+        # Convert database format to scan_result format
+        from dataclasses import dataclass
+        
+        @dataclass
+        class FileObj:
+            """Wrapper to make dict look like object"""
+            path: str
+            size: int
+            hash: str
+            modified: int
+            segments: int
+            
+        # Convert dicts to objects
+        file_objects = []
+        for f in files:
+            file_objects.append(FileObj(
+                path=f.get('path', f.get('file_path', '')),
+                size=f.get('size', f.get('file_size', 0)),
+                hash=f.get('hash', f.get('file_hash', '')),
+                modified=f.get('modified', 0),
+                segments=f.get('segments', 1)
+            ))
+        
+        # Build scan result
+        scan_result = {
+            'files': file_objects,
+            'folders': {},  # No folder info from database
+            'total_size': sum(f.size for f in file_objects),
+            'total_files': len(file_objects)
+        }
+        
+        # Create binary index
+        binary_index = self._create_binary_index(scan_result)
+        
+        # Compress with maximum compression
+        compressed = zlib.compress(binary_index, level=9)
+        
+        self.logger.info(f"Index created: {len(files)} files, {len(compressed):,} bytes compressed")
+        
+        return compressed
