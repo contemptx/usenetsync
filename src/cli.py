@@ -410,10 +410,10 @@ def add_folder(path, name):
         click.echo(json.dumps({'error': str(e)}), err=True)
         sys.exit(1)
 
-@cli.command('index-folder')
+@cli.command('index-managed-folder')
 @click.option('--folder-id', required=True, help='Folder ID')
-def index_folder(folder_id):
-    """Index files in a folder"""
+def index_managed_folder(folder_id):
+    """Index files in a managed folder"""
     try:
         import asyncio
         from folder_management.folder_manager import FolderManager, FolderConfig

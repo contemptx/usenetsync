@@ -137,6 +137,11 @@ class SQLiteCursorWrapper:
         """Get row count"""
         return self.cursor.rowcount
     
+    @property
+    def description(self):
+        """Get cursor description"""
+        return self.cursor.description
+    
     def _convert_query(self, query):
         """Convert PostgreSQL query syntax to SQLite"""
         # Remove or replace PostgreSQL-specific syntax
