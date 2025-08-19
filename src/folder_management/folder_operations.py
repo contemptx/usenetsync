@@ -430,11 +430,8 @@ class FolderPublisher:
             # Get all files and segments info
             index_data = await self._build_index_data(folder_id)
             
-            # Create binary index
-            index_bytes = self._create_binary_index(index_data)
-            
-            # Compress index
-            compressed_index = zlib.compress(index_bytes, level=9)
+            # Create binary index (already compressed by SimplifiedBinaryIndex)
+            compressed_index = self._create_binary_index(index_data)
             
             # Calculate hash
             index_hash = hashlib.sha256(compressed_index).hexdigest()
@@ -450,13 +447,15 @@ class FolderPublisher:
                 
                 # For public shares, we need to wrap the encrypted data with the key
                 # so the client can decrypt it
-                wrapped_index = json.dumps({
+                wrapped_data = {
                     'share_type': 'public',
                     'encrypted_data': base64.b64encode(encrypted_index).decode('utf-8'),
                     'encryption_key': base64.b64encode(public_key).decode('utf-8')
-                }).encode('utf-8')
+                }
                 
-                final_index = wrapped_index
+                # Compress the wrapped JSON for efficiency
+                wrapped_json = json.dumps(wrapped_data, separators=(',', ':')).encode('utf-8')
+                final_index = zlib.compress(wrapped_json, level=9)
                 encryption_key = None  # Key is in the index itself
             elif access_type == 'protected':
                 # For password-protected shares, derive key from password
@@ -538,7 +537,7 @@ class FolderPublisher:
             await self.fm._update_folder_stats(folder_id, {
                 'share_id': share_id,
                 'core_index_hash': index_hash,
-                'core_index_size': len(index_bytes),
+                'core_index_size': len(compressed_index),
                 'published': True,
                 'published_at': datetime.now(),
                 'state': 'published',
@@ -637,10 +636,56 @@ class FolderPublisher:
             }
     
     def _create_binary_index(self, data: Dict) -> bytes:
-        """Create binary index from data"""
-        # Simple JSON encoding for now
-        # In production, this would use the SimplifiedBinaryIndex format
-        return json.dumps(data, separators=(',', ':')).encode('utf-8')
+        """Create optimized binary index from data"""
+        import struct
+        import zlib
+        import io
+        
+        # Build optimized binary format
+        buffer = io.BytesIO()
+        
+        # Header: magic + version + counts
+        buffer.write(b'USIDX')  # Magic bytes
+        buffer.write(struct.pack('<H', 2))  # Version 2
+        
+        files = data.get('files', [])
+        segments = data.get('segments', [])
+        
+        # Write counts
+        buffer.write(struct.pack('<I', len(files)))  # File count
+        buffer.write(struct.pack('<I', len(segments)))  # Segment count
+        buffer.write(struct.pack('<Q', sum(f.get('size', 0) for f in files)))  # Total size
+        
+        # Write files
+        for file in files:
+            path_bytes = file['path'].encode('utf-8')
+            buffer.write(struct.pack('<H', len(path_bytes)))  # Path length
+            buffer.write(path_bytes)  # Path
+            buffer.write(struct.pack('<Q', file.get('size', 0)))  # Size
+            hash_bytes = file.get('hash', '').encode('utf-8')
+            buffer.write(struct.pack('<B', len(hash_bytes)))  # Hash length
+            buffer.write(hash_bytes)  # Hash
+        
+        # Write segments
+        for segment in segments:
+            buffer.write(struct.pack('<I', segment.get('file_id', 0)))  # File ID
+            buffer.write(struct.pack('<H', segment.get('index', 0)))  # Segment index
+            msg_id = segment.get('message_id', '').encode('utf-8')
+            buffer.write(struct.pack('<H', len(msg_id)))  # Message ID length
+            buffer.write(msg_id)  # Message ID
+            buffer.write(struct.pack('<I', segment.get('size', 0)))  # Size
+        
+        # Get binary data
+        binary_data = buffer.getvalue()
+        
+        # Compress with maximum compression
+        compressed = zlib.compress(binary_data, level=9)
+        
+        # Log compression stats
+        self.logger.info(f"Index compression: {len(binary_data)} -> {len(compressed)} bytes")
+        self.logger.info(f"Compression ratio: {len(compressed)/len(binary_data)*100:.1f}%")
+        
+        return compressed
     
     def _segment_index(self, data: bytes, segment_size: int = 768000) -> List[bytes]:
         """Segment the index for upload"""
