@@ -159,7 +159,7 @@ class FolderSystemTest:
             return False
         
         print(f"Indexing folder {self.folder_id}...")
-        result = run_cli_command(f"index-folder --folder-id {self.folder_id}")
+        result = run_cli_command(f"index-managed-folder --folder-id {self.folder_id}")
         
         if parse_json_output(result):
             data = result['data']

@@ -901,15 +901,17 @@ class FolderManager:
                 cursor = conn.cursor()
                 
                 for file_info in all_files:
+                    # Use the correct column names for the files table
                     cursor.execute("""
-                        INSERT INTO files (id, folder_id, file_name, file_path, file_size, file_hash, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                        ON CONFLICT (id) DO NOTHING
+                        INSERT INTO files (file_id, folder_id, filename, file_path, relative_path, size, hash, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                        ON CONFLICT (file_id) DO NOTHING
                     """, (
                         file_info['id'],
                         file_info['folder_id'],
                         file_info['file_name'],
                         file_info['file_path'],
+                        os.path.relpath(file_info['file_path'], folder_path),
                         file_info['file_size'],
                         file_info['file_hash']
                     ))
@@ -960,6 +962,196 @@ class FolderManager:
         if folder_id in self.progress_callbacks:
             callback = self.progress_callbacks[folder_id]
             await callback(operation, data)
+    
+    async def set_access_control(self, folder_id: str, access_type: str, password: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Set access control for a folder
+        
+        Args:
+            folder_id: Folder ID
+            access_type: 'public', 'private', or 'protected'
+            password: Password for protected access
+        """
+        if access_type not in ['public', 'private', 'protected']:
+            raise ValueError(f"Invalid access type: {access_type}")
+        
+        if access_type == 'protected' and not password:
+            raise ValueError("Password required for protected access")
+        
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Hash password if provided
+            password_hash = None
+            if password:
+                import hashlib
+                password_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            # Update folder access settings
+            cursor.execute("""
+                UPDATE managed_folders 
+                SET access_type = %s, password_hash = %s
+                WHERE folder_id = %s
+                RETURNING *
+            """, (access_type, password_hash, folder_id))
+            
+            result = cursor.fetchone()
+            if not result:
+                raise ValueError(f"Folder not found: {folder_id}")
+            
+            conn.commit()
+            
+            return {
+                'folder_id': folder_id,
+                'access_type': access_type,
+                'password_protected': password_hash is not None,
+                'message': f"Access control set to {access_type}"
+            }
+    
+    async def get_folder_info(self, folder_id: str) -> Dict[str, Any]:
+        """Get detailed information about a folder"""
+        folder = await self._get_folder(folder_id)
+        if not folder:
+            raise ValueError(f"Folder not found: {folder_id}")
+        
+        # Get file count
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) as file_count,
+                       SUM(size) as total_size
+                FROM files
+                WHERE folder_id = %s
+            """, (folder_id,))
+            file_stats = cursor.fetchone()
+            
+            # Get segment count
+            cursor.execute("""
+                SELECT COUNT(*) as segment_count
+                FROM segments s
+                JOIN files f ON s.file_id = f.file_id
+                WHERE f.folder_id = %s
+            """, (folder_id,))
+            segment_stats = cursor.fetchone()
+        
+        return {
+            'folder_id': folder['folder_id'],
+            'name': folder['name'],
+            'path': folder['path'],
+            'state': folder['state'],
+            'access_type': folder.get('access_type', 'public'),
+            'total_files': folder.get('total_files', 0),
+            'total_size': folder.get('total_size', 0),
+            'total_segments': folder.get('total_segments', 0),
+            'uploaded_segments': folder.get('uploaded_segments', 0),
+            'published': folder.get('published', False),
+            'share_id': folder.get('share_id'),
+            'created_at': folder.get('created_at'),
+            'indexed_at': folder.get('indexed_at'),
+            'segmented_at': folder.get('segmented_at'),
+            'published_at': folder.get('published_at')
+        }
+    
+    async def resync_folder(self, folder_id: str) -> Dict[str, Any]:
+        """
+        Re-sync folder to detect changes
+        
+        Returns:
+            Dictionary with sync results
+        """
+        folder = await self._get_folder(folder_id)
+        if not folder:
+            raise ValueError(f"Folder not found: {folder_id}")
+        
+        folder_path = Path(folder['path'])
+        if not folder_path.exists():
+            raise ValueError(f"Folder path no longer exists: {folder['path']}")
+        
+        # Get current files from database
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT file_path, hash, size, modified_at
+                FROM files
+                WHERE folder_id = %s
+            """, (folder_id,))
+            
+            db_files = {}
+            for row in cursor.fetchall():
+                db_files[row[0]] = {
+                    'hash': row[1],
+                    'size': row[2],
+                    'modified_at': row[3]
+                }
+        
+        # Scan actual files
+        new_files = []
+        modified_files = []
+        deleted_files = []
+        
+        # Check for new and modified files
+        for file_path in folder_path.rglob('*'):
+            if file_path.is_file():
+                rel_path = str(file_path.relative_to(folder_path))
+                file_size = file_path.stat().st_size
+                
+                if rel_path not in db_files:
+                    new_files.append(rel_path)
+                else:
+                    # Check if modified
+                    if file_size != db_files[rel_path]['size']:
+                        modified_files.append(rel_path)
+                    db_files.pop(rel_path)  # Remove from tracking
+        
+        # Remaining files in db_files are deleted
+        deleted_files = list(db_files.keys())
+        
+        # Update database
+        if new_files or modified_files or deleted_files:
+            # Re-index the folder
+            await self.index_folder(folder_id, force=True)
+            
+            # Update state if needed
+            if modified_files or new_files:
+                await self._update_folder_state(folder_id, FolderState.MODIFIED)
+        
+        return {
+            'folder_id': folder_id,
+            'new_files': len(new_files),
+            'modified_files': len(modified_files),
+            'deleted_files': len(deleted_files),
+            'changes_detected': len(new_files) + len(modified_files) + len(deleted_files) > 0,
+            'message': f"Sync complete: {len(new_files)} new, {len(modified_files)} modified, {len(deleted_files)} deleted"
+        }
+    
+    async def delete_folder(self, folder_id: str) -> Dict[str, Any]:
+        """
+        Delete a managed folder
+        
+        Args:
+            folder_id: Folder ID to delete
+        """
+        folder = await self._get_folder(folder_id)
+        if not folder:
+            raise ValueError(f"Folder not found: {folder_id}")
+        
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Delete folder (cascades to files, segments, etc.)
+            cursor.execute("""
+                DELETE FROM managed_folders
+                WHERE folder_id = %s
+            """, (folder_id,))
+            
+            deleted_count = cursor.rowcount
+            conn.commit()
+        
+        return {
+            'folder_id': folder_id,
+            'deleted': deleted_count > 0,
+            'message': f"Folder {folder['name']} deleted successfully"
+        }
 
 
 # Export the main class

@@ -208,6 +208,27 @@ export async function publishFolder(
   return await invoke('publish_folder', { folderId, accessType, userIds, password });
 }
 
+// New folder management functions
+export async function setFolderAccess(
+  folderId: string,
+  accessType: 'public' | 'private' | 'protected',
+  password?: string
+): Promise<any> {
+  return await invoke('set_folder_access', { folderId, accessType, password });
+}
+
+export async function getFolderInfo(folderId: string): Promise<any> {
+  return await invoke('folder_info', { folderId });
+}
+
+export async function resyncFolder(folderId: string): Promise<any> {
+  return await invoke('resync_folder', { folderId });
+}
+
+export async function deleteFolder(folderId: string, confirm: boolean = true): Promise<any> {
+  return await invoke('delete_folder', { folderId, confirm });
+}
+
 // Additional API functions for full integration
 export async function uploadFile(filePath: string, shareId: string, password?: string): Promise<boolean> {
   // @ts-ignore
