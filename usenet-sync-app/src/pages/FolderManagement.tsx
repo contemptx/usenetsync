@@ -299,15 +299,23 @@ export const FolderManagement: React.FC = () => {
   const getNextAction = (folder: ManagedFolder) => {
     switch (folder.state) {
       case 'added':
-        return { label: 'Index', action: () => indexFolder(folder.folder_id), icon: <FileText className="w-4 h-4" /> };
+        return { label: 'Index', action: () => handleIndexFolder(folder.folder_id), icon: <FileText className="w-4 h-4" /> };
       case 'indexed':
-        return { label: 'Segment', action: () => segmentFolder(folder.folder_id), icon: <Package className="w-4 h-4" /> };
+        return { label: 'Segment', action: () => handleSegmentFolder(folder.folder_id), icon: <Package className="w-4 h-4" /> };
       case 'segmented':
-        return { label: 'Upload', action: () => uploadFolder(folder.folder_id), icon: <Upload className="w-4 h-4" /> };
+        return { label: 'Upload', action: () => handleUploadFolder(folder.folder_id), icon: <Upload className="w-4 h-4" /> };
       case 'uploaded':
         return { label: 'Publish', action: () => publishFolder(folder.folder_id, selectedAccessType, authorizedUsers, protectedPassword), icon: <Share2 className="w-4 h-4" /> };
       case 'published':
-        return { label: 'Re-sync', action: () => indexFolder(folder.folder_id), icon: <RefreshCw className="w-4 h-4" /> };
+        return { label: 'Re-sync', action: async () => {
+          try {
+            const result = await resyncFolder(folder.folder_id);
+            toast.success(`Resync complete: ${result.message || 'No changes detected'}`);
+            await loadFolders();
+          } catch (error) {
+            toast.error(`Resync failed: ${error}`);
+          }
+        }, icon: <RefreshCw className="w-4 h-4" /> };
       default:
         return null;
     }

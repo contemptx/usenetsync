@@ -579,7 +579,7 @@ async fn index_folder_full(folder_id: String) -> Result<serde_json::Value, Strin
         cmd.arg(get_workspace_dir().join("src").join("cli.py"));
     }
     
-    let output = cmd.arg("index-folder").arg("--folder-id").arg(&folder_id)
+    let output = cmd.arg("index-managed-folder").arg("--folder-id").arg(&folder_id)
         .output().map_err(|e| e.to_string())?;
     
     if !output.status.success() {

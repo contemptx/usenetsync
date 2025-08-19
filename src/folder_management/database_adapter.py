@@ -169,6 +169,17 @@ class SQLiteCursorWrapper:
         # Replace TIMESTAMP with DATETIME
         query = re.sub(r'\bTIMESTAMP\b', 'DATETIME', query, flags=re.IGNORECASE)
         
+        # Remove RETURNING clause (not supported in SQLite)
+        query = re.sub(r'\s+RETURNING\s+.*$', '', query, flags=re.IGNORECASE | re.MULTILINE)
+        
+        # Convert ON CONFLICT ... DO UPDATE to SQLite's INSERT OR REPLACE
+        if 'ON CONFLICT' in query.upper():
+            # For simple ON CONFLICT DO NOTHING, use INSERT OR IGNORE
+            query = re.sub(r'INSERT INTO', 'INSERT OR IGNORE INTO', query, flags=re.IGNORECASE)
+            query = re.sub(r'ON CONFLICT.*?DO NOTHING', '', query, flags=re.IGNORECASE | re.DOTALL)
+            # For ON CONFLICT DO UPDATE, use INSERT OR REPLACE
+            query = re.sub(r'ON CONFLICT.*?DO UPDATE.*?(?=;|$)', '', query, flags=re.IGNORECASE | re.DOTALL)
+        
         # Replace DEFAULT gen_random_uuid() with nothing (will generate in app)
         query = re.sub(r'DEFAULT gen_random_uuid\(\)', '', query, flags=re.IGNORECASE)
         

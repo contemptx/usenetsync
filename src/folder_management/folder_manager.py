@@ -822,10 +822,20 @@ class FolderManager:
             cursor.execute("""
                 INSERT INTO folder_operations (folder_id, operation)
                 VALUES (%s, %s)
-                RETURNING id
             """, (folder_id, operation))
             
-            operation_id = cursor.fetchone()[0]
+            # Get the last inserted ID (works for both SQLite and PostgreSQL)
+            operation_id = cursor.lastrowid
+            if not operation_id:
+                # Fallback for PostgreSQL
+                cursor.execute("""
+                    SELECT id FROM folder_operations 
+                    WHERE folder_id = %s AND operation = %s 
+                    ORDER BY started_at DESC LIMIT 1
+                """, (folder_id, operation))
+                result = cursor.fetchone()
+                operation_id = result[0] if result else 0
+            
             conn.commit()
             
             return operation_id
@@ -901,19 +911,19 @@ class FolderManager:
                 cursor = conn.cursor()
                 
                 for file_info in all_files:
-                    # Use the correct column names for the files table
+                    # Use the actual column names from the existing files table
                     cursor.execute("""
-                        INSERT INTO files (file_id, folder_id, filename, file_path, relative_path, size, hash, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                        ON CONFLICT (file_id) DO NOTHING
+                        INSERT INTO files (folder_id, file_path, file_hash, file_size, created_at)
+                        VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                        ON CONFLICT (file_path, folder_id) DO UPDATE SET
+                            file_hash = EXCLUDED.file_hash,
+                            file_size = EXCLUDED.file_size,
+                            modified_at = CURRENT_TIMESTAMP
                     """, (
-                        file_info['id'],
                         file_info['folder_id'],
-                        file_info['file_name'],
                         file_info['file_path'],
-                        os.path.relpath(file_info['file_path'], folder_path),
-                        file_info['file_size'],
-                        file_info['file_hash']
+                        file_info['file_hash'],
+                        file_info['file_size']
                     ))
                 
                 conn.commit()
@@ -992,12 +1002,17 @@ class FolderManager:
                 UPDATE managed_folders 
                 SET access_type = %s, password_hash = %s
                 WHERE folder_id = %s
-                RETURNING *
             """, (access_type, password_hash, folder_id))
             
-            result = cursor.fetchone()
-            if not result:
+            # Check if update was successful
+            if cursor.rowcount == 0:
                 raise ValueError(f"Folder not found: {folder_id}")
+            
+            # Get updated folder
+            cursor.execute("""
+                SELECT * FROM managed_folders WHERE folder_id = %s
+            """, (folder_id,))
+            result = cursor.fetchone()
             
             conn.commit()
             
@@ -1019,7 +1034,7 @@ class FolderManager:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT COUNT(*) as file_count,
-                       SUM(size) as total_size
+                       SUM(file_size) as total_size
                 FROM files
                 WHERE folder_id = %s
             """, (folder_id,))
@@ -1071,7 +1086,7 @@ class FolderManager:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT file_path, hash, size, modified_at
+                SELECT file_path, file_hash, file_size, modified_at
                 FROM files
                 WHERE folder_id = %s
             """, (folder_id,))
