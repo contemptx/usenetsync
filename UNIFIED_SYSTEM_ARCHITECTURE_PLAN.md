@@ -482,8 +482,14 @@ To ensure smooth transition:
 7. **Message ID Security**: Random generation with no patterns
 8. **Share ID Protection**: No Usenet data in share identifiers
 9. **Client-Side Decryption**: All sensitive operations local only
+10. **User ID Permanence**: Once generated, NEVER regenerated (see USER_AND_FOLDER_KEY_SECURITY.md)
+11. **Folder Keys**: Ed25519 keys per folder for signing and owner access
+12. **No Recovery Mechanisms**: Lost User IDs require re-authorization by design
 
-**CRITICAL**: See CRITICAL_FUNCTIONALITY_PRESERVATION.md for detailed security requirements that MUST be preserved.
+**CRITICAL**: See documentation:
+- CRITICAL_FUNCTIONALITY_PRESERVATION.md - Security features
+- USER_AND_FOLDER_KEY_SECURITY.md - User ID and Folder Key requirements
+- ACCESS_MANAGEMENT_DOCUMENTATION.md - Three-tier access control
 
 ### Benefits of Unification
 
@@ -528,6 +534,33 @@ To ensure smooth transition:
 - Unified API surface
 - Complete test coverage
 
+## Critical Security Considerations
+
+### User ID System
+- **One-Time Generation**: User IDs are 64-character hex strings generated ONCE
+- **No Regeneration**: If reinstalled, users get NEW IDs and must request access again
+- **Security by Design**: Prevents impersonation and unauthorized access
+- **Database Enforcement**: Triggers prevent User ID updates
+
+### Folder Key System
+- **Ed25519 Keys**: Every folder gets permanent key pair on first index
+- **Private Key**: Encrypted locally, used for signing and owner access
+- **Public Key**: Included in indexes for signature verification
+- **No Regeneration**: Keys are permanent once created
+
+### Access Management
+- **PUBLIC**: Encrypted but key included (no access control)
+- **PRIVATE**: Zero-knowledge proofs, per-user wrapped keys
+- **PROTECTED**: Password-derived keys with scrypt
+- **All Client-Side**: Decryption NEVER happens on servers
+
 ## Conclusion
 
-This unification plan addresses the current fragmentation while maintaining all functionality. The phased approach ensures minimal disruption while delivering a more maintainable, scalable, and secure system. The unified architecture will support UsenetSync's growth from handling gigabytes to petabytes of data efficiently.
+This unification plan addresses the current fragmentation while maintaining all functionality AND critical security features:
+
+1. **Preserved Security**: User ID permanence, Folder Keys, three-tier access control
+2. **Maintained Functionality**: All 9 critical requirements from CRITICAL_SYSTEM_REQUIREMENTS.md
+3. **Scalability**: Handles 20TB+ datasets with streaming and dual database support
+4. **Privacy**: Two-layer subjects, obfuscated message IDs, encrypted storage
+
+The phased approach ensures minimal disruption while delivering a more maintainable, scalable, and secure system. The unified architecture will support UsenetSync's growth from handling gigabytes to petabytes of data efficiently, while maintaining the strong security model that makes it suitable for untrusted storage on Usenet servers.
