@@ -151,9 +151,14 @@ class FolderManager:
         self.progress_callbacks = {}
         self.active_operations = {}
         
-        # Initialize extended operations
-        self.upload_manager = FolderUploadManager(self)
-        self.publisher = FolderPublisher(self)
+        # Initialize extended operations (optional - only if modules available)
+        try:
+            self.upload_manager = FolderUploadManager(self)
+            self.publisher = FolderPublisher(self)
+        except Exception as e:
+            self.logger.warning(f"Could not initialize upload/publish managers: {e}")
+            self.upload_manager = None
+            self.publisher = None
         
         # Ensure database schema
         self._ensure_database_schema()
@@ -269,16 +274,74 @@ class FolderManager:
                 )
             """)
             
-            # Add folder_id column to files table if it doesn't exist
+            # Create files table if it doesn't exist
             cursor.execute("""
-                ALTER TABLE files 
-                ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES managed_folders(folder_id)
+                CREATE TABLE IF NOT EXISTS files (
+                    id SERIAL PRIMARY KEY,
+                    file_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+                    folder_id UUID REFERENCES managed_folders(folder_id) ON DELETE CASCADE,
+                    filename TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    relative_path TEXT NOT NULL,
+                    size BIGINT NOT NULL,
+                    mime_type TEXT,
+                    hash TEXT,
+                    encrypted BOOLEAN DEFAULT FALSE,
+                    
+                    -- Segmentation info
+                    total_segments INTEGER DEFAULT 0,
+                    segment_size INTEGER,
+                    
+                    -- Upload tracking
+                    uploaded BOOLEAN DEFAULT FALSE,
+                    upload_started_at TIMESTAMP,
+                    upload_completed_at TIMESTAMP,
+                    
+                    -- Metadata
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    modified_at TIMESTAMP,
+                    indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    metadata JSONB DEFAULT '{}'::jsonb
+                )
             """)
             
-            # Add index for folder_id in files table
+            # Create segments table if it doesn't exist
             cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id)
+                CREATE TABLE IF NOT EXISTS segments (
+                    id SERIAL PRIMARY KEY,
+                    segment_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+                    file_id UUID REFERENCES files(file_id) ON DELETE CASCADE,
+                    segment_index INTEGER NOT NULL,
+                    size INTEGER NOT NULL,
+                    hash TEXT,
+                    
+                    -- Upload info
+                    message_id TEXT,
+                    newsgroup TEXT,
+                    uploaded BOOLEAN DEFAULT FALSE,
+                    upload_attempts INTEGER DEFAULT 0,
+                    last_attempt_at TIMESTAMP,
+                    uploaded_at TIMESTAMP,
+                    
+                    -- Redundancy
+                    is_redundancy BOOLEAN DEFAULT FALSE,
+                    redundancy_index INTEGER,
+                    
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    metadata JSONB DEFAULT '{}'::jsonb
+                )
             """)
+            
+            # Create indexes for files and segments
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);
+                CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash);
+                CREATE INDEX IF NOT EXISTS idx_segments_file_id ON segments(file_id);
+                CREATE INDEX IF NOT EXISTS idx_segments_message_id ON segments(message_id);
+            """)
+            
+            # Compatibility check - ensure folder_id exists in files table
+            # (already created in the CREATE TABLE statement above)
             
             conn.commit()
             self.logger.info("Database schema initialized")

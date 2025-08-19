@@ -72,8 +72,11 @@ class AdvancedNNTPPool:
             except Exception as e:
                 self.logger.error(f"Failed to create initial connection: {e}")
     
-    def _create_connection(self) -> nntp.NNTPClient:
+    def _create_connection(self) -> Optional[Any]:
         """Create new NNTP connection with optimizations"""
+        if nntp is None:
+            raise ImportError("NNTP module not available. Install pynntp or skip NNTP operations.")
+            
         with self.lock:
             if self.active_connections >= self.max_connections:
                 raise Exception("Maximum connections reached")
