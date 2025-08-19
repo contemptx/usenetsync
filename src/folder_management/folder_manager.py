@@ -276,7 +276,7 @@ class FolderManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS folder_operations (
                     id SERIAL PRIMARY KEY,
-                    folder_id UUID REFERENCES folders(folder_id),
+                    folder_id UUID NOT NULL,
                     operation VARCHAR(50) NOT NULL,
                     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     completed_at TIMESTAMP,
@@ -1134,7 +1134,7 @@ class FolderManager:
             cursor.execute("""
                 SELECT file_path, file_hash, file_size, modified_at
                 FROM files
-                WHERE folder_unique_id = %s
+                WHERE folder_id = %s
             """, (folder_int_id,))
             
             db_files = {}

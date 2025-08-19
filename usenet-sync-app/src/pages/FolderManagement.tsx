@@ -297,9 +297,36 @@ export const FolderManagement: React.FC = () => {
   };
 
   const getNextAction = (folder: ManagedFolder) => {
-    switch (folder.state) {
-      case 'added':
+    // Handle both old states and new 'active' state from consolidated database
+    if (folder.state === 'active' || folder.state === 'added') {
+      // Check if folder has been indexed by looking at file count
+      if (folder.total_files && folder.total_files > 0) {
+        // Has files, check if segmented
+        if (folder.total_segments && folder.total_segments > 0) {
+          // Has segments, check if published
+          if (folder.published) {
+            return { label: 'Re-sync', action: async () => {
+              try {
+                const result = await resyncFolder(folder.folder_id);
+                toast.success(`Resync complete: ${result.message || 'No changes detected'}`);
+                await loadFolders();
+              } catch (error) {
+                toast.error(`Resync failed: ${error}`);
+              }
+            }, icon: <RefreshCw className="w-4 h-4" /> };
+          } else {
+            return { label: 'Upload', action: () => handleUploadFolder(folder.folder_id), icon: <Upload className="w-4 h-4" /> };
+          }
+        } else {
+          return { label: 'Segment', action: () => handleSegmentFolder(folder.folder_id), icon: <Package className="w-4 h-4" /> };
+        }
+      } else {
         return { label: 'Index', action: () => handleIndexFolder(folder.folder_id), icon: <FileText className="w-4 h-4" /> };
+      }
+    }
+    
+    // Keep old state handling for compatibility
+    switch (folder.state) {
       case 'indexed':
         return { label: 'Segment', action: () => handleSegmentFolder(folder.folder_id), icon: <Package className="w-4 h-4" /> };
       case 'segmented':
@@ -396,7 +423,7 @@ export const FolderManagement: React.FC = () => {
                   <div
                     key={folder.folder_id}
                     onClick={() => setSelectedFolder(folder)}
-                    className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors ${
+                    className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
                       selectedFolder?.folder_id === folder.folder_id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                     }`}
                   >
@@ -553,32 +580,47 @@ export const FolderManagement: React.FC = () => {
                   </div>
 
                   {/* Workflow Progress */}
-                  <div className="bg-white dark:bg-dark-surface rounded-lg p-4">
-                    <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">Workflow Progress</h3>
+                  <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                    <h3 className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-6">Workflow Progress</h3>
                     <div className="flex items-center justify-between">
-                      {['added', 'indexed', 'segmented', 'uploaded', 'published'].map((step, index) => {
-                        const states = ['added', 'indexed', 'segmented', 'uploaded', 'published'];
-                        const currentIndex = states.indexOf(selectedFolder.state);
+                      {['Added', 'Indexed', 'Segmented', 'Uploaded', 'Published'].map((step, index) => {
+                        const states = ['added', 'indexed', 'segmented', 'uploaded', 'published', 'active'];
+                        const currentState = selectedFolder.state.toLowerCase();
+                        
+                        // For 'active' state, determine progress based on data
+                        let currentIndex = states.indexOf(currentState);
+                        if (currentState === 'active') {
+                          if (selectedFolder.published) {
+                            currentIndex = 4; // published
+                          } else if (selectedFolder.total_segments > 0) {
+                            currentIndex = 2; // segmented
+                          } else if (selectedFolder.total_files > 0) {
+                            currentIndex = 1; // indexed
+                          } else {
+                            currentIndex = 0; // added
+                          }
+                        }
+                        
                         const isComplete = currentIndex >= index;
                         const isCurrent = currentIndex === index;
                         
                         return (
                           <React.Fragment key={step}>
                             <div className="flex flex-col items-center">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
                                 isComplete 
-                                  ? 'bg-green-500 text-white' 
+                                  ? 'bg-green-600 text-white shadow-md' 
                                   : isCurrent 
-                                    ? 'bg-blue-500 text-white animate-pulse' 
-                                    : 'bg-gray-200 text-gray-400'
+                                    ? 'bg-blue-600 text-white animate-pulse shadow-md' 
+                                    : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
                               }`}>
                                 {isComplete ? '✓' : index + 1}
                               </div>
-                              <span className="text-xs mt-1 capitalize">{step}</span>
+                              <span className="text-sm font-medium mt-2 text-gray-700 dark:text-gray-300">{step}</span>
                             </div>
                             {index < 4 && (
-                              <div className={`flex-1 h-0.5 ${
-                                currentIndex > index ? 'bg-green-500' : 'bg-gray-200'
+                              <div className={`flex-1 h-1 mx-2 rounded-full transition-all ${
+                                currentIndex > index ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'
                               }`} />
                             )}
                           </React.Fragment>
@@ -590,49 +632,49 @@ export const FolderManagement: React.FC = () => {
               )}
 
               {activeTab === 'access' && (
-                <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
-                  <h3 className="text-lg font-medium mb-4">Access Control Settings</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Access Control Settings</h3>
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Access Type
                       </label>
                       <div className="flex gap-4">
-                        <label className="flex items-center">
+                        <label className="flex items-center cursor-pointer text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                           <input 
                             type="radio" 
                             name="access" 
                             value="public" 
                             checked={selectedAccessType === 'public'}
                             onChange={() => setSelectedAccessType('public')}
-                            className="mr-2" 
+                            className="mr-2 text-blue-600 focus:ring-blue-500" 
                           />
                           <Unlock className="w-4 h-4 mr-1" />
-                          Public
+                          <span className="font-medium">Public</span>
                         </label>
-                        <label className="flex items-center">
+                        <label className="flex items-center cursor-pointer text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                           <input 
                             type="radio" 
                             name="access" 
                             value="private" 
                             checked={selectedAccessType === 'private'}
                             onChange={() => setSelectedAccessType('private')}
-                            className="mr-2" 
+                            className="mr-2 text-blue-600 focus:ring-blue-500" 
                           />
                           <Lock className="w-4 h-4 mr-1" />
-                          Private
+                          <span className="font-medium">Private</span>
                         </label>
-                        <label className="flex items-center">
+                        <label className="flex items-center cursor-pointer text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                           <input 
                             type="radio" 
                             name="access" 
                             value="protected" 
                             checked={selectedAccessType === 'protected'}
                             onChange={() => setSelectedAccessType('protected')}
-                            className="mr-2" 
+                            className="mr-2 text-blue-600 focus:ring-blue-500" 
                           />
                           <Users className="w-4 h-4 mr-1" />
-                          Protected
+                          <span className="font-medium">Protected</span>
                         </label>
                       </div>
                     </div>
@@ -656,7 +698,7 @@ export const FolderManagement: React.FC = () => {
                           type="password"
                           value={protectedPassword}
                           onChange={(e) => setProtectedPassword(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Enter password for protected access"
                         />
                       </div>
