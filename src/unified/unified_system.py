@@ -741,6 +741,9 @@ class UnifiedSystem:
     """Main unified system orchestrator"""
     
     def __init__(self, db_type: str = 'sqlite', **db_params):
+        # Store database type
+        self.db_type = db_type
+        
         # Initialize database
         self.db_manager = UnifiedDatabaseManager(db_type, **db_params)
         self.db_manager.connect()
@@ -748,6 +751,11 @@ class UnifiedSystem:
         # Initialize subsystems
         self.indexer = UnifiedIndexingSystem(self.db_manager)
         self.uploader = None  # Initialized when NNTP client provided
+        self.downloader = None  # Initialized when NNTP client provided
+        
+        # Import and initialize publishing system
+        from unified.publishing_system import UnifiedPublishingSystem
+        self.publisher = UnifiedPublishingSystem(self.db_manager)
         
         # Create schema
         self._create_schema()
