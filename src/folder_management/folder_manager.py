@@ -562,8 +562,9 @@ class FolderManager:
         if not folder:
             raise ValueError(f"Folder not found: {folder_id}")
         
-        if folder['state'] != FolderState.INDEXED.value:
-            raise ValueError(f"Folder must be indexed first. Current state: {folder['state']}")
+        # Check if folder has been indexed (folders table uses 'active' for all operational states)
+        if folder.get('total_files', 0) == 0:
+            raise ValueError(f"Folder must be indexed first. No files found.")
         
         # Update state
         await self._update_folder_state(folder_id, FolderState.SEGMENTING)
@@ -768,32 +769,25 @@ class FolderManager:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # First check if files table has folder_id column
+            # For SQLite, we know the files table uses integer folder_id
+            # Get the integer folder_id from folders table
             cursor.execute("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'files' 
-                AND column_name = 'folder_id'
-            """)
+                SELECT id FROM folders WHERE folder_unique_id = %s
+            """, (folder_id,))
+            folder_int_id_result = cursor.fetchone()
             
-            if cursor.fetchone():
-                # Use folder_id if it exists
+            if folder_int_id_result:
+                folder_int_id = folder_int_id_result[0]
+                # Query files using integer folder_id
                 cursor.execute("""
-                    SELECT id as file_id, file_path, file_name, file_size
+                    SELECT id as file_id, file_path, file_path as file_name, file_size
                     FROM files
-                    WHERE folder_unique_id = %s
+                    WHERE folder_id = %s
                     ORDER BY file_path
-                """, (folder_id,))
+                """, (folder_int_id,))
             else:
-                # Otherwise use share_id (existing schema)
-                cursor.execute("""
-                    SELECT id as file_id, file_path, file_name, file_size
-                    FROM files
-                    WHERE share_id IN (
-                        SELECT share_id FROM folders WHERE folder_unique_id = %s
-                    )
-                    ORDER BY file_path
-                """, (folder_id,))
+                # No folder found
+                return []
             
             rows = cursor.fetchall()
             columns = [desc[0] for desc in cursor.description]
