@@ -221,52 +221,54 @@ class FolderUploadManager:
             return segments
     
     async def _post_segment(self, data: bytes, subject: str, headers: Dict, newsgroup: str) -> str:
-        """Post a segment to Usenet"""
+        """Post a segment to Usenet using the production NNTP client"""
         import uuid
-        from nntp import NNTPClient
+        import time
         
         try:
-            # Create a simple direct connection for now
-            client = NNTPClient(
-                host='news.newshosting.com',
-                port=563,
-                username='contemptx',
-                password='Kia211101#',
-                use_ssl=True
-            )
-            
-            # Build the article
-            article_lines = []
-            article_lines.append(f"From: UsenetSync <usenet@sync.local>")
-            article_lines.append(f"Newsgroups: {newsgroup}")
-            article_lines.append(f"Subject: {subject}")
-            article_lines.append(f"Message-ID: <{uuid.uuid4()}@usenetsync>")
-            for key, value in headers.items():
-                if key not in ['From', 'Newsgroups', 'Subject', 'Message-ID']:
-                    article_lines.append(f"{key}: {value}")
-            article_lines.append("")  # Empty line before body
-            
-            # Add the data (for testing, just use a placeholder)
-            if data:
-                article_lines.append(str(data))
-            else:
-                article_lines.append("Test segment data")
-            
-            article = "\r\n".join(article_lines)
-            
-            # Post the article
-            response = client.post(article)
-            
-            client.quit()
-            
-            # Generate message ID
-            message_id = f"<{uuid.uuid4()}@usenetsync>"
-            return message_id
-            
+            # Use the existing connection pool from ProductionNNTPClient
+            with self.fm.nntp_client.connection_pool.get_connection() as conn:
+                # Build the article
+                article_lines = []
+                article_lines.append(f"From: UsenetSync <usenet@sync.local>")
+                article_lines.append(f"Newsgroups: {newsgroup}")
+                article_lines.append(f"Subject: {subject}")
+                message_id = f"<{uuid.uuid4()}@usenetsync>"
+                article_lines.append(f"Message-ID: {message_id}")
+                
+                for key, value in headers.items():
+                    if key not in ['From', 'Newsgroups', 'Subject', 'Message-ID']:
+                        article_lines.append(f"{key}: {value}")
+                
+                article_lines.append("")  # Empty line before body
+                
+                # Add the data - encode if needed
+                if data:
+                    if isinstance(data, bytes):
+                        # For binary data, we should yEnc encode it
+                        import base64
+                        encoded = base64.b64encode(data).decode('ascii')
+                        article_lines.append(encoded)
+                    else:
+                        article_lines.append(str(data))
+                else:
+                    # For testing, use placeholder data
+                    article_lines.append("Test segment data placeholder")
+                
+                article = "\r\n".join(article_lines)
+                
+                # Post using the connection's post method (expects bytes)
+                response = conn.post(article.encode('utf-8'), newsgroup)
+                
+                # Update connection stats
+                conn.last_used = time.time()
+                conn.post_count += 1
+                
+                return message_id
+                
         except Exception as e:
             self.logger.error(f"Failed to post segment: {e}")
-            # Return a fake message ID for testing
-            return f"<{uuid.uuid4()}@usenetsync>"
+            raise
     
     async def _update_segment_message_id(self, segment_id: str, message_id: str):
         """Update segment with message ID after upload"""
@@ -441,20 +443,27 @@ class FolderPublisher:
         with self.fm.db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Get folder info
+            # Get folder info from folders table
             cursor.execute(
-                "SELECT * FROM managed_folders WHERE folder_id = %s",
+                "SELECT * FROM folders WHERE folder_unique_id = %s",
                 (folder_id,)
             )
             folder = cursor.fetchone()
             
-            # Get files
+            # Get integer folder_id for files query
+            cursor.execute("SELECT id FROM folders WHERE folder_unique_id = %s", (folder_id,))
+            folder_int_id_result = cursor.fetchone()
+            if not folder_int_id_result:
+                return {'files': [], 'segments': []}
+            folder_int_id = folder_int_id_result[0]
+            
+            # Get files using integer folder_id
             cursor.execute("""
-                SELECT id, file_name, file_path, file_size, file_hash
+                SELECT id, file_path, file_path, file_size, file_hash
                 FROM files
                 WHERE folder_id = %s
                 ORDER BY file_path
-            """, (folder_id,))
+            """, (folder_int_id,))
             
             files = []
             for row in cursor.fetchall():
@@ -468,12 +477,12 @@ class FolderPublisher:
             
             # Get segments with message IDs
             cursor.execute("""
-                SELECT s.*, f.file_name
+                SELECT s.*, f.file_path as file_name
                 FROM segments s
                 JOIN files f ON s.file_id = f.id
                 WHERE f.folder_id = %s
                 ORDER BY s.file_id, s.segment_index
-            """, (folder_id,))
+            """, (folder_int_id,))
             
             segments = []
             for row in cursor.fetchall():
