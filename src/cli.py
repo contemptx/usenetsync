@@ -614,28 +614,94 @@ def publish_folder(folder_id, access_type, user_ids, password):
 def download_share(access_string, destination, password):
     """Download a share using access string"""
     try:
-        # For now, parse the access string and provide info
+        from download.enhanced_download_system import EnhancedDownloadSystem
+        from database.database_selector import DatabaseSelector
+        from networking.production_nntp_client import ProductionNNTPClient
+        from security.enhanced_security_system import EnhancedSecuritySystem
+        
+        # Get database manager (returns tuple)
+        db_manager, db_type = DatabaseSelector.get_database_manager()
+        
+        # Initialize NNTP client with real credentials
+        nntp_client = ProductionNNTPClient(
+            host='news.newshosting.com',
+            port=563,
+            username='contemptx',
+            password='Kia211101#',
+            use_ssl=True,
+            max_connections=2
+        )
+        
+        # Initialize security system
+        security = EnhancedSecuritySystem(db_manager)
+        
+        # Configuration for download system
+        config = {
+            'download_workers': 2,
+            'max_concurrent_files': 3,
+            'temp_dir': '/tmp/download_temp',
+            'verify_downloads': True
+        }
+        
+        # Initialize the REAL download system
+        download_system = EnhancedDownloadSystem(
+            db_manager=db_manager,
+            nntp_client=nntp_client,
+            security_system=security,
+            config=config
+        )
+        
+        # Convert access string format for compatibility
         import base64
         import json as json_lib
         
-        # Decode the access string
         if access_string.startswith('usenetsync://'):
-            encoded = access_string[13:]  # Remove prefix
-            decoded = base64.b64decode(encoded).decode('utf-8')
-            share_info = json_lib.loads(decoded)
+            # Parse our format
+            encoded = access_string[13:]
+            decoded = base64.urlsafe_b64decode(encoded).decode('utf-8')
+            our_data = json_lib.loads(decoded)
             
-            result = {
-                'success': True,
-                'destination': destination,
-                'share_id': share_info.get('id'),
-                'type': share_info.get('type'),
-                'index_message_ids': share_info.get('idx', []),
-                'message': 'Download functionality ready. Would retrieve segments from Usenet and reconstruct files.'
+            # Convert to expected format
+            index_ids = our_data.get('idx', [])
+            # Convert index format
+            if index_ids and len(index_ids) > 0:
+                index_ref = {
+                    'type': 'single',
+                    'message_id': index_ids[0],  # Use first message ID
+                    'newsgroup': 'alt.binaries.test'  # Default newsgroup
+                }
+            else:
+                index_ref = {}
+            
+            converted_data = {
+                'v': our_data.get('v', '1.0'),
+                'share_type': our_data.get('type', 'public'),
+                'folder_id': our_data.get('id', ''),
+                'index': index_ref
             }
             
-            click.echo(json.dumps(result))
+            if 'key' in our_data:
+                converted_data['key'] = our_data['key']
+            
+            # Re-encode in expected format (without prefix)
+            converted_string = base64.b64encode(
+                json_lib.dumps(converted_data).encode()
+            ).decode('utf-8')
         else:
-            raise ValueError('Invalid access string format')
+            converted_string = access_string
+        
+        # Use the REAL download_from_access_string method
+        result = download_system.download_from_access_string(
+            access_string=converted_string,
+            destination_path=destination,
+            password=password
+        )
+        
+        click.echo(json.dumps({
+            'success': True,
+            'destination': destination,
+            'result': result
+        }))
         
     except Exception as e:
         click.echo(json.dumps({'error': str(e)}), err=True)
