@@ -102,6 +102,9 @@ class FolderUploadManager:
                 raise ValueError("No segments found to upload")
             
             total_segments = len(segments)
+            # Store for use in _build_headers and _build_subject
+            self.total_segments = total_segments
+            
             uploaded_count = 0
             failed_count = 0
             
@@ -257,8 +260,8 @@ class FolderUploadManager:
                 
                 article = "\r\n".join(article_lines)
                 
-                # Post using the connection's post method (expects bytes)
-                response = conn.post(article.encode('utf-8'), newsgroup)
+                # Post using the connection's post method (expects bytes only)
+                response = conn.post(article.encode('utf-8'))
                 
                 # Update connection stats
                 conn.last_used = time.time()
@@ -529,7 +532,8 @@ class FolderPublisher:
     
     def _generate_share_id(self, folder: Dict) -> str:
         """Generate unique share ID"""
-        data = f"{folder['folder_id']}{datetime.now().isoformat()}"
+        folder_id = folder.get('folder_unique_id', folder.get('folder_id', ''))
+        data = f"{folder_id}{datetime.now().isoformat()}"
         hash_value = hashlib.sha256(data.encode()).hexdigest()
         return f"US-{hash_value[:8].upper()}-{hash_value[8:16].upper()}"
     

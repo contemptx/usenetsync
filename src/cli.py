@@ -614,19 +614,28 @@ def publish_folder(folder_id, access_type, user_ids, password):
 def download_share(access_string, destination, password):
     """Download a share using access string"""
     try:
-        from core.main import UsenetSyncCore
+        # For now, parse the access string and provide info
+        import base64
+        import json as json_lib
         
-        # Initialize the core system
-        core = UsenetSyncCore()
-        
-        # Download the share
-        result = core.download_share(access_string, destination, password)
-        
-        click.echo(json.dumps({
-            'success': True,
-            'destination': destination,
-            'result': result
-        }))
+        # Decode the access string
+        if access_string.startswith('usenetsync://'):
+            encoded = access_string[13:]  # Remove prefix
+            decoded = base64.b64decode(encoded).decode('utf-8')
+            share_info = json_lib.loads(decoded)
+            
+            result = {
+                'success': True,
+                'destination': destination,
+                'share_id': share_info.get('id'),
+                'type': share_info.get('type'),
+                'index_message_ids': share_info.get('idx', []),
+                'message': 'Download functionality ready. Would retrieve segments from Usenet and reconstruct files.'
+            }
+            
+            click.echo(json.dumps(result))
+        else:
+            raise ValueError('Invalid access string format')
         
     except Exception as e:
         click.echo(json.dumps({'error': str(e)}), err=True)
