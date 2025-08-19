@@ -254,7 +254,7 @@ class FolderUploadManager:
         """Build subject line for Usenet article"""
         return (
             f"[{segment['segment_index']}/{folder['total_segments']}] "
-            f"{folder['name']} - {segment['file_name']} "
+            f"{folder.get('display_name', folder.get('name', 'Unknown'))} - {segment['file_name']} "
             f"[{segment['hash'][:8]}]"
         )
     
@@ -323,7 +323,7 @@ class FolderPublisher:
             binary_index = SimplifiedBinaryIndex(folder_id)
             
             # Build core index with all metadata
-            self.logger.info(f"Building core index for folder {folder['name']}")
+            self.logger.info(f"Building core index for folder {folder.get('display_name', folder.get('name', 'Unknown'))}")
             
             # Get all files and segments info
             index_data = await self._build_index_data(folder_id)
@@ -351,7 +351,7 @@ class FolderPublisher:
             # Upload index segments
             index_message_ids = []
             for idx, segment in enumerate(index_segments):
-                subject = f"[CORE_INDEX] {folder['name']} - Part {idx+1}/{len(index_segments)}"
+                subject = f"[CORE_INDEX] {folder.get('display_name', folder.get('name', 'Unknown'))} - Part {idx+1}/{len(index_segments)}"
                 headers = {
                     'From': 'UsenetSync <noreply@usenetsync.com>',
                     'X-UsenetSync-Type': 'CoreIndex',
