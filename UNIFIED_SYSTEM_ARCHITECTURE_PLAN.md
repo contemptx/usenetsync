@@ -159,6 +159,7 @@ Currently using **multiple database schemas** across systems:
 4. **Security by Design**: Unified security model across all operations
 5. **Background Processing**: All heavy operations run asynchronously
 6. **Progressive Enhancement**: Start simple, add complexity as needed
+7. **Preserve Critical Functionality**: All security features from CRITICAL_FUNCTIONALITY_PRESERVATION.md must be maintained
 
 ### Unified System Components
 
@@ -355,7 +356,7 @@ class UnifiedUploadManager:
 ```python
 class UnifiedSecurityLayer:
     """
-    Single security implementation
+    Single security implementation preserving critical features
     """
     
     def __init__(self):
@@ -363,11 +364,18 @@ class UnifiedSecurityLayer:
         self.key_derivation = Scrypt
         self.access_control = RoleBasedAccessControl()
         
+    def generate_subject_pair(self, folder_id: str, file_version: int, 
+                            segment_index: int) -> SubjectPair:
+        """CRITICAL: Maintain two-layer subject system"""
+        internal_subject = self._generate_internal_subject(...)  # 64 hex chars
+        usenet_subject = self._generate_usenet_subject()  # 20 random chars
+        return SubjectPair(internal_subject, usenet_subject)
+        
     def encrypt_segment(self, segment: bytes, access_level: AccessLevel):
         # Consistent encryption for all segments
         
     def verify_access(self, user_id: str, entity_id: str, operation: str):
-        # Unified access control
+        # Unified access control with zero-knowledge proofs
 ```
 
 ### Migration Strategy
@@ -427,6 +435,12 @@ To ensure smooth transition:
 3. **Audit Logging**: All operations logged
 4. **Key Management**: Secure key derivation and storage
 5. **Network Security**: TLS for all connections
+6. **Usenet Obfuscation**: Maintain two-layer subject system
+7. **Message ID Security**: Random generation with no patterns
+8. **Share ID Protection**: No Usenet data in share identifiers
+9. **Client-Side Decryption**: All sensitive operations local only
+
+**CRITICAL**: See CRITICAL_FUNCTIONALITY_PRESERVATION.md for detailed security requirements that MUST be preserved.
 
 ### Benefits of Unification
 
