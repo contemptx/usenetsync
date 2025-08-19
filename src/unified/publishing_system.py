@@ -12,7 +12,7 @@ import time
 import json
 import secrets
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 
 # Add src to path
