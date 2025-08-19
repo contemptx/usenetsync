@@ -980,34 +980,49 @@ class EnhancedSecuritySystem:
                     
                     decrypted_data = self.decrypt_data(encrypted_data, encryption_key)
                     
-                    # The decrypted data is a compressed USBI binary index
-                    # We need to decompress it and parse it
+                    # The decrypted data could be:
+                    # 1. Compressed USBI binary index
+                    # 2. Compressed JSON
+                    # 3. Uncompressed JSON
+                    
                     import zlib
+                    
+                    # First check if it's compressed
+                    is_compressed = False
                     try:
-                        # Try to decompress (USBI format is always compressed)
                         decompressed = zlib.decompress(decrypted_data)
-                        
-                        # Check if it's USBI format
-                        if decompressed[:4] == b'USBI':
-                            # It's a binary index, parse it
-                            from indexing.simplified_binary_index import SimplifiedBinaryIndex
-                            indexer = SimplifiedBinaryIndex('')
-                            parsed_index = indexer.parse_binary_index(decrypted_data)  # Takes compressed data
-                            
-                            logger.info(f"Decrypted PUBLIC USBI index: {parsed_index.get('files', []).__len__()} files")
-                            return parsed_index
-                        else:
-                            # Try as JSON (legacy format)
-                            decrypted_json = json.loads(decompressed.decode('utf-8'))
-                            logger.info(f"Decrypted PUBLIC JSON index")
-                            return decrypted_json
+                        is_compressed = True
                     except zlib.error:
-                        # Not compressed, try as raw JSON
-                        decrypted_json = json.loads(decrypted_data.decode('utf-8'))
-                        logger.info(f"Decrypted PUBLIC index (uncompressed)")
-                        return decrypted_json
+                        decompressed = decrypted_data
+                    
+                    # Check if it's USBI format
+                    if is_compressed and decompressed[:4] == b'USBI':
+                        # It's a binary index, parse it
+                        from indexing.simplified_binary_index import SimplifiedBinaryIndex
+                        indexer = SimplifiedBinaryIndex('')
+                        # parse_binary_index expects compressed data
+                        parsed_index = indexer.parse_binary_index(decrypted_data)
+                        
+                        logger.info(f"Decrypted PUBLIC USBI index: {len(parsed_index.get('files', []))} files")
+                        return parsed_index
+                    else:
+                        # Try as JSON
+                        try:
+                            if is_compressed:
+                                decrypted_json = json.loads(decompressed.decode('utf-8'))
+                                logger.info(f"Decrypted PUBLIC JSON index (compressed)")
+                            else:
+                                decrypted_json = json.loads(decrypted_data.decode('utf-8'))
+                                logger.info(f"Decrypted PUBLIC index (uncompressed)")
+                            return decrypted_json
+                        except Exception as e:
+                            logger.error(f"Failed to parse decrypted index as JSON: {e}")
+                            return None
                 except Exception as e:
+                    import traceback
                     logger.error(f"Failed to decrypt public index: {e}")
+                    logger.error(f"Exception type: {type(e).__name__}")
+                    logger.error(f"Traceback: {traceback.format_exc()}")
                     return None
             else:
                 # Old-style unencrypted public share

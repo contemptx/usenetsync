@@ -554,11 +554,17 @@ import re
             
             # Create file downloads
             for file_info in folder_info['files']:
+                # segments can be either an int (count) or a list
+                if isinstance(file_info.get('segments'), int):
+                    segment_count = file_info['segments']
+                else:
+                    segment_count = len(file_info.get('segments', []))
+                
                 file_download = FileDownload(
                     file_path=file_info['path'],
                     file_size=file_info['size'],
                     file_hash=file_info.get('hash', ''),
-                    segment_count=len(file_info['segments'])
+                    segment_count=segment_count
                 )
                 session.file_downloads[file_info['path']] = file_download
                 

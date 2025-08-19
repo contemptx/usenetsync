@@ -455,18 +455,41 @@ class SimplifiedBinaryIndex:
         # Convert dicts to objects
         file_objects = []
         for f in files:
+            # Ensure hash is valid hex string (64 chars for SHA256)
+            file_hash = f.get('hash', f.get('file_hash', ''))
+            if not file_hash or len(file_hash) != 64:
+                # Generate a placeholder hash if missing
+                import hashlib
+                file_path = f.get('path', f.get('file_path', 'unknown'))
+                file_hash = hashlib.sha256(file_path.encode()).hexdigest()
+            
             file_objects.append(FileObj(
                 path=f.get('path', f.get('file_path', '')),
                 size=f.get('size', f.get('file_size', 0)),
-                hash=f.get('hash', f.get('file_hash', '')),
-                modified=f.get('modified', 0),
+                hash=file_hash,
+                modified=f.get('modified', int(time.time())),
                 segments=f.get('segments', 1)
             ))
+        
+        # Build folder structure from file paths
+        folders = {}
+        for f in file_objects:
+            # Extract folder path from file path
+            if '/' in f.path:
+                folder_path = '/'.join(f.path.split('/')[:-1])
+                if folder_path not in folders:
+                    folders[folder_path] = {'file_count': 0, 'subfolder_count': 0}
+                folders[folder_path]['file_count'] += 1
+        
+        # Add root folder if there are files in root
+        root_files = [f for f in file_objects if '/' not in f.path]
+        if root_files:
+            folders[''] = {'file_count': len(root_files), 'subfolder_count': len(set(p.split('/')[0] for p in folders.keys() if p))}
         
         # Build scan result
         scan_result = {
             'files': file_objects,
-            'folders': {},  # No folder info from database
+            'folders': folders,
             'total_size': sum(f.size for f in file_objects),
             'total_files': len(file_objects)
         }
