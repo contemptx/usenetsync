@@ -607,6 +607,31 @@ def publish_folder(folder_id, access_type, user_ids, password):
         click.echo(json.dumps({'error': str(e)}), err=True)
         sys.exit(1)
 
+@cli.command('download-share')
+@click.option('--access-string', required=True, help='Access string for the share')
+@click.option('--destination', required=True, help='Destination path to download to')
+@click.option('--password', help='Password for protected shares')
+def download_share(access_string, destination, password):
+    """Download a share using access string"""
+    try:
+        from core.main import UsenetSyncCore
+        
+        # Initialize the core system
+        core = UsenetSyncCore()
+        
+        # Download the share
+        result = core.download_share(access_string, destination, password)
+        
+        click.echo(json.dumps({
+            'success': True,
+            'destination': destination,
+            'result': result
+        }))
+        
+    except Exception as e:
+        click.echo(json.dumps({'error': str(e)}), err=True)
+        sys.exit(1)
+
 @cli.command('add-authorized-user')
 @click.option('--folder-id', required=True, help='Folder ID')
 @click.option('--user-id', required=True, help='User ID to authorize')

@@ -282,24 +282,32 @@ class FolderUploadManager:
     
     def _build_subject(self, folder: Dict, segment: Dict) -> str:
         """Build subject line for Usenet article"""
+        total_segments = self.total_segments if hasattr(self, 'total_segments') else 0
+        segment_index = segment.get('segment_index', 0)
+        file_name = segment.get('file_name', 'unknown')
+        hash_val = segment.get('hash', '')[:8] if segment.get('hash') else 'nohash'
+        
         return (
-            f"[{segment['segment_index']}/{folder['total_segments']}] "
-            f"{folder.get('display_name', folder.get('name', 'Unknown'))} - {segment['file_name']} "
-            f"[{segment['hash'][:8]}]"
+            f"[{segment_index}/{total_segments}] "
+            f"{folder.get('display_name', folder.get('name', 'Unknown'))} - {file_name} "
+            f"[{hash_val}]"
         )
     
     def _build_headers(self, folder: Dict, segment: Dict) -> Dict:
         """Build headers for Usenet article"""
+        # Get folder_id properly
+        folder_id = folder.get('folder_unique_id', folder.get('folder_id', ''))
+        
         return {
             'From': 'UsenetSync <noreply@usenetsync.com>',
             'Message-ID': f"<{uuid.uuid4()}@usenetsync>",
             'X-UsenetSync-Version': '1.0',
-            'X-UsenetSync-Folder-ID': folder['folder_id'],
-            'X-UsenetSync-Segment': str(segment['segment_index']),
-            'X-UsenetSync-Redundancy': str(segment['redundancy_index']),
-            'X-UsenetSync-Total': str(folder['total_segments']),
-            'X-UsenetSync-Size': str(segment['size']),
-            'X-UsenetSync-Hash': segment['hash'],
+            'X-UsenetSync-Folder-ID': folder_id,
+            'X-UsenetSync-Segment': str(segment.get('segment_index', 0)),
+            'X-UsenetSync-Redundancy': str(segment.get('redundancy_index', 0)),
+            'X-UsenetSync-Total': str(self.total_segments if hasattr(self, 'total_segments') else 0),
+            'X-UsenetSync-Size': str(segment.get('size', 0)),
+            'X-UsenetSync-Hash': segment.get('hash', ''),
             'X-No-Archive': 'yes'
         }
 
