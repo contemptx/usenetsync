@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class MigrationManager:
+class UnifiedMigrations:
     """Manage database schema migrations"""
     
     def __init__(self, db):
