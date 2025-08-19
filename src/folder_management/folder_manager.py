@@ -1174,7 +1174,7 @@ class FolderManager:
             
             # Update state if needed
             if modified_files or new_files:
-                await self._update_folder_state(folder_id, FolderState.MODIFIED)
+                await self._update_folder_state(folder_id, FolderState.SYNCING)
         
         return {
             'folder_id': folder_id,
