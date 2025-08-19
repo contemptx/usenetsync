@@ -681,33 +681,42 @@ def list_folders():
                 except:
                     pass  # Table might already exist
                 
-                # Query the folders table - handle different schemas
+                # Query the managed_folders table first (from FolderManager)
                 try:
-                    # Try the new schema first
                     cursor.execute("""
                         SELECT folder_id, name, path, state, total_files, total_size,
                                total_segments, share_id, published, created_at
-                        FROM folders
+                        FROM managed_folders
                         ORDER BY created_at DESC
                     """)
-                    columns_type = 'new'
+                    columns_type = 'managed'
                 except:
-                    # Fall back to old schema
+                    # Fall back to folders table
                     try:
                         cursor.execute("""
-                            SELECT folder_unique_id, display_name, folder_path, state, 
-                                   total_files, total_size, 0 as total_segments, 
-                                   NULL as share_id, 
-                                   CASE WHEN last_published IS NOT NULL THEN 1 ELSE 0 END as published,
-                                   created_at
+                            SELECT folder_id, name, path, state, total_files, total_size,
+                                   total_segments, share_id, published, created_at
                             FROM folders
                             ORDER BY created_at DESC
                         """)
-                        columns_type = 'old'
-                    except Exception as e:
-                        # If both fail, return empty array
-                        click.echo(json.dumps([]))
-                        return
+                        columns_type = 'new'
+                    except:
+                        # Fall back to old schema
+                        try:
+                            cursor.execute("""
+                                SELECT folder_unique_id, display_name, folder_path, state, 
+                                       total_files, total_size, 0 as total_segments, 
+                                       NULL as share_id, 
+                                       CASE WHEN last_published IS NOT NULL THEN 1 ELSE 0 END as published,
+                                       created_at
+                                FROM folders
+                                ORDER BY created_at DESC
+                            """)
+                            columns_type = 'old'
+                        except Exception as e:
+                            # If all fail, return empty array
+                            click.echo(json.dumps([]))
+                            return
                 
                 folders = []
                 for row in cursor.fetchall():
@@ -912,10 +921,10 @@ def list_shares():
         # Return empty list on error
         click.echo(json.dumps([]))
 
-@cli.command('index-folder')
+@cli.command('index-folder-path')
 @click.option('--path', required=True, help='Path to folder to index')
-def index_folder(path):
-    """Index a folder and return file tree structure"""
+def index_folder_path(path):
+    """Index a folder by path and return file tree structure"""
     try:
         folder_path = Path(path)
         if not folder_path.exists():
