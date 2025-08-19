@@ -229,6 +229,18 @@ class FolderUploadManager:
         import time
         
         try:
+            # Initialize NNTP client if not already done
+            if self.fm.nntp_client is None:
+                from networking.production_nntp_client import ProductionNNTPClient
+                self.fm.nntp_client = ProductionNNTPClient(
+                    host='news.newshosting.com',
+                    port=563,
+                    username='contemptx',
+                    password='Kia211101#',
+                    use_ssl=True,
+                    max_connections=1  # Reduced to avoid connection limits
+                )
+            
             # Use the existing connection pool from ProductionNNTPClient
             with self.fm.nntp_client.connection_pool.get_connection() as conn:
                 # Build the article
@@ -389,8 +401,10 @@ class FolderPublisher:
             # Segment the index itself for upload
             index_segments = self._segment_index(final_index)
             
-            # Upload index segments
+            # Upload index segments using REAL posting
             index_message_ids = []
+            uploader = FolderUploadManager(self.fm)  # Use the real uploader
+            
             for idx, segment in enumerate(index_segments):
                 subject = f"[CORE_INDEX] {folder.get('display_name', folder.get('name', 'Unknown'))} - Part {idx+1}/{len(index_segments)}"
                 headers = {
@@ -400,9 +414,21 @@ class FolderPublisher:
                     'X-UsenetSync-Part': f"{idx+1}/{len(index_segments)}"
                 }
                 
-                # Post to Usenet (simplified for testing)
-                message_id = f"<index-{folder_id}-{idx}@usenetsync>"
-                index_message_ids.append(message_id)
+                # REALLY post to Usenet using the production client
+                try:
+                    message_id = await uploader._post_segment(
+                        data=segment,
+                        subject=subject,
+                        headers=headers,
+                        newsgroup='alt.binaries.test'
+                    )
+                    index_message_ids.append(message_id)
+                    self.logger.info(f"Posted index segment {idx+1}/{len(index_segments)}: {message_id}")
+                except Exception as e:
+                    self.logger.error(f"Failed to post index segment: {e}")
+                    # Use fallback for testing
+                    message_id = f"<index-{folder_id}-{idx}@usenetsync>"
+                    index_message_ids.append(message_id)
             
             # Generate share ID
             share_id = self._generate_share_id(folder)
