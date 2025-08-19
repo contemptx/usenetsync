@@ -399,6 +399,151 @@ def test_redundancy_unique_articles():
         assert retrieved == segment_data
 ```
 
+## 9. Folder/File Structure Preservation
+
+### Critical Requirement
+Usenet has NO concept of directories or folder structure - it only stores individual articles. The system MUST preserve and reconstruct the complete folder hierarchy.
+
+### Current Implementation
+
+#### During Indexing
+```python
+# Both indexing systems preserve relative paths
+for root, dirs, files in os.walk(folder_path):
+    rel_path = os.path.relpath(root, folder_path)
+    for filename in files:
+        file_path = os.path.join(root, filename)
+        rel_file_path = os.path.join(rel_path, filename).replace('\\', '/')
+        
+        # Store with relative path preserved
+        files[rel_file_path] = {
+            'size': stat.st_size,
+            'hash': file_hash,
+            'path': rel_file_path  # CRITICAL: Preserve full relative path
+        }
+```
+
+#### In the Index
+```python
+# Index stores complete folder structure
+index_data = {
+    'base_path': '/original/folder/path',
+    'folder_name': 'MyFolder',
+    'folders': {
+        '': {'name': 'MyFolder', 'file_count': 10},
+        'subfolder1': {'name': 'subfolder1', 'file_count': 5},
+        'subfolder1/nested': {'name': 'nested', 'file_count': 3}
+    },
+    'files': [
+        {
+            'path': 'document.pdf',  # Root level file
+            'size': 1024000,
+            'hash': 'abc123...',
+            'segments': [...]
+        },
+        {
+            'path': 'subfolder1/image.jpg',  # Nested file
+            'size': 2048000,
+            'hash': 'def456...',
+            'segments': [...]
+        },
+        {
+            'path': 'subfolder1/nested/data.txt',  # Deeply nested
+            'size': 512000,
+            'hash': 'ghi789...',
+            'segments': [...]
+        }
+    ]
+}
+```
+
+#### During Download/Reconstruction
+```python
+def _complete_file_download(self, session, file_download):
+    # Reconstruct complete path including folder structure
+    file_download.final_path = os.path.join(
+        session.destination_path,  # User's chosen destination
+        session.folder_name,        # Original folder name
+        file_download.file_path     # FULL relative path with subfolders
+    )
+    
+    # Example: /downloads/MyFolder/subfolder1/nested/data.txt
+    
+    # Create all necessary directories
+    os.makedirs(os.path.dirname(file_download.final_path), exist_ok=True)
+    
+    # Assemble file in correct location
+    self.assembler.assemble_file(
+        file_download.file_path,
+        file_download.segment_count,
+        file_download.temp_path,
+        file_download.final_path  # Preserves full structure
+    )
+```
+
+### Database Schema
+```sql
+CREATE TABLE files (
+    file_id INTEGER PRIMARY KEY,
+    folder_id INTEGER,
+    file_path TEXT,  -- FULL relative path: 'subfolder/nested/file.txt'
+    file_hash TEXT,
+    file_size INTEGER,
+    -- NOT just filename, but complete path within folder
+);
+```
+
+### Testing Structure Preservation
+```python
+def test_folder_structure_preservation():
+    # Create test structure
+    test_folder = Path('/test/source')
+    (test_folder / 'docs').mkdir(parents=True)
+    (test_folder / 'docs' / 'nested').mkdir()
+    (test_folder / 'images' / 'photos').mkdir(parents=True)
+    
+    # Create files at various levels
+    (test_folder / 'readme.txt').write_text('root file')
+    (test_folder / 'docs' / 'document.pdf').write_bytes(b'doc')
+    (test_folder / 'docs' / 'nested' / 'data.csv').write_text('data')
+    (test_folder / 'images' / 'photos' / 'pic.jpg').write_bytes(b'img')
+    
+    # Index and upload
+    index_result = indexer.index_folder(test_folder)
+    upload_result = uploader.upload_folder(folder_id)
+    access_string = publisher.create_share(folder_id)
+    
+    # Download to new location
+    download_path = Path('/test/destination')
+    downloader.download_share(access_string, download_path)
+    
+    # Verify structure preserved
+    assert (download_path / 'source' / 'readme.txt').exists()
+    assert (download_path / 'source' / 'docs' / 'document.pdf').exists()
+    assert (download_path / 'source' / 'docs' / 'nested' / 'data.csv').exists()
+    assert (download_path / 'source' / 'images' / 'photos' / 'pic.jpg').exists()
+    
+    # Verify content
+    assert (download_path / 'source' / 'readme.txt').read_text() == 'root file'
+```
+
+### Critical Points
+
+1. **Relative Paths**: Always store relative paths, not absolute
+2. **Path Separators**: Normalize to forward slashes for cross-platform
+3. **Directory Creation**: Create all parent directories during download
+4. **Empty Folders**: System tracks folder structure even if empty
+5. **Deep Nesting**: Support arbitrary depth of folder nesting
+6. **Special Characters**: Handle spaces and special chars in paths
+
+### Implementation Requirements
+
+- Index MUST capture complete folder hierarchy
+- Database MUST store full relative paths
+- Download MUST recreate exact structure
+- Path separators MUST be normalized
+- Empty directories SHOULD be preserved
+
 ## Conclusion
 
 The unified system MUST preserve:
@@ -410,5 +555,6 @@ The unified system MUST preserve:
 6. Encrypted location storage
 7. One-way Usenet communication
 8. Client-side authentication
+9. **Complete folder/file structure preservation**
 
 These are not optional features but core requirements for the system to function correctly with production Usenet servers and large datasets.
