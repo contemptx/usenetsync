@@ -652,3 +652,65 @@ GROUP BY f.folder_unique_id;"""
                 ORDER BY f.display_name
             """)
             return [dict(row) for row in cursor]
+    
+    # Download Management Methods
+    
+    def create_download_session(self, session_id: str, access_string: str,
+                               folder_name: str, total_files: int, total_size: int) -> bool:
+        """Create a new download session"""
+        with self.pool.get_connection() as conn:
+            try:
+                conn.execute("""
+                    INSERT INTO download_sessions 
+                    (session_id, access_string, folder_name, total_files, total_size, state)
+                    VALUES (?, ?, ?, ?, ?, 'active')
+                """, (session_id, access_string, folder_name, total_files, total_size))
+                conn.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Failed to create download session: {e}")
+                return False
+    
+    def update_download_progress(self, session_id: str, file_path: str,
+                                downloaded_size: int, completed_segments: int) -> bool:
+        """Update download progress for a file"""
+        with self.pool.get_connection() as conn:
+            try:
+                conn.execute("""
+                    UPDATE download_progress
+                    SET downloaded_size = ?, completed_segments = ?,
+                        state = CASE 
+                            WHEN completed_segments >= segment_count THEN 'completed'
+                            ELSE 'downloading'
+                        END
+                    WHERE session_id = ? AND file_path = ?
+                """, (downloaded_size, completed_segments, session_id, file_path))
+                conn.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Failed to update download progress: {e}")
+                return False
+    
+    def get_download_session(self, session_id: str) -> Optional[Dict]:
+        """Get download session details"""
+        with self.pool.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM download_sessions WHERE session_id = ?
+            """, (session_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def complete_download_session(self, session_id: str) -> bool:
+        """Mark download session as complete"""
+        with self.pool.get_connection() as conn:
+            try:
+                conn.execute("""
+                    UPDATE download_sessions
+                    SET state = 'completed', completed_at = CURRENT_TIMESTAMP
+                    WHERE session_id = ?
+                """, (session_id,))
+                conn.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Failed to complete download session: {e}")
+                return False
