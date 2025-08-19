@@ -452,13 +452,14 @@ class FolderManager:
         # Insert into database
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Insert into managed_folders (new system)
             cursor.execute("""
                 INSERT INTO managed_folders (
                     folder_id, path, name, state, segment_size, 
                     redundancy_level, newsgroup
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
             """, (
                 folder_id, 
                 str(folder_path), 
@@ -469,7 +470,13 @@ class FolderManager:
                 self.config.newsgroup
             ))
             
-            folder_data = cursor.fetchone()
+            # Also insert into folders table (old system) for compatibility
+            cursor.execute("""
+                INSERT INTO folders (
+                    folder_unique_id, folder_path, display_name, state, created_at
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """, (folder_id, str(folder_path), folder_name, 'active'))  # Use 'active' for old system
+            
             conn.commit()
             
         self.logger.info(f"Added folder: {folder_name} (ID: {folder_id})")
@@ -910,17 +917,22 @@ class FolderManager:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Get the integer folder_id from folders table
+                cursor.execute("""
+                    SELECT id FROM folders WHERE folder_unique_id = %s
+                """, (folder_id,))
+                folder_int_id_result = cursor.fetchone()
+                if not folder_int_id_result:
+                    raise ValueError(f"Folder not found in folders table: {folder_id}")
+                folder_int_id = folder_int_id_result[0]
+                
                 for file_info in all_files:
-                    # Use the actual column names from the existing files table
+                    # Use the integer folder_id for the files table
                     cursor.execute("""
-                        INSERT INTO files (folder_id, file_path, file_hash, file_size, created_at)
+                        INSERT OR REPLACE INTO files (folder_id, file_path, file_hash, file_size, created_at)
                         VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-                        ON CONFLICT (file_path, folder_id) DO UPDATE SET
-                            file_hash = EXCLUDED.file_hash,
-                            file_size = EXCLUDED.file_size,
-                            modified_at = CURRENT_TIMESTAMP
                     """, (
-                        file_info['folder_id'],
+                        folder_int_id,  # Use integer ID
                         file_info['file_path'],
                         file_info['file_hash'],
                         file_info['file_size']
@@ -1032,13 +1044,24 @@ class FolderManager:
         # Get file count
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Get integer folder_id
             cursor.execute("""
-                SELECT COUNT(*) as file_count,
-                       SUM(file_size) as total_size
-                FROM files
-                WHERE folder_id = %s
+                SELECT id FROM folders WHERE folder_unique_id = %s
             """, (folder_id,))
-            file_stats = cursor.fetchone()
+            folder_int_id_result = cursor.fetchone()
+            if folder_int_id_result:
+                folder_int_id = folder_int_id_result[0]
+                
+                cursor.execute("""
+                    SELECT COUNT(*) as file_count,
+                           SUM(file_size) as total_size
+                    FROM files
+                    WHERE folder_id = %s
+                """, (folder_int_id,))
+                file_stats = cursor.fetchone()
+            else:
+                file_stats = (0, 0)
             
             # Get segment count
             cursor.execute("""
@@ -1085,11 +1108,21 @@ class FolderManager:
         # Get current files from database
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Get integer folder_id
+            cursor.execute("""
+                SELECT id FROM folders WHERE folder_unique_id = %s
+            """, (folder_id,))
+            folder_int_id_result = cursor.fetchone()
+            if not folder_int_id_result:
+                raise ValueError(f"Folder not found in folders table: {folder_id}")
+            folder_int_id = folder_int_id_result[0]
+            
             cursor.execute("""
                 SELECT file_path, file_hash, file_size, modified_at
                 FROM files
                 WHERE folder_id = %s
-            """, (folder_id,))
+            """, (folder_int_id,))
             
             db_files = {}
             for row in cursor.fetchall():
