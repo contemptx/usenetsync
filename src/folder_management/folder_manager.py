@@ -517,9 +517,8 @@ class FolderManager:
             # Use ParallelIndexer for performance (10,000+ files/sec)
             self.logger.info(f"Starting parallel indexing of {folder['folder_path']}")
             
-            # For now, do simple indexing to get it working
-            # In production, would use ParallelIndexer
-            result = await self._simple_index_folder(folder['folder_path'], folder_id, progress_callback)
+            # Use the REAL VersionedCoreIndexSystem for proper segment handling
+            result = await self._index_with_versioned_system(folder['folder_path'], folder_id, folder['id'], progress_callback)
             
             # Update folder statistics
             await self._update_folder_stats(folder_id, {
@@ -887,6 +886,35 @@ class FolderManager:
                 WHERE id = %s
             """, (datetime.now(), error, operation_id))
             conn.commit()
+    
+    async def _index_with_versioned_system(self, folder_path: str, folder_id: str, folder_db_id: int, progress_callback) -> Dict:
+        """
+        Use the REAL VersionedCoreIndexSystem for proper indexing with segments
+        This creates proper segments that can be uploaded and downloaded
+        """
+        try:
+            # Use the core indexer which handles segments properly
+            # It will get folder_db_id itself from the database
+            result = self.core_indexer.index_folder(
+                folder_path=folder_path,
+                folder_id=folder_id,
+                progress_callback=progress_callback
+            )
+            
+            return {
+                'folder_id': folder_id,
+                'files_indexed': result.get('files_indexed', 0),
+                'folders': result.get('folders_indexed', 0),
+                'total_size': result.get('total_size', 0),
+                'version': result.get('version', 1),
+                'segments_created': result.get('segments_created', 0)
+            }
+            
+        except Exception as e:
+            self.logger.error(f"VersionedCoreIndexSystem indexing failed: {e}")
+            # Fallback to simple indexing if needed
+            self.logger.warning("Falling back to simple indexing")
+            return await self._simple_index_folder(folder_path, folder_id, progress_callback)
     
     async def _simple_index_folder(self, folder_path: str, folder_id: str, progress_callback) -> Dict:
         """Simple folder indexing that actually saves files to database"""
