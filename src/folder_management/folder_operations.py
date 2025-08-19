@@ -237,7 +237,7 @@ class FolderUploadManager:
                 from config.configuration_manager import ConfigurationManager
                 
                 # Load the REAL configuration
-                config = ConfigurationManager()
+                config = ConfigurationManager('config/usenetsync.json')
                 enabled_servers = [s for s in config.servers if s.enabled]
                 
                 if enabled_servers:

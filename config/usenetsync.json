@@ -38,7 +38,7 @@
     {
       "enabled": true,
       "hostname": "news.newshosting.com",
-      "max_connections": 2,
+      "max_connections": 1,
       "name": "Primary",
       "password": "Z0FBQUFBQm9wRkhITm9JQUxJTFhiS2dTYktTUnM2NkdMbUhteW5zZjh5WDFlbk14VXkwUmJ0ck5BWDNnN2lSdnB1SWVDX1VydU1ZbzctQmIwZ2o2UDlBcDNiYXYxSEtiR0E9PQ==",
       "port": 563,
