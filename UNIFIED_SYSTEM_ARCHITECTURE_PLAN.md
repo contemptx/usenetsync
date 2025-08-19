@@ -155,11 +155,13 @@ Currently using **multiple database schemas** across systems:
 
 1. **Single Source of Truth**: One database schema, one indexing system
 2. **Modular Pipeline**: Clear separation of concerns with well-defined interfaces
-3. **Scalability First**: Built for 20TB+ datasets from the ground up
+3. **Scalability First**: Built for 20TB+ datasets from the ground up with streaming
 4. **Security by Design**: Unified security model across all operations
 5. **Background Processing**: All heavy operations run asynchronously
 6. **Progressive Enhancement**: Start simple, add complexity as needed
 7. **Preserve Critical Functionality**: All security features from CRITICAL_FUNCTIONALITY_PRESERVATION.md must be maintained
+8. **Resource Aware**: Never load large datasets into memory, use streaming
+9. **Dual Database Support**: Both SQLite and PostgreSQL with auto-setup
 
 ### Unified System Components
 
@@ -233,19 +235,35 @@ class UnifiedIndexingEngine:
 
 #### 2. Unified Segmentation Engine
 
-**Single segmentation implementation:**
+**Single segmentation implementation with packing and redundancy:**
 ```python
 class UnifiedSegmentationEngine:
     """
     Single source for all segmentation operations
     """
     
+    def __init__(self):
+        self.segment_size = 768000  # 750KB standard
+        self.packing_system = SegmentPackingSystem()
+    
     def segment_file(self, file_path: str, options: SegmentOptions):
         # Standard 768KB segments
-        # Optional compression
-        # Optional redundancy
+        # Pack small files together
+        # Create redundant copies (unique articles)
+        # Stream large files to avoid memory issues
         # Consistent hash calculation
-        # Stream to database
+        
+    def create_redundant_segments(self, segment: bytes, redundancy_level: int):
+        """Create unique redundant copies, NOT duplicates"""
+        segments = []
+        for i in range(redundancy_level):
+            segments.append({
+                'data': segment,
+                'redundancy_index': i,
+                'subject': generate_random_subject(),  # UNIQUE
+                'message_id': generate_message_id()    # UNIQUE
+            })
+        return segments
 ```
 
 **Features:**
@@ -257,10 +275,28 @@ class UnifiedSegmentationEngine:
 
 #### 3. Unified Data Layer (UDL)
 
-**Single database schema for all operations:**
+**Single database schema supporting both SQLite and PostgreSQL:**
+
+```python
+class UnifiedDataLayer:
+    def __init__(self, config):
+        if config.database_type == 'postgresql':
+            self.db = PostgreSQLManager(config)
+            # Auto-setup if needed
+            if config.auto_install:
+                self.auto_install_postgresql()
+        else:
+            self.db = SQLiteManager(config)  # Default
+    
+    def auto_install_postgresql(self):
+        """GUI-triggered auto installation"""
+        # Platform-specific installation
+        # Configuration for large datasets
+        # Sharding setup for 20TB+
+```
 
 ```sql
--- Core entities
+-- Core entities (works on both SQLite and PostgreSQL)
 CREATE TABLE entities (
     entity_id UUID PRIMARY KEY,
     entity_type VARCHAR(50) NOT NULL, -- 'folder', 'file', 'segment', 'share'
@@ -281,16 +317,20 @@ CREATE TABLE index_data (
     binary_index BYTEA  -- Compressed binary index
 );
 
--- Segments
+-- Segments with redundancy support
 CREATE TABLE segments (
-    segment_id UUID PRIMARY KEY,
+    segment_id UUID,
     entity_id UUID REFERENCES entities(entity_id),
     segment_index INTEGER NOT NULL,
+    redundancy_index INTEGER DEFAULT 0,  -- 0=original, 1+=redundant copies
     size INTEGER NOT NULL,
     hash VARCHAR(64) NOT NULL,
     offset BIGINT,
-    data BYTEA,  -- Optional, for caching
-    redundancy_level INTEGER DEFAULT 0
+    message_id TEXT ENCRYPTED,  -- Encrypted for security
+    subject TEXT ENCRYPTED,      -- Encrypted for security
+    internal_subject TEXT,       -- For verification only
+    packed_segment_id UUID,      -- For packed small files
+    PRIMARY KEY (segment_id, redundancy_index)
 );
 
 -- Upload/Download operations
@@ -421,12 +461,15 @@ To ensure smooth transition:
 
 ### Performance Targets
 
-- **Indexing**: 100,000 files/minute
-- **Segmentation**: 1GB/second
+- **Indexing**: 100,000 files/minute (streaming for large datasets)
+- **Segmentation**: 1GB/second with packing for small files
 - **Upload**: 100MB/second (network permitting)
 - **Download**: 100MB/second (network permitting)
-- **Memory Usage**: < 2GB for 1 million files
+- **Memory Usage**: < 2GB for 1 million files (streaming for 20TB+)
 - **Database Size**: ~1KB per file + segments
+- **Max Dataset Size**: 20TB+ with PostgreSQL sharding
+- **Redundancy**: Configurable 1-5 unique copies
+- **Segment Packing**: Pack files < 750KB together
 
 ### Security Requirements
 
@@ -445,13 +488,19 @@ To ensure smooth transition:
 ### Benefits of Unification
 
 1. **Reduced Complexity**: Single codebase to maintain
-2. **Improved Performance**: Optimized data flow
-3. **Better Scalability**: Designed for large datasets
-4. **Consistent Security**: Single security model
+2. **Improved Performance**: Optimized data flow with streaming
+3. **Better Scalability**: Handles 20TB+ datasets with resource management
+4. **Consistent Security**: Single security model with encrypted storage
 5. **Easier Testing**: Unified test suite
 6. **Better Documentation**: Single system to document
 7. **Reduced Bugs**: Fewer integration points
 8. **Faster Development**: Clear architecture
+9. **Preserved Functionality**: All critical features maintained:
+   - Redundancy with unique articles
+   - Segment packing for small files
+   - Dual database support
+   - Encrypted location storage
+   - Resource-aware processing
 
 ### Risk Mitigation
 
