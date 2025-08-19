@@ -441,8 +441,19 @@ class CompleteUnifiedSystem:
         )
         
         # Initialize indexing system (uses existing production system)
+        # VersionedCoreIndexSystem needs db_manager, security_system, and config
+        indexing_config = {
+            'processing': {
+                'worker_threads': 8,
+                'segment_size': 768000,
+                'batch_size': 100,
+                'buffer_size': 65536
+            }
+        }
         self.indexer = VersionedCoreIndexSystem(
-            db_path=db_params.get('path', 'usenetsync.db')
+            db_manager=self.db_manager,
+            security_system=self.security,
+            config=indexing_config
         )
         
         # Initialize publishing system
