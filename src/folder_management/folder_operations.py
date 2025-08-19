@@ -421,21 +421,50 @@ class FolderPublisher:
         operation_id = await self.fm._start_operation(folder_id, 'publishing')
         
         try:
-            # Use the REAL SimplifiedBinaryIndex system
-            from indexing.simplified_binary_index import SimplifiedBinaryIndex
-            binary_index = SimplifiedBinaryIndex(folder_id)
+            # Build core index with all metadata INCLUDING segments with message IDs
+            self.logger.info(f"Building complete index for folder {folder.get('display_name', folder.get('name', 'Unknown'))}")
             
-            # Build core index with all metadata
-            self.logger.info(f"Building core index for folder {folder.get('display_name', folder.get('name', 'Unknown'))}")
-            
-            # Get all files and segments info
+            # Get all files and segments info from database
             index_data = await self._build_index_data(folder_id)
             
-            # Create binary index using the REAL SimplifiedBinaryIndex system
-            # It returns already compressed data
-            files = index_data.get('files', [])
-            segments = index_data.get('segments', [])
-            compressed_index = binary_index.create_index_from_database(files, segments)
+            # Create a complete index that includes segment message IDs for download
+            # Group segments by file for easier download processing
+            files_with_segments = {}
+            for file in index_data.get('files', []):
+                files_with_segments[file['id']] = {
+                    'path': file['path'],
+                    'size': file['size'],
+                    'hash': file['hash'],
+                    'segments': []
+                }
+            
+            # Add segment info to each file
+            for segment in index_data.get('segments', []):
+                file_id = segment.get('file_id')
+                if file_id in files_with_segments:
+                    files_with_segments[file_id]['segments'].append({
+                        'index': segment['index'],
+                        'message_id': segment['message_id'],
+                        'newsgroup': segment.get('newsgroup', 'alt.binaries.test')
+                    })
+            
+            # Create the complete index structure
+            complete_index = {
+                'version': '2.0',  # Version 2 includes segment message IDs
+                'folder_id': folder_id,
+                'created': datetime.now().isoformat(),
+                'files': list(files_with_segments.values()),
+                'total_size': index_data['stats']['total_size'],
+                'total_files': index_data['stats']['total_files']
+            }
+            
+            # Compress the JSON index
+            import json
+            import zlib
+            index_json = json.dumps(complete_index, separators=(',', ':')).encode('utf-8')
+            compressed_index = zlib.compress(index_json, level=9)
+            
+            self.logger.info(f"Created complete index: {len(index_json)} bytes -> {len(compressed_index)} compressed")
             
             # Calculate hash
             index_hash = hashlib.sha256(compressed_index).hexdigest()
@@ -620,10 +649,11 @@ class FolderPublisher:
             segments = []
             for row in cursor.fetchall():
                 segments.append({
-                    'file_id': row[1],
-                    'index': row[2],
-                    'redundancy': row[3],
-                    'message_id': row[7]
+                    'file_id': row[1],  # file_id
+                    'index': row[2],    # segment_index
+                    'redundancy': row[11],  # redundancy_index
+                    'message_id': row[8],   # message_id
+                    'newsgroup': row[9]     # newsgroup
                 })
             
             return {
