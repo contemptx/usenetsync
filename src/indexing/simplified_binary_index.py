@@ -437,8 +437,22 @@ class SimplifiedBinaryIndex:
         """
         Create binary index from database data (files and segments)
         This is used when publishing folders that are already indexed
+        
+        This creates a COMPLETE index including segment message IDs for download
         """
-        self.logger.info(f"Creating binary index from database data")
+        self.logger.info(f"Creating binary index from database data with {len(segments)} segments")
+        
+        # Group segments by file_id for easy lookup
+        segments_by_file = {}
+        for seg in segments:
+            file_id = seg.get('file_id')
+            if file_id not in segments_by_file:
+                segments_by_file[file_id] = []
+            segments_by_file[file_id].append(seg)
+        
+        # Sort segments by index for each file
+        for file_id in segments_by_file:
+            segments_by_file[file_id].sort(key=lambda s: s.get('index', 0))
         
         # Convert database format to scan_result format
         from dataclasses import dataclass
@@ -451,6 +465,7 @@ class SimplifiedBinaryIndex:
             hash: str
             modified: int
             segments: int
+            segment_data: list  # NEW: Store actual segment info
             
         # Convert dicts to objects
         file_objects = []
@@ -463,12 +478,16 @@ class SimplifiedBinaryIndex:
                 file_path = f.get('path', f.get('file_path', 'unknown'))
                 file_hash = hashlib.sha256(file_path.encode()).hexdigest()
             
+            # Get segments for this file
+            file_segments = segments_by_file.get(f.get('id'), [])
+            
             file_objects.append(FileObj(
                 path=f.get('path', f.get('file_path', '')),
                 size=f.get('size', f.get('file_size', 0)),
                 hash=file_hash,
                 modified=f.get('modified', int(time.time())),
-                segments=f.get('segments', 1)
+                segments=len(file_segments) if file_segments else 1,
+                segment_data=file_segments  # Include actual segment data
             ))
         
         # Build folder structure from file paths
