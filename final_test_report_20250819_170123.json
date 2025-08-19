@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-08-19T17:01:23.765029",
+  "total_tests": 8,
+  "passed": 4,
+  "failed": 4,
+  "pass_rate": 50.0,
+  "failures": [
+    "Indexing: table folders has no column named last_indexed",
+    "Workflow: table folders has no column named last_indexed",
+    "Stats: ",
+    "GUI: "
+  ],
+  "production_ready": false
+}

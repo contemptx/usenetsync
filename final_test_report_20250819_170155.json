@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-08-19T17:01:55.576219",
+  "total_tests": 8,
+  "passed": 4,
+  "failed": 4,
+  "pass_rate": 50.0,
+  "failures": [
+    "Indexing: no such column: segment_count",
+    "Workflow: no such column: segment_count",
+    "Stats: ",
+    "GUI: "
+  ],
+  "production_ready": false
+}

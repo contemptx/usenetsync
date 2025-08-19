@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-08-19T17:03:40.190935",
+  "total_tests": 8,
+  "passed": 7,
+  "failed": 1,
+  "pass_rate": 87.5,
+  "failures": [
+    "Workflow: "
+  ],
+  "production_ready": false
+}
