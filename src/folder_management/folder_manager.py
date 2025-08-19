@@ -894,11 +894,16 @@ class FolderManager:
         """
         try:
             # Use the core indexer which handles segments properly
-            # It will get folder_db_id itself from the database
-            result = self.core_indexer.index_folder(
-                folder_path=folder_path,
-                folder_id=folder_id,
-                progress_callback=progress_callback
+            # Run in executor since it's a synchronous blocking operation
+            # Don't pass async callback to sync function
+            import asyncio
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                self.core_indexer.index_folder,
+                folder_path,
+                folder_id,
+                None  # Don't pass async callback to sync function
             )
             
             return {
