@@ -20,8 +20,8 @@ from typing import Dict, List, Optional, Any, Generator
 from dataclasses import dataclass, field
 from enum import Enum
 
-# Add parent directory to folder_path for imports
-sys.folder_path.insert(0, os.folder_path.dirname(os.folder_path.dirname(os.folder_path.abspath(__file__))))
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import existing systems
 from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
@@ -74,7 +74,7 @@ class FolderConfig:
 class FolderProgress:
     """Progress tracking for folder operations"""
     operation: str
-    folder_unique_id: str
+    folder_id: str
     current: int = 0
     total: int = 0
     percent: float = 0.0
@@ -212,7 +212,7 @@ class FolderManager:
             # We use the existing 'folders' table, just ensure it has needed columns
             # The folders table already exists with:
             # - id (INTEGER PRIMARY KEY)
-            # - folder_unique_id (TEXT) - for UUID
+            # - folder_id (TEXT) - for UUID
             # - folder_path (TEXT)
             # - display_name (TEXT)
             # - state (TEXT)
@@ -256,7 +256,7 @@ class FolderManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS folder_operations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    folder_unique_id TEXT NOT NULL,
+                    folder_id TEXT NOT NULL,
                     operation TEXT NOT NULL,
                     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     completed_at TIMESTAMP,
@@ -276,7 +276,7 @@ class FolderManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS folder_operations (
                     id SERIAL PRIMARY KEY,
-                    folder_unique_id UUID REFERENCES folders(folder_unique_id),
+                    folder_id UUID REFERENCES folders(folder_id),
                     operation VARCHAR(50) NOT NULL,
                     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     completed_at TIMESTAMP,
@@ -314,7 +314,7 @@ class FolderManager:
                 CREATE TABLE IF NOT EXISTS files (
                     id SERIAL PRIMARY KEY,
                     file_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-                    folder_unique_id UUID REFERENCES folders(folder_unique_id) ON DELETE CASCADE,
+                    folder_id UUID REFERENCES folders(folder_id) ON DELETE CASCADE,
                     filename TEXT NOT NULL,
                     file_path TEXT NOT NULL,
                     relative_path TEXT NOT NULL,
@@ -371,7 +371,7 @@ class FolderManager:
             # Check if files table exists and what columns it has
             try:
                 cursor.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_files_folder_unique_id ON files(folder_unique_id)
+                    CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id)
                 """)
             except:
                 pass  # Index might already exist or column might not exist
@@ -404,7 +404,7 @@ class FolderManager:
             except:
                 pass
             
-            # Compatibility check - ensure folder_unique_id exists in files table
+            # Compatibility check - ensure folder_id exists in files table
             # (already created in the CREATE TABLE statement above)
             
             conn.commit()
@@ -440,85 +440,77 @@ class FolderManager:
                 raise ValueError(f"Folder already managed: {folder_path} (ID: {existing[0]})")
         
         # Create folder record
-        folder_unique_id = str(uuid.uuid4())
-        folder_name = display_name or folder_path.display_name
+        folder_id = str(uuid.uuid4())
+        folder_name = display_name or folder_path.name
         
-        # Insert into database
+        # Insert into folders table ONLY ONCE (no duplication!)
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Insert into folders (new system)
+            # Single insert into folders table with all needed fields
             cursor.execute("""
                 INSERT INTO folders (
-                    folder_unique_id, folder_path, display_name, state, segment_size, 
-                    redundancy_level, newsgroup
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    folder_unique_id, folder_path, display_name, state,
+                    segment_size, redundancy_level, newsgroup, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (
-                folder_unique_id, 
+                folder_id,  # Use the folder_id we generated
                 str(folder_path), 
                 folder_name, 
-                FolderState.ADDED.value,
+                'active',  # Use 'active' for compatibility with existing code
                 self.config.segment_size,
                 self.config.redundancy_level,
                 self.config.newsgroup
             ))
             
-            # Also insert into folders table (old system) for compatibility
-            cursor.execute("""
-                INSERT INTO folders (
-                    folder_unique_id, folder_path, display_name, state, created_at
-                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (folder_unique_id, str(folder_path), folder_name, 'active'))  # Use 'active' for old system
-            
             conn.commit()
             
-        self.logger.info(f"Added folder: {folder_name} (ID: {folder_unique_id})")
+        self.logger.info(f"Added folder: {folder_name} (ID: {folder_id})")
         
         return {
-            'folder_unique_id': folder_unique_id,
+            'folder_id': folder_id,
             'folder_path': str(folder_path),
             'display_name': folder_name,
             'state': FolderState.ADDED.value,
             'created_at': datetime.now().isoformat()
         }
     
-    async def index_folder(self, folder_unique_id: str, force: bool = False) -> Dict[str, Any]:
+    async def index_folder(self, folder_id: str, force: bool = False) -> Dict[str, Any]:
         """
         Index folder using ParallelIndexer for high performance
         Handles millions of files through chunking
         
         Args:
-            folder_unique_id: UUID of the folder
+            folder_id: UUID of the folder
             force: Force re-indexing even if already indexed
             
         Returns:
             Dictionary containing indexing results
         """
         # Get folder info
-        folder = await self._get_folder(folder_unique_id)
+        folder = await self._get_folder(folder_id)
         if not folder:
-            raise ValueError(f"Folder not found: {folder_unique_id}")
+            raise ValueError(f"Folder not found: {folder_id}")
         
         # Check if already indexed
         if folder['state'] == FolderState.INDEXED.value and not force:
             return {
-                'folder_unique_id': folder_unique_id,
+                'folder_id': folder_id,
                 'already_indexed': True,
                 'files': folder['indexed_files'],
                 'size': folder['indexed_size']
             }
         
         # Update state
-        await self._update_folder_state(folder_unique_id, FolderState.INDEXING)
+        await self._update_folder_state(folder_id, FolderState.INDEXING)
         
         # Start operation tracking
-        operation_id = await self._start_operation(folder_unique_id, 'indexing')
+        operation_id = await self._start_operation(folder_id, 'indexing')
         
         # Create progress callback
         def progress_callback(data: Dict):
             asyncio.create_task(self._handle_progress(
-                folder_unique_id, 'indexing', data, operation_id
+                folder_id, 'indexing', data, operation_id
             ))
         
         try:
@@ -527,10 +519,10 @@ class FolderManager:
             
             # For now, do simple indexing to get it working
             # In production, would use ParallelIndexer
-            result = await self._simple_index_folder(folder['folder_path'], folder_unique_id, progress_callback)
+            result = await self._simple_index_folder(folder['folder_path'], folder_id, progress_callback)
             
             # Update folder statistics
-            await self._update_folder_stats(folder_unique_id, {
+            await self._update_folder_stats(folder_id, {
                 'total_files': result.get('files_indexed', 0),
                 'total_folders': result.get('folders', 0),
                 'total_size': result.get('total_size', 0),
@@ -550,38 +542,38 @@ class FolderManager:
             
         except Exception as e:
             self.logger.error(f"Indexing failed: {e}")
-            await self._update_folder_state(folder_unique_id, FolderState.ERROR)
+            await self._update_folder_state(folder_id, FolderState.ERROR)
             await self._fail_operation(operation_id, str(e))
             raise
     
-    async def segment_folder(self, folder_unique_id: str) -> Dict[str, Any]:
+    async def segment_folder(self, folder_id: str) -> Dict[str, Any]:
         """
         Create segments with redundancy (NOT PAR2)
         Uses memory-mapped files for efficiency
         
         Args:
-            folder_unique_id: UUID of the folder
+            folder_id: UUID of the folder
             
         Returns:
             Dictionary containing segmentation results
         """
         # Get folder info
-        folder = await self._get_folder(folder_unique_id)
+        folder = await self._get_folder(folder_id)
         if not folder:
-            raise ValueError(f"Folder not found: {folder_unique_id}")
+            raise ValueError(f"Folder not found: {folder_id}")
         
         if folder['state'] != FolderState.INDEXED.value:
             raise ValueError(f"Folder must be indexed first. Current state: {folder['state']}")
         
         # Update state
-        await self._update_folder_state(folder_unique_id, FolderState.SEGMENTING)
+        await self._update_folder_state(folder_id, FolderState.SEGMENTING)
         
         # Start operation tracking
-        operation_id = await self._start_operation(folder_unique_id, 'segmenting')
+        operation_id = await self._start_operation(folder_id, 'segmenting')
         
         try:
             # Get files from database
-            files = await self._get_folder_files(folder_unique_id)
+            files = await self._get_folder_files(folder_id)
             
             if not files:
                 raise ValueError("No files found to segment")
@@ -616,7 +608,7 @@ class FolderManager:
                             segment = {
                                 'segment_id': str(uuid.uuid4()),
                                 'file_id': file_info['file_id'],
-                                'folder_unique_id': folder_unique_id,
+                                'folder_id': folder_id,
                                 'segment_index': segment_data.get('index', 0),
                                 'redundancy_index': redundancy_index,
                                 'size': segment_data.get('size', 0),
@@ -634,7 +626,7 @@ class FolderManager:
                         
                         # Update progress less frequently to avoid connection pool exhaustion
                         if total_segments % 10 == 0:  # Only update every 10 segments
-                            await self._handle_progress(folder_unique_id, 'segmenting', {
+                            await self._handle_progress(folder_id, 'segmenting', {
                                 'current': total_segments,
                                 'total': len(files) * folder['redundancy_level'] * 10,  # Estimate
                                 'segments_created': total_segments,
@@ -647,7 +639,7 @@ class FolderManager:
                     segments_to_insert = []
             
             # Update folder stats
-            await self._update_folder_stats(folder_unique_id, {
+            await self._update_folder_stats(folder_id, {
                 'total_segments': total_segments,
                 'redundancy_segments': redundancy_segments,
                 'segmented_at': datetime.now(),
@@ -656,7 +648,7 @@ class FolderManager:
             
             # Complete operation
             result = {
-                'folder_unique_id': folder_unique_id,
+                'folder_id': folder_id,
                 'total_segments': total_segments,
                 'redundancy_segments': redundancy_segments,
                 'redundancy_level': folder['redundancy_level']
@@ -670,32 +662,32 @@ class FolderManager:
             
         except Exception as e:
             self.logger.error(f"Segmentation failed: {e}")
-            await self._update_folder_state(folder_unique_id, FolderState.ERROR)
+            await self._update_folder_state(folder_id, FolderState.ERROR)
             await self._fail_operation(operation_id, str(e))
             raise
     
-    async def upload_folder(self, folder_unique_id: str) -> Dict[str, Any]:
+    async def upload_folder(self, folder_id: str) -> Dict[str, Any]:
         """
         Upload folder segments to Usenet
         Delegates to FolderUploadManager
         """
-        return await self.upload_manager.upload_folder(folder_unique_id)
+        return await self.upload_manager.upload_folder(folder_id)
     
-    async def publish_folder(self, folder_unique_id: str, access_type: str = 'public') -> Dict[str, Any]:
+    async def publish_folder(self, folder_id: str, access_type: str = 'public') -> Dict[str, Any]:
         """
         Publish folder with core index
         Delegates to FolderPublisher
         """
-        return await self.publisher.publish_folder(folder_unique_id, access_type)
+        return await self.publisher.publish_folder(folder_id, access_type)
     
     # Helper methods
-    async def _get_folder(self, folder_unique_id: str) -> Optional[Dict]:
+    async def _get_folder(self, folder_id: str) -> Optional[Dict]:
         """Get folder information from database"""
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT * FROM folders WHERE folder_unique_id = %s",
-                (folder_unique_id,)
+                (folder_id,)
             )
             
             row = cursor.fetchone()
@@ -704,17 +696,17 @@ class FolderManager:
                 return dict(zip(columns, row))
         return None
     
-    async def _update_folder_state(self, folder_unique_id: str, state: FolderState):
+    async def _update_folder_state(self, folder_id: str, state: FolderState):
         """Update folder state"""
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE folders SET state = %s WHERE folder_unique_id = %s",
-                (state.value, folder_unique_id)
+                (state.value, folder_id)
             )
             conn.commit()
     
-    async def _update_folder_stats(self, folder_unique_id: str, stats: Dict):
+    async def _update_folder_stats(self, folder_id: str, stats: Dict):
         """Update folder statistics"""
         set_clauses = []
         values = []
@@ -723,7 +715,7 @@ class FolderManager:
             set_clauses.append(f"{key} = %s")
             values.append(value)
         
-        values.append(folder_unique_id)
+        values.append(folder_id)
         
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
@@ -733,27 +725,27 @@ class FolderManager:
             )
             conn.commit()
     
-    async def _get_folder_files(self, folder_unique_id: str) -> List[Dict]:
+    async def _get_folder_files(self, folder_id: str) -> List[Dict]:
         """Get files for a folder from database"""
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # First check if files table has folder_unique_id column
+            # First check if files table has folder_id column
             cursor.execute("""
                 SELECT column_name 
                 FROM information_schema.columns 
                 WHERE table_name = 'files' 
-                AND column_name = 'folder_unique_id'
+                AND column_name = 'folder_id'
             """)
             
             if cursor.fetchone():
-                # Use folder_unique_id if it exists
+                # Use folder_id if it exists
                 cursor.execute("""
                     SELECT id as file_id, file_path, file_name, file_size
                     FROM files
                     WHERE folder_unique_id = %s
                     ORDER BY file_path
-                """, (folder_unique_id,))
+                """, (folder_id,))
             else:
                 # Otherwise use share_id (existing schema)
                 cursor.execute("""
@@ -763,7 +755,7 @@ class FolderManager:
                         SELECT share_id FROM folders WHERE folder_unique_id = %s
                     )
                     ORDER BY file_path
-                """, (folder_unique_id,))
+                """, (folder_id,))
             
             rows = cursor.fetchall()
             columns = [desc[0] for desc in cursor.description]
@@ -784,7 +776,7 @@ class FolderManager:
                     CREATE TABLE IF NOT EXISTS segments (
                         id TEXT PRIMARY KEY,
                         file_id TEXT,
-                        folder_unique_id TEXT,
+                        folder_id TEXT,
                         segment_index INTEGER,
                         redundancy_index INTEGER DEFAULT 0,
                         size INTEGER,
@@ -799,14 +791,14 @@ class FolderManager:
                 # Insert segment
                 cursor.execute("""
                     INSERT INTO segments (
-                        id, file_id, folder_unique_id, segment_index, redundancy_index,
+                        id, file_id, folder_id, segment_index, redundancy_index,
                         size, hash, compressed_size
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO NOTHING
                 """, (
                     seg['segment_id'],
                     seg['file_id'],
-                    seg['folder_unique_id'],
+                    seg['folder_id'],
                     seg['segment_index'],
                     seg['redundancy_index'],
                     seg['size'],
@@ -816,14 +808,14 @@ class FolderManager:
             
             conn.commit()
     
-    async def _start_operation(self, folder_unique_id: str, operation: str) -> int:
+    async def _start_operation(self, folder_id: str, operation: str) -> int:
         """Start tracking an operation"""
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO folder_operations (folder_unique_id, operation)
+                INSERT INTO folder_operations (folder_id, operation)
                 VALUES (%s, %s)
-            """, (folder_unique_id, operation))
+            """, (folder_id, operation))
             
             # Get the last inserted ID (works for both SQLite and PostgreSQL)
             operation_id = cursor.lastrowid
@@ -833,7 +825,7 @@ class FolderManager:
                     SELECT id FROM folder_operations 
                     WHERE folder_unique_id = %s AND operation = %s 
                     ORDER BY started_at DESC LIMIT 1
-                """, (folder_unique_id, operation))
+                """, (folder_id, operation))
                 result = cursor.fetchone()
                 operation_id = result[0] if result else 0
             
@@ -863,7 +855,7 @@ class FolderManager:
             """, (datetime.now(), error, operation_id))
             conn.commit()
     
-    async def _simple_index_folder(self, folder_path: str, folder_unique_id: str, progress_callback) -> Dict:
+    async def _simple_index_folder(self, folder_path: str, folder_id: str, progress_callback) -> Dict:
         """Simple folder indexing that actually saves files to database"""
         import os
         
@@ -893,7 +885,7 @@ class FolderManager:
                     
                     all_files.append({
                         'id': str(uuid.uuid4()),
-                        'folder_unique_id': folder_unique_id,
+                        'folder_id': folder_id,
                         'file_name': file_name,
                         'file_path': file_path,
                         'file_size': file_size,
@@ -911,19 +903,19 @@ class FolderManager:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Get the integer folder_unique_id from folders table
+                # Get the integer folder_id from folders table
                 cursor.execute("""
                     SELECT id FROM folders WHERE folder_unique_id = %s
-                """, (folder_unique_id,))
+                """, (folder_id,))
                 folder_int_id_result = cursor.fetchone()
                 if not folder_int_id_result:
-                    raise ValueError(f"Folder not found in folders table: {folder_unique_id}")
+                    raise ValueError(f"Folder not found in folders table: {folder_id}")
                 folder_int_id = folder_int_id_result[0]
                 
                 for file_info in all_files:
-                    # Use the integer folder_unique_id for the files table
+                    # Use the integer folder_id for the files table
                     cursor.execute("""
-                        INSERT OR REPLACE INTO files (folder_unique_id, file_path, file_hash, file_size, created_at)
+                        INSERT OR REPLACE INTO files (folder_id, file_path, file_hash, file_size, created_at)
                         VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
                     """, (
                         folder_int_id,  # Use integer ID
@@ -950,7 +942,7 @@ class FolderManager:
             'version': 1
         }
     
-    async def _handle_progress(self, folder_unique_id: str, operation: str, data: Dict, operation_id: int):
+    async def _handle_progress(self, folder_id: str, operation: str, data: Dict, operation_id: int):
         """Handle progress updates"""
         # Update database
         with self.db.get_connection() as conn:
@@ -975,16 +967,16 @@ class FolderManager:
             conn.commit()
         
         # Call registered callback if exists
-        if folder_unique_id in self.progress_callbacks:
-            callback = self.progress_callbacks[folder_unique_id]
+        if folder_id in self.progress_callbacks:
+            callback = self.progress_callbacks[folder_id]
             await callback(operation, data)
     
-    async def set_access_control(self, folder_unique_id: str, access_type: str, password: Optional[str] = None) -> Dict[str, Any]:
+    async def set_access_control(self, folder_id: str, access_type: str, password: Optional[str] = None) -> Dict[str, Any]:
         """
         Set access control for a folder
         
         Args:
-            folder_unique_id: Folder ID
+            folder_id: Folder ID
             access_type: 'public', 'private', or 'protected'
             password: Password for protected access
         """
@@ -1008,41 +1000,41 @@ class FolderManager:
                 UPDATE folders 
                 SET access_type = %s, password_hash = %s
                 WHERE folder_unique_id = %s
-            """, (access_type, password_hash, folder_unique_id))
+            """, (access_type, password_hash, folder_id))
             
             # Check if update was successful
             if cursor.rowcount == 0:
-                raise ValueError(f"Folder not found: {folder_unique_id}")
+                raise ValueError(f"Folder not found: {folder_id}")
             
             # Get updated folder
             cursor.execute("""
                 SELECT * FROM folders WHERE folder_unique_id = %s
-            """, (folder_unique_id,))
+            """, (folder_id,))
             result = cursor.fetchone()
             
             conn.commit()
             
             return {
-                'folder_unique_id': folder_unique_id,
+                'folder_id': folder_id,
                 'access_type': access_type,
                 'password_protected': password_hash is not None,
                 'message': f"Access control set to {access_type}"
             }
     
-    async def get_folder_info(self, folder_unique_id: str) -> Dict[str, Any]:
+    async def get_folder_info(self, folder_id: str) -> Dict[str, Any]:
         """Get detailed information about a folder"""
-        folder = await self._get_folder(folder_unique_id)
+        folder = await self._get_folder(folder_id)
         if not folder:
-            raise ValueError(f"Folder not found: {folder_unique_id}")
+            raise ValueError(f"Folder not found: {folder_id}")
         
         # Get file count
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Get integer folder_unique_id
+            # Get integer folder_id
             cursor.execute("""
                 SELECT id FROM folders WHERE folder_unique_id = %s
-            """, (folder_unique_id,))
+            """, (folder_id,))
             folder_int_id_result = cursor.fetchone()
             if folder_int_id_result:
                 folder_int_id = folder_int_id_result[0]
@@ -1062,7 +1054,7 @@ class FolderManager:
             segment_stats = (0,)
         
         return {
-            'folder_unique_id': folder['folder_unique_id'],
+            'folder_id': folder['folder_id'],
             'display_name': folder['display_name'],
             'folder_path': folder['folder_path'],
             'state': folder['state'],
@@ -1079,16 +1071,16 @@ class FolderManager:
             'published_at': folder.get('published_at')
         }
     
-    async def resync_folder(self, folder_unique_id: str) -> Dict[str, Any]:
+    async def resync_folder(self, folder_id: str) -> Dict[str, Any]:
         """
         Re-sync folder to detect changes
         
         Returns:
             Dictionary with sync results
         """
-        folder = await self._get_folder(folder_unique_id)
+        folder = await self._get_folder(folder_id)
         if not folder:
-            raise ValueError(f"Folder not found: {folder_unique_id}")
+            raise ValueError(f"Folder not found: {folder_id}")
         
         folder_path = Path(folder['folder_path'])
         if not folder_path.exists():
@@ -1098,13 +1090,13 @@ class FolderManager:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Get integer folder_unique_id
+            # Get integer folder_id
             cursor.execute("""
                 SELECT id FROM folders WHERE folder_unique_id = %s
-            """, (folder_unique_id,))
+            """, (folder_id,))
             folder_int_id_result = cursor.fetchone()
             if not folder_int_id_result:
-                raise ValueError(f"Folder not found in folders table: {folder_unique_id}")
+                raise ValueError(f"Folder not found in folders table: {folder_id}")
             folder_int_id = folder_int_id_result[0]
             
             cursor.execute("""
@@ -1146,14 +1138,14 @@ class FolderManager:
         # Update database
         if new_files or modified_files or deleted_files:
             # Re-index the folder
-            await self.index_folder(folder_unique_id, force=True)
+            await self.index_folder(folder_id, force=True)
             
             # Update state if needed
             if modified_files or new_files:
-                await self._update_folder_state(folder_unique_id, FolderState.MODIFIED)
+                await self._update_folder_state(folder_id, FolderState.MODIFIED)
         
         return {
-            'folder_unique_id': folder_unique_id,
+            'folder_id': folder_id,
             'new_files': len(new_files),
             'modified_files': len(modified_files),
             'deleted_files': len(deleted_files),
@@ -1161,16 +1153,16 @@ class FolderManager:
             'message': f"Sync complete: {len(new_files)} new, {len(modified_files)} modified, {len(deleted_files)} deleted"
         }
     
-    async def delete_folder(self, folder_unique_id: str) -> Dict[str, Any]:
+    async def delete_folder(self, folder_id: str) -> Dict[str, Any]:
         """
         Delete a managed folder
         
         Args:
-            folder_unique_id: Folder ID to delete
+            folder_id: Folder ID to delete
         """
-        folder = await self._get_folder(folder_unique_id)
+        folder = await self._get_folder(folder_id)
         if not folder:
-            raise ValueError(f"Folder not found: {folder_unique_id}")
+            raise ValueError(f"Folder not found: {folder_id}")
         
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
@@ -1179,13 +1171,13 @@ class FolderManager:
             cursor.execute("""
                 DELETE FROM folders
                 WHERE folder_unique_id = %s
-            """, (folder_unique_id,))
+            """, (folder_id,))
             
             deleted_count = cursor.rowcount
             conn.commit()
         
         return {
-            'folder_unique_id': folder_unique_id,
+            'folder_id': folder_id,
             'deleted': deleted_count > 0,
             'message': f"Folder {folder['display_name']} deleted successfully"
         }
