@@ -1,0 +1,72 @@
+{
+  "logging": {
+    "log_format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "log_level": "INFO",
+    "log_to_console": true,
+    "log_to_file": true,
+    "max_log_files": 5,
+    "max_log_size_mb": 10
+  },
+  "network": {
+    "connection_timeout": 30,
+    "download_workers": 3,
+    "keepalive_interval": 60,
+    "max_retries": 3,
+    "rate_limit_mbps": 0,
+    "retry_delay": 5,
+    "upload_workers": 3
+  },
+  "processing": {
+    "batch_size": 100,
+    "buffer_size": 65536,
+    "compression_threshold": 0.9,
+    "redundancy_enabled": true,
+    "redundancy_level": 2,
+    "redundancy_type": "parity",
+    "segment_size": 768000,
+    "worker_threads": 8
+  },
+  "security": {
+    "enable_encryption": true,
+    "max_password_attempts": 3,
+    "secure_delete": true,
+    "session_timeout_minutes": 30,
+    "verify_downloads": true,
+    "verify_signatures": true
+  },
+  "servers": [
+    {
+      "enabled": true,
+      "hostname": "news.newshosting.com",
+      "max_connections": 2,
+      "name": "Primary",
+      "password": "Z0FBQUFBQm9wRkhITm9JQUxJTFhiS2dTYktTUnM2NkdMbUhteW5zZjh5WDFlbk14VXkwUmJ0ck5BWDNnN2lSdnB1SWVDX1VydU1ZbzctQmIwZ2o2UDlBcDNiYXYxSEtiR0E9PQ==",
+      "port": 563,
+      "posting_group": "alt.binaries.test",
+      "priority": 1,
+      "use_ssl": true,
+      "username": "contemptx"
+    }
+  ],
+  "storage": {
+    "cleanup_age_hours": 24,
+    "cleanup_temp_files": true,
+    "data_directory": "./data",
+    "database_path": "./data/usenetsync.db",
+    "download_directory": "./downloads",
+    "log_directory": "./logs",
+    "max_temp_storage_gb": 50,
+    "temp_directory": "./temp"
+  },
+  "ui": {
+    "auto_update_check": true,
+    "confirm_deletions": true,
+    "language": "en",
+    "minimize_to_tray": true,
+    "show_hidden_files": false,
+    "start_minimized": false,
+    "theme": "system"
+  },
+  "updated": "2025-08-19T10:28:23.481764",
+  "version": "1.0"
+}

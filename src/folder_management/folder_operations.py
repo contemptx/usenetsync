@@ -229,17 +229,29 @@ class FolderUploadManager:
         import time
         
         try:
-            # Initialize NNTP client if not already done
+            # Get NNTP client from folder manager - it should be initialized by the system
             if self.fm.nntp_client is None:
+                # The system should have initialized this! 
+                # For CLI testing, we need to initialize it properly
                 from networking.production_nntp_client import ProductionNNTPClient
-                self.fm.nntp_client = ProductionNNTPClient(
-                    host='news.newshosting.com',
-                    port=563,
-                    username='contemptx',
-                    password='Kia211101#',
-                    use_ssl=True,
-                    max_connections=1  # Reduced to avoid connection limits
-                )
+                from config.configuration_manager import ConfigurationManager
+                
+                # Load the REAL configuration
+                config = ConfigurationManager()
+                enabled_servers = [s for s in config.servers if s.enabled]
+                
+                if enabled_servers:
+                    server = enabled_servers[0]  # Use primary server
+                    self.fm.nntp_client = ProductionNNTPClient(
+                        host=server.hostname,
+                        port=server.port,
+                        username=server.username,
+                        password=server.password,
+                        use_ssl=server.use_ssl,
+                        max_connections=server.max_connections
+                    )
+                else:
+                    raise ValueError("No NNTP servers configured in system")
             
             # Use the existing connection pool from ProductionNNTPClient
             with self.fm.nntp_client.connection_pool.get_connection() as conn:
