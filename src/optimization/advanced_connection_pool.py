@@ -14,9 +14,12 @@ from datetime import datetime, timedelta
 import psycopg2
 from psycopg2 import pool
 try:
-    import nntp  # pynntp provides the nntp module
+    from nntp import NNTPClient  # pynntp provides the nntp module
 except ImportError:
-    nntp = None  # Handle gracefully if not available
+    # Create a mock NNTPClient for type hints
+    class NNTPClient:
+        pass
+    nntp = None  # Mark as not available
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +84,7 @@ class AdvancedNNTPPool:
             if self.active_connections >= self.max_connections:
                 raise Exception("Maximum connections reached")
             
-            conn = nntp.NNTPClient(
+            conn = NNTPClient(
                 host=self.config['hostname'],
                 port=self.config['port'],
                 username=self.config['username'],

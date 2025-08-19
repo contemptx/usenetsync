@@ -681,48 +681,87 @@ def list_folders():
                 except:
                     pass  # Table might already exist
                 
-                # Query the folders table - handle different schemas
+                # Query the folders table - handle different schemas and tables
+                folders_found = False
+                
+                # First try managed_folders table (FolderManager)
                 try:
-                    # Try the new schema first
                     cursor.execute("""
                         SELECT folder_id, name, path, state, total_files, total_size,
                                total_segments, share_id, published, created_at
-                        FROM folders
+                        FROM managed_folders
                         ORDER BY created_at DESC
                     """)
-                    columns_type = 'new'
+                    columns_type = 'managed'
+                    folders_found = True
                 except:
-                    # Fall back to old schema
+                    pass
+                
+                # If managed_folders doesn't exist, try folders table
+                if not folders_found:
                     try:
+                        # Try the new schema first
                         cursor.execute("""
-                            SELECT folder_unique_id, display_name, folder_path, state, 
-                                   total_files, total_size, 0 as total_segments, 
-                                   NULL as share_id, 
-                                   CASE WHEN last_published IS NOT NULL THEN 1 ELSE 0 END as published,
-                                   created_at
+                            SELECT folder_id, name, path, state, total_files, total_size,
+                                   total_segments, share_id, published, created_at
                             FROM folders
                             ORDER BY created_at DESC
                         """)
-                        columns_type = 'old'
-                    except Exception as e:
-                        # If both fail, return empty array
-                        click.echo(json.dumps([]))
-                        return
+                        columns_type = 'new'
+                        folders_found = True
+                    except:
+                        # Fall back to old schema
+                        try:
+                            cursor.execute("""
+                                SELECT folder_unique_id, display_name, folder_path, state, 
+                                       total_files, total_size, 0 as total_segments, 
+                                       NULL as share_id, 
+                                       CASE WHEN last_published IS NOT NULL THEN 1 ELSE 0 END as published,
+                                       created_at
+                                FROM folders
+                                ORDER BY created_at DESC
+                            """)
+                            columns_type = 'old'
+                            folders_found = True
+                        except Exception as e:
+                            pass
+                
+                if not folders_found:
+                    # If no folders table found, return empty array
+                    click.echo(json.dumps([]))
+                    return
                 
                 folders = []
                 for row in cursor.fetchall():
-                    folders.append({
-                        'folder_id': row[0],
-                        'name': row[1],
-                        'path': row[2],
-                        'state': row[3],
-                        'total_files': row[4] or 0,
-                        'total_size': row[5] or 0,
-                        'total_segments': row[6] or 0,
-                        'share_id': row[7],
-                        'published': row[8] or False,
-                        'created_at': row[9].isoformat() if row[9] else None
-                    })
+                    # Handle both tuple and dict-like rows
+                    if hasattr(row, 'keys'):
+                        # Dictionary-like row (SQLite with row_factory)
+                        folders.append({
+                            'folder_id': row.get('folder_id') or row.get('folder_unique_id'),
+                            'name': row.get('name') or row.get('display_name'),
+                            'path': row.get('path') or row.get('folder_path'),
+                            'state': row.get('state', 'added'),
+                            'total_files': row.get('total_files', 0) or 0,
+                            'total_size': row.get('total_size', 0) or 0,
+                            'total_segments': row.get('total_segments', 0) or 0,
+                            'share_id': row.get('share_id'),
+                            'published': row.get('published', False) or False,
+                            'created_at': row.get('created_at').isoformat() if row.get('created_at') and hasattr(row.get('created_at'), 'isoformat') else row.get('created_at')
+                        })
+                    else:
+                        # Tuple row (PostgreSQL or SQLite without row_factory)
+                        folders.append({
+                            'folder_id': row[0],
+                            'name': row[1],
+                            'path': row[2],
+                            'state': row[3],
+                            'total_files': row[4] or 0,
+                            'total_size': row[5] or 0,
+                            'total_segments': row[6] or 0,
+                            'share_id': row[7],
+                            'published': row[8] or False,
+                            'created_at': row[9].isoformat() if row[9] and hasattr(row[9], 'isoformat') else row[9]
+                        })
                 
             click.echo(json.dumps(folders))
         except Exception as e:

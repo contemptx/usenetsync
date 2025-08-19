@@ -101,18 +101,54 @@ class FolderManager:
         self.config = config or FolderConfig()
         self.logger = logger
         
-        # Initialize PostgreSQL
-        self.db_config = PostgresConfig(
-            host='localhost',
-            port=5432,
-            database='usenet',
-            user='usenet',
-            password='usenetsync',
-            pool_size=5,
-            max_overflow=10,
-            shard_count=4
-        )
-        self.db = ShardedPostgreSQLManager(self.db_config)
+        # Initialize database using DatabaseSelector
+        try:
+            from database.database_selector import DatabaseSelector
+            db_manager, db_type = DatabaseSelector.get_database_manager()
+            
+            if db_type == 'postgresql':
+                # Use PostgreSQL with sharding
+                self.db_config = PostgresConfig(
+                    host='localhost',
+                    port=5432,
+                    database='usenet',
+                    user='usenet',
+                    password='usenetsync',
+                    pool_size=5,
+                    max_overflow=10,
+                    shard_count=4
+                )
+                self.db = ShardedPostgreSQLManager(self.db_config)
+            else:
+                # Use SQLite through an adapter
+                from folder_management.database_adapter import SQLiteToPostgreSQLAdapter
+                self.db_config = None
+                self.db = SQLiteToPostgreSQLAdapter(db_manager)
+                self.logger.info("Using SQLite database with PostgreSQL adapter")
+                
+        except Exception as e:
+            self.logger.warning(f"Could not initialize database: {e}")
+            # Try to use SQLite as fallback
+            try:
+                from database.database_selector import DatabaseSelector
+                from folder_management.database_adapter import SQLiteToPostgreSQLAdapter
+                db_manager, _ = DatabaseSelector.get_database_manager()
+                self.db_config = None
+                self.db = SQLiteToPostgreSQLAdapter(db_manager)
+                self.logger.info("Using SQLite database as fallback")
+            except:
+                # Last resort - try PostgreSQL
+                self.db_config = PostgresConfig(
+                    host='localhost',
+                    port=5432,
+                    database='usenet',
+                    user='usenet',
+                    password='usenetsync',
+                    pool_size=5,
+                    max_overflow=10,
+                    shard_count=4
+                )
+                self.db = ShardedPostgreSQLManager(self.db_config)
         
         # Initialize security system with database
         self.security = EnhancedSecuritySystem(self.db)
@@ -139,10 +175,15 @@ class FolderManager:
         # Real client will be initialized when server is configured
         self.upload_system = None  # Will be initialized when NNTP is ready
         
-        self.bulk_db = BulkDatabaseOperations(
-            {'host': self.db_config.host, 'database': self.db_config.database,
-             'user': self.db_config.user, 'password': self.db_config.password}
-        )
+        # Initialize bulk database operations only for PostgreSQL
+        if self.db_config:
+            self.bulk_db = BulkDatabaseOperations(
+                {'host': self.db_config.host, 'database': self.db_config.database,
+                 'user': self.db_config.user, 'password': self.db_config.password}
+            )
+        else:
+            # For SQLite, we don't use bulk operations
+            self.bulk_db = None
         
         # Initialize publishing system (will use folder-specific binary index)
         self.publisher = None  # Will be initialized when needed
@@ -333,12 +374,41 @@ class FolderManager:
             """)
             
             # Create indexes for files and segments
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);
-                CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash);
-                CREATE INDEX IF NOT EXISTS idx_segments_file_id ON segments(file_id);
-                CREATE INDEX IF NOT EXISTS idx_segments_message_id ON segments(message_id);
-            """)
+            # Check if files table exists and what columns it has
+            try:
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id)
+                """)
+            except:
+                pass  # Index might already exist or column might not exist
+            
+            try:
+                # Try to create index on hash column (new schema)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash)
+                """)
+            except:
+                # Try file_hash column (old schema)
+                try:
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_files_hash ON files(file_hash)
+                    """)
+                except:
+                    pass  # Column might not exist
+            
+            try:
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_segments_file_id ON segments(file_id)
+                """)
+            except:
+                pass
+            
+            try:
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_segments_message_id ON segments(message_id)
+                """)
+            except:
+                pass
             
             # Compatibility check - ensure folder_id exists in files table
             # (already created in the CREATE TABLE statement above)
