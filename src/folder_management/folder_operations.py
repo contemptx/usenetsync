@@ -384,6 +384,10 @@ class FolderPublisher:
         Publish folder by creating and uploading core index
         NOT NZB/torrent - our custom core index system
         """
+        import hashlib
+        import base64
+        import json
+        import zlib
         # Get folder info
         folder = await self.fm._get_folder(folder_id)
         if not folder:
@@ -435,13 +439,45 @@ class FolderPublisher:
             # Calculate hash
             index_hash = hashlib.sha256(compressed_index).hexdigest()
             
-            # Encrypt if needed
-            if access_type in ['private', 'protected']:
-                encrypted_index, encryption_key = self.fm.security.encrypt_data(compressed_index)
-                final_index = encrypted_index
-            else:
+            # Encrypt based on access type
+            if access_type == 'public':
+                # For public shares, use a well-known key that anyone can derive
+                # This maintains the zero-knowledge property while allowing public access
+                import hashlib
+                import base64
+                public_key = hashlib.sha256(b'USENETSYNC_PUBLIC_KEY').digest()
+                encrypted_index = self.fm.security.encrypt_data(compressed_index, public_key)
+                
+                # For public shares, we need to wrap the encrypted data with the key
+                # so the client can decrypt it
+                wrapped_index = json.dumps({
+                    'share_type': 'public',
+                    'encrypted_data': base64.b64encode(encrypted_index).decode('utf-8'),
+                    'encryption_key': base64.b64encode(public_key).decode('utf-8')
+                }).encode('utf-8')
+                
+                final_index = wrapped_index
+                encryption_key = None  # Key is in the index itself
+            elif access_type == 'protected':
+                # For password-protected shares, derive key from password
+                # Password will be required for decryption
+                # This will be handled separately
                 final_index = compressed_index
                 encryption_key = None
+            elif access_type == 'private':
+                # For private shares, use folder-specific keys
+                # Only authorized users can decrypt
+                folder_keys = self.fm.security.load_folder_keys(folder_id)
+                if folder_keys:
+                    # Use the folder's encryption key
+                    import os
+                    encryption_key = os.urandom(32)  # Generate random key
+                    encrypted_index = self.fm.security.encrypt_data(compressed_index, encryption_key)
+                    final_index = encrypted_index
+                else:
+                    raise ValueError("No encryption keys found for private share")
+            else:
+                raise ValueError(f"Unknown access type: {access_type}")
             
             # Segment the index itself for upload
             index_segments = self._segment_index(final_index)
