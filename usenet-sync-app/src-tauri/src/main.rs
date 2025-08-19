@@ -823,6 +823,101 @@ async fn is_user_initialized() -> Result<bool, String> {
         .unwrap_or(false))
 }
 
+// Additional Folder Management Commands
+#[tauri::command]
+async fn set_folder_access(folder_id: String, access_type: String, password: Option<String>) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("set-folder-access")
+       .arg("--folder-id").arg(&folder_id)
+       .arg("--access-type").arg(&access_type);
+    
+    if let Some(pwd) = password {
+        cmd.arg("--password").arg(pwd);
+    }
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn folder_info(folder_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("folder-info")
+       .arg("--folder-id").arg(&folder_id);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn resync_folder(folder_id: String) -> Result<serde_json::Value, String> {
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("resync-folder")
+       .arg("--folder-id").arg(&folder_id);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn delete_folder(folder_id: String, confirm: bool) -> Result<serde_json::Value, String> {
+    if !confirm {
+        return Err("Deletion not confirmed".to_string());
+    }
+    
+    let python_cmd = get_python_backend();
+    let mut cmd = Command::new(&python_cmd);
+    
+    if !is_bundled_backend() {
+        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    }
+    
+    cmd.arg("delete-folder")
+       .arg("--folder-id").arg(&folder_id)
+       .arg("--confirm");
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+}
+
 // Transfer Operations
 #[tauri::command]
 async fn pause_transfer(state: State<'_, AppState>, transfer_id: String) -> Result<(), String> {
@@ -1070,6 +1165,11 @@ fn main() {
             add_authorized_user,
             remove_authorized_user,
             get_authorized_users,
+            // Additional folder management
+            set_folder_access,
+            folder_info,
+            resync_folder,
+            delete_folder,
             // User management
             get_user_info,
             initialize_user,

@@ -10,7 +10,11 @@ import {
   uploadFolder, 
   publishFolder as publishFolderApi,
   getAuthorizedUsers,
-  checkDatabaseStatus 
+  checkDatabaseStatus,
+  setFolderAccess,
+  getFolderInfo,
+  resyncFolder,
+  deleteFolder
 } from '../lib/tauri';
 import { 
   Folder, 
@@ -652,6 +656,28 @@ export const FolderManagement: React.FC = () => {
 
                     <div className="flex gap-3">
                       <button 
+                        onClick={async () => {
+                          if (selectedFolder) {
+                            try {
+                              await setFolderAccess(
+                                selectedFolder.folder_id,
+                                selectedAccessType,
+                                selectedAccessType === 'protected' ? protectedPassword : undefined
+                              );
+                              toast.success(`Access control set to ${selectedAccessType}`);
+                              await loadFolders();
+                            } catch (error) {
+                              toast.error(`Failed to set access control: ${error}`);
+                            }
+                          }
+                        }}
+                        disabled={!selectedFolder}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Update Access Control
+                      </button>
+
+                      <button 
                         onClick={() => {
                           if (selectedFolder) {
                             publishFolder(
@@ -665,15 +691,15 @@ export const FolderManagement: React.FC = () => {
                         disabled={!selectedFolder || selectedFolder.state !== 'uploaded'}
                         className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {selectedFolder?.published ? 'Update Access & Re-publish' : 'Publish with Access Settings'}
+                        {selectedFolder?.published ? 'Re-publish with New Settings' : 'Publish Folder'}
                       </button>
-                      
-                      {selectedFolder?.published && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 self-center">
-                          Re-publishing only updates access control, not files
-                        </p>
-                      )}
                     </div>
+                    
+                    {selectedFolder?.published && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                        Share ID: <span className="font-mono">{selectedFolder.share_id}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -697,32 +723,129 @@ export const FolderManagement: React.FC = () => {
 
               {activeTab === 'actions' && (
                 <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
-                  <h3 className="text-lg font-medium mb-4">Actions</h3>
+                  <h3 className="text-lg font-medium mb-4">Folder Actions</h3>
                   <div className="space-y-3">
-                    <button
-                      onClick={() => handleIndexFolder(selectedFolder.folder_id)}
-                      className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Re-index Folder
-                    </button>
+                    {/* Processing Actions */}
+                    <div className="border-b border-gray-200 dark:border-dark-border pb-3 mb-3">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Processing</h4>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => handleIndexFolder(selectedFolder.folder_id)}
+                          className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <FileText className="w-4 h-4" />
+                          {selectedFolder.state === 'added' ? 'Index Folder' : 'Re-index Folder'}
+                        </button>
 
-                    {selectedFolder.published && (
+                        {selectedFolder.state !== 'added' && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const result = await resyncFolder(selectedFolder.folder_id);
+                                toast.success(`Resync complete: ${result.message || 'No changes detected'}`);
+                                await loadFolders();
+                              } catch (error) {
+                                toast.error(`Resync failed: ${error}`);
+                              }
+                            }}
+                            className="w-full px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                            Resync for Changes
+                          </button>
+                        )}
+
+                        {selectedFolder.state === 'indexed' && (
+                          <button
+                            onClick={() => handleSegmentFolder(selectedFolder.folder_id)}
+                            className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Package className="w-4 h-4" />
+                            Create Segments
+                          </button>
+                        )}
+
+                        {selectedFolder.state === 'segmented' && (
+                          <button
+                            onClick={() => handleUploadFolder(selectedFolder.folder_id)}
+                            className="w-full px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Upload className="w-4 h-4" />
+                            Upload to Usenet
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Publishing Actions */}
+                    <div className="border-b border-gray-200 dark:border-dark-border pb-3 mb-3">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Publishing</h4>
+                      <div className="space-y-2">
+                        {selectedFolder.state === 'uploaded' && !selectedFolder.published && (
+                          <button
+                            onClick={() => publishFolder(selectedFolder.folder_id, 'public')}
+                            className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            Publish Share
+                          </button>
+                        )}
+
+                        {selectedFolder.published && (
+                          <button
+                            onClick={() => publishFolder(selectedFolder.folder_id)}
+                            className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            Re-publish Share
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Information Actions */}
+                    <div className="border-b border-gray-200 dark:border-dark-border pb-3 mb-3">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Information</h4>
+                      <div className="space-y-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const info = await getFolderInfo(selectedFolder.folder_id);
+                              toast.success(`Folder: ${info.name}\nFiles: ${info.total_files}\nSize: ${info.total_size} bytes\nState: ${info.state}`);
+                            } catch (error) {
+                              toast.error(`Failed to get folder info: ${error}`);
+                            }
+                          }}
+                          className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Get Detailed Info
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div>
+                      <h4 className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">Danger Zone</h4>
                       <button
-                        onClick={() => publishFolder(selectedFolder.folder_id)}
-                        className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                        onClick={async () => {
+                          if (confirm(`Are you sure you want to delete the folder "${selectedFolder.name}"? This action cannot be undone.`)) {
+                            try {
+                              await deleteFolder(selectedFolder.folder_id, true);
+                              toast.success('Folder deleted successfully');
+                              setSelectedFolder(null);
+                              await loadFolders();
+                            } catch (error) {
+                              toast.error(`Failed to delete folder: ${error}`);
+                            }
+                          }
+                        }}
+                        className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
                       >
-                        <Share2 className="w-4 h-4" />
-                        Re-publish Share
+                        <AlertCircle className="w-4 h-4" />
+                        Delete Folder
                       </button>
-                    )}
-
-                    <button
-                      className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Advanced Settings
-                    </button>
+                    </div>
                   </div>
                 </div>
               )}
