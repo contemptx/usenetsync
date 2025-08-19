@@ -78,15 +78,30 @@ class FolderUploadManager:
         
         # Initialize NNTP client if not already done
         if not self.fm.nntp_client:
-            # Get server config from database or use default
-            self.fm.nntp_client = ProductionNNTPClient(
-                host='news.newshosting.com',
-                port=563,
-                username='contemptx',
-                password='Kia211101#',
-                use_ssl=True,
-                max_connections=self.fm.config.max_connections
-            )
+            # Load proper configuration
+            from config.configuration_manager import ConfigurationManager
+            import os
+            
+            # Use absolute path to ensure config is found
+            config_path = os.path.abspath('config/usenetsync.json')
+            if os.path.exists(config_path):
+                config = ConfigurationManager(config_path)
+            else:
+                config = ConfigurationManager()
+            
+            enabled_servers = [s for s in config.servers if s.enabled]
+            if enabled_servers:
+                server = enabled_servers[0]
+                self.fm.nntp_client = ProductionNNTPClient(
+                    host=server.hostname,
+                    port=server.port,
+                    username=server.username,
+                    password=server.password,
+                    use_ssl=server.use_ssl,
+                    max_connections=server.max_connections
+                )
+            else:
+                raise ValueError("No NNTP servers configured")
         
         # Update state
         await self.fm._update_folder_state(folder_id, 'uploading')
@@ -236,8 +251,13 @@ class FolderUploadManager:
                 from networking.production_nntp_client import ProductionNNTPClient
                 from config.configuration_manager import ConfigurationManager
                 
-                # Load the REAL configuration
-                config = ConfigurationManager('config/usenetsync.json')
+                # Load the REAL configuration with absolute path
+                import os
+                config_path = os.path.abspath('config/usenetsync.json')
+                if os.path.exists(config_path):
+                    config = ConfigurationManager(config_path)
+                else:
+                    config = ConfigurationManager()
                 enabled_servers = [s for s in config.servers if s.enabled]
                 
                 if enabled_servers:
