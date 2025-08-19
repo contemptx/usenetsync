@@ -24,6 +24,7 @@ from enum import Enum
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import existing systems
+from database.database_selector import DatabaseSelector
 from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
 from indexing.versioned_core_index_system import VersionedCoreIndexSystem
 from indexing.parallel_indexer import ParallelIndexer
@@ -101,18 +102,24 @@ class FolderManager:
         self.config = config or FolderConfig()
         self.logger = logger
         
-        # Initialize PostgreSQL
-        self.db_config = PostgresConfig(
-            host='localhost',
-            port=5432,
-            database='usenet',
-            user='usenet',
-            password='usenetsync',
-            pool_size=5,
-            max_overflow=10,
-            shard_count=4
-        )
-        self.db = ShardedPostgreSQLManager(self.db_config)
+        # Use DatabaseSelector to get appropriate database
+        self.db, self.db_type = DatabaseSelector.get_database_manager()
+        
+        # Store db_config for compatibility
+        if self.db_type == 'postgresql':
+            self.db_config = PostgresConfig(
+                host='localhost',
+                port=5432,
+                database='usenet',
+                user='usenet',
+                password='usenetsync',
+                pool_size=5,
+                max_overflow=10,
+                shard_count=4
+            )
+        else:
+            # SQLite config
+            self.db_config = None
         
         # Initialize security system with database
         self.security = EnhancedSecuritySystem(self.db)
@@ -139,10 +146,15 @@ class FolderManager:
         # Real client will be initialized when server is configured
         self.upload_system = None  # Will be initialized when NNTP is ready
         
-        self.bulk_db = BulkDatabaseOperations(
-            {'host': self.db_config.host, 'database': self.db_config.database,
-             'user': self.db_config.user, 'password': self.db_config.password}
-        )
+        # Initialize bulk operations based on database type
+        if self.db_type == 'postgresql' and self.db_config:
+            self.bulk_db = BulkDatabaseOperations(
+                {'host': self.db_config.host, 'database': self.db_config.database,
+                 'user': self.db_config.user, 'password': self.db_config.password}
+            )
+        else:
+            # For SQLite, bulk_db operations will be handled by the main db manager
+            self.bulk_db = None
         
         # Initialize publishing system (will use folder-specific binary index)
         self.publisher = None  # Will be initialized when needed
@@ -160,11 +172,13 @@ class FolderManager:
         
     def _ensure_database_schema(self):
         """Create necessary database tables if they don't exist"""
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Create managed_folders table
-            cursor.execute("""
+        # Handle different database types
+        if self.db_type == 'postgresql':
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Create managed_folders table for PostgreSQL
+                cursor.execute("""
                 CREATE TABLE IF NOT EXISTS managed_folders (
                     id SERIAL PRIMARY KEY,
                     folder_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
