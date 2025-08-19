@@ -786,10 +786,10 @@ def list_folders():
                                display_name as name, 
                                folder_path as path, 
                                state, 
-                               total_files, 
-                               total_size,
-                               COALESCE(total_segments, 0) as total_segments, 
-                               share_id, 
+                               COALESCE(total_files, 0) as total_files, 
+                               COALESCE(total_size, 0) as total_size,
+                               0 as total_segments, 
+                               NULL as share_id, 
                                CASE WHEN last_published IS NOT NULL THEN 1 ELSE 0 END as published,
                                created_at
                         FROM folders
@@ -797,6 +797,9 @@ def list_folders():
                     """)
                     folders_found = True
                 except Exception as e:
+                    # Log the error for debugging
+                    import sys
+                    print(f"Query error: {e}", file=sys.stderr)
                     pass
                 
                 if not folders_found:

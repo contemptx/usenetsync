@@ -698,22 +698,53 @@ class FolderManager:
     
     async def _update_folder_state(self, folder_id: str, state: FolderState):
         """Update folder state"""
+        # Map FolderManager states to folders table states
+        # The folders table only accepts: 'active', 'deleted', 'archived'
+        db_state = 'active'  # Default to active for all operational states
+        if state == FolderState.ERROR:
+            db_state = 'archived'  # Use archived for error state
+        
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Update the state in folders table
             cursor.execute(
                 "UPDATE folders SET state = %s WHERE folder_unique_id = %s",
-                (state.value, folder_id)
+                (db_state, folder_id)
             )
+            
+            # Store the detailed state in a separate column if it exists
+            try:
+                cursor.execute(
+                    "UPDATE folders SET last_operation = %s WHERE folder_unique_id = %s",
+                    (state.value, folder_id)
+                )
+            except:
+                pass  # Column might not exist
+            
             conn.commit()
     
     async def _update_folder_stats(self, folder_id: str, stats: Dict):
         """Update folder statistics"""
+        # Map stats to columns that actually exist in folders table
+        valid_columns = {
+            'total_files': 'total_files',
+            'total_size': 'total_size',
+            'indexed_files': 'total_files',  # Map to total_files
+            'indexed_size': 'total_size',    # Map to total_size
+        }
+        
         set_clauses = []
         values = []
         
         for key, value in stats.items():
-            set_clauses.append(f"{key} = %s")
-            values.append(value)
+            if key in valid_columns:
+                column = valid_columns[key]
+                set_clauses.append(f"{column} = %s")
+                values.append(value)
+        
+        if not set_clauses:
+            return  # Nothing to update
         
         values.append(folder_id)
         
@@ -723,6 +754,13 @@ class FolderManager:
                 f"UPDATE folders SET {', '.join(set_clauses)} WHERE folder_unique_id = %s",
                 values
             )
+            
+            # Also update last_indexed timestamp
+            cursor.execute(
+                "UPDATE folders SET last_indexed = CURRENT_TIMESTAMP WHERE folder_unique_id = %s",
+                (folder_id,)
+            )
+            
             conn.commit()
     
     async def _get_folder_files(self, folder_id: str) -> List[Dict]:
@@ -869,7 +907,7 @@ class FolderManager:
             folders += len(dirs)
             
             for file_name in files:
-                file_path = os.folder_path.join(root, file_name)
+                file_path = os.path.join(root, file_name)
                 try:
                     file_stat = os.stat(file_path)
                     file_size = file_stat.st_size
@@ -1043,7 +1081,7 @@ class FolderManager:
                     SELECT COUNT(*) as file_count,
                            SUM(file_size) as total_size
                     FROM files
-                    WHERE folder_unique_id = %s
+                    WHERE folder_id = %s
                 """, (folder_int_id,))
                 file_stats = cursor.fetchone()
             else:
@@ -1054,21 +1092,21 @@ class FolderManager:
             segment_stats = (0,)
         
         return {
-            'folder_id': folder['folder_id'],
-            'display_name': folder['display_name'],
-            'folder_path': folder['folder_path'],
-            'state': folder['state'],
+            'folder_id': folder.get('folder_unique_id', folder_id),
+            'name': folder.get('display_name'),
+            'path': folder.get('folder_path'),
+            'state': folder.get('state'),
             'access_type': folder.get('access_type', 'public'),
-            'total_files': folder.get('total_files', 0),
-            'total_size': folder.get('total_size', 0),
-            'total_segments': folder.get('total_segments', 0),
-            'uploaded_segments': folder.get('uploaded_segments', 0),
-            'published': folder.get('published', False),
+            'total_files': file_stats[0] if file_stats else 0,
+            'total_size': file_stats[1] if file_stats else 0,
+            'total_segments': segment_stats[0] if segment_stats else 0,
+            'uploaded_segments': 0,
+            'published': folder.get('last_published') is not None,
             'share_id': folder.get('share_id'),
             'created_at': folder.get('created_at'),
-            'indexed_at': folder.get('indexed_at'),
-            'segmented_at': folder.get('segmented_at'),
-            'published_at': folder.get('published_at')
+            'indexed_at': folder.get('last_indexed'),
+            'segmented_at': None,
+            'published_at': folder.get('last_published')
         }
     
     async def resync_folder(self, folder_id: str) -> Dict[str, Any]:
