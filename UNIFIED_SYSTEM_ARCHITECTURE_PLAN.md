@@ -6,6 +6,14 @@ This document outlines a comprehensive plan to unify the currently fragmented in
 
 ## Current State Analysis
 
+**Important Note**: The `folder_manager.py` appears to be incomplete/development code. The actual production systems are:
+- `src/core/main.py` - Main integration point
+- `src/indexing/versioned_core_index_system.py` and `simplified_binary_index.py` - Core indexing
+- `src/upload/enhanced_upload_system.py` and `segment_packing_system.py` - Upload pipeline
+- `src/download/enhanced_download_system.py` and `segment_retrieval_system.py` - Download pipeline
+- `src/upload/publishing_system.py` (not `src/publishing/`) - Share publishing
+- `src/security/enhanced_security_system.py` - Security layer
+
 ### 1. Multiple Indexing Systems
 
 #### VersionedCoreIndexSystem (`src/indexing/versioned_core_index_system.py`)
@@ -63,17 +71,19 @@ This document outlines a comprehensive plan to unify the currently fragmented in
 
 ### 4. Publishing Systems
 
-#### PublishingSystem (`src/publishing/publishing_system.py`)
+#### PublishingSystem (`src/upload/publishing_system.py`)
 - Share creation and management
 - Access control (public/private/protected)
 - Password protection
 - Expiry management
 - SQLite database for shares
+- Used in production via `src/core/main.py`
 
-#### FolderManager Publishing (`src/folder_management/folder_manager.py`)
-- Folder-level operations
-- PostgreSQL support
-- State machine (INDEXED, SEGMENTED, UPLOADING, PUBLISHED)
+#### ShareIDGenerator (`src/indexing/share_id_generator.py`)
+- Generates unique share IDs without patterns
+- Creates access strings (standard/compact/legacy formats)
+- Parses and validates access strings
+- No Usenet information leaked in share IDs
 
 ### 5. Download Systems
 
@@ -94,18 +104,29 @@ This document outlines a comprehensive plan to unify the currently fragmented in
 ### 6. Database Fragmentation
 
 Currently using **multiple database schemas** across systems:
-- SQLite in indexing systems
-- SQLite in upload/download systems
-- PostgreSQL in folder management
-- Different table structures for same entities
+- SQLite in indexing systems (VersionedCoreIndexSystem)
+- SQLite in upload/download systems (EnhancedUploadSystem, EnhancedDownloadSystem)
+- PostgreSQL option in main.py and CLI (ShardedPostgreSQLManager)
+- ProductionDatabaseManager wraps EnhancedDatabaseManager with retry logic
+- Different table structures for same entities (files, segments, shares)
 - No unified transaction management
+
+### 7. Actual Production Workflow (from src/core/main.py)
+
+1. **Initialization**: UsenetSync class integrates all components
+2. **Index**: `index_system.index_folder()` → creates file/segment metadata
+3. **Upload**: `upload_system` with `segment_packing` → posts to Usenet
+4. **Publish**: `publishing.create_share()` → generates access string
+5. **Download**: `download_system.download_from_access_string()` → retrieves and reconstructs
+6. **Security**: `EnhancedSecuritySystem` handles encryption/decryption throughout
 
 ## Problems with Current Architecture
 
 1. **Redundant Functionality**
-   - Multiple segment creation implementations
-   - Duplicate database schemas
-   - Overlapping upload/publish logic
+   - Multiple segment creation implementations (FileSegmentProcessor vs SegmentPackingSystem)
+   - Duplicate database schemas (SQLite vs PostgreSQL, different table structures)
+   - Overlapping upload/publish logic (PublishingSystem vs folder_manager)
+   - Two publishing system paths (src/upload/ vs src/publishing/)
 
 2. **Integration Issues**
    - Systems not properly connected (per UPLOAD_FLOW_ANALYSIS.md)
@@ -121,6 +142,7 @@ Currently using **multiple database schemas** across systems:
    - Multiple codebases to maintain
    - Inconsistent error handling
    - Difficult to add new features
+   - Incomplete/experimental code (folder_manager) mixed with production
 
 5. **Security Inconsistencies**
    - Different access control implementations
