@@ -607,16 +607,12 @@ class FolderManager:
                         # Create redundancy copies (NOT PAR2)
                         for redundancy_index in range(folder['redundancy_level']):
                             segment = {
-                                'segment_id': str(uuid.uuid4()),
                                 'file_id': file_info['file_id'],
-                                'folder_id': folder_id,
                                 'segment_index': segment_data.get('index', 0),
                                 'redundancy_index': redundancy_index,
                                 'size': segment_data.get('size', 0),
                                 'hash': segment_data.get('hash', ''),
-                                'compressed_size': segment_data.get('compressed_size', 0),
                                 'data': segment_data.get('data', b''),  # Encrypted & compressed
-                                'created_at': datetime.now()
                             }
                             
                             segments_to_insert.append(segment)
@@ -821,21 +817,26 @@ class FolderManager:
                 """)
                 
                 # Insert segment
+                # Generate a subject hash for the segment
+                import hashlib
+                subject_hash = hashlib.sha256(
+                    f"{seg['file_id']}_{seg['segment_index']}_{seg.get('redundancy_index', 0)}".encode()
+                ).hexdigest()[:16]
+                
                 cursor.execute("""
                     INSERT INTO segments (
-                        id, file_id, folder_id, segment_index, redundancy_index,
-                        size, hash, compressed_size
+                        file_id, segment_index, redundancy_index,
+                        segment_hash, segment_size, subject_hash, newsgroup, state
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO NOTHING
                 """, (
-                    seg['segment_id'],
                     seg['file_id'],
-                    seg['folder_id'],
                     seg['segment_index'],
-                    seg['redundancy_index'],
-                    seg['size'],
-                    seg['hash'],
-                    seg.get('compressed_size', seg['size'])
+                    seg.get('redundancy_index', 0),
+                    seg.get('hash', subject_hash),  # Use subject_hash as default if no hash provided
+                    seg.get('size', 0),
+                    subject_hash,
+                    'alt.binaries.test',  # Default newsgroup
+                    'pending'
                 ))
             
             conn.commit()
