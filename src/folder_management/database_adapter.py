@@ -56,7 +56,8 @@ class SQLiteConnectionWrapper:
         self.conn.row_factory = sqlite3.Row
         
         # Enable foreign keys
-        self.conn.execute("PRAGMA foreign_keys = ON")
+        # Don't enable foreign keys as we've removed constraints
+        # self.conn.execute("PRAGMA foreign_keys = ON")
         
         # Register custom functions
         self.conn.create_function("gen_random_uuid", 0, lambda: str(uuid.uuid4()))
@@ -109,8 +110,10 @@ class SQLiteCursorWrapper:
                 else:
                     return self.cursor.execute(converted_query)
         except Exception as e:
-            logger.error(f"Query failed: {converted_query}")
-            logger.error(f"Params: {params}")
+            # Don't log ALTER TABLE ADD COLUMN errors - these are expected when columns exist
+            if not ("ALTER TABLE" in converted_query and "ADD COLUMN" in converted_query):
+                logger.error(f"Query failed: {converted_query}")
+                logger.error(f"Params: {params}")
             raise
     
     def fetchone(self):

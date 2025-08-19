@@ -855,7 +855,7 @@ class FolderManager:
                 # Fallback for PostgreSQL
                 cursor.execute("""
                     SELECT id FROM folder_operations 
-                    WHERE folder_unique_id = %s AND operation = %s 
+                    WHERE folder_id = %s AND operation = %s 
                     ORDER BY started_at DESC LIMIT 1
                 """, (folder_id, operation))
                 result = cursor.fetchone()
