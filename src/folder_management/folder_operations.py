@@ -477,13 +477,26 @@ class FolderPublisher:
             # Generate share ID
             share_id = self._generate_share_id(folder)
             
-            # Create access string
-            access_string = self._create_access_string(
-                share_id=share_id,
-                index_message_ids=index_message_ids,
-                encryption_key=encryption_key,
-                access_type=access_type
-            )
+            # Create access string using the REAL security system
+            # Build the share data for the security system
+            share_data = {
+                'share_id': share_id,
+                'share_type': access_type,  # public, private, or protected
+                'folder_id': folder_id,
+                'index_reference': {
+                    'type': 'single' if len(index_message_ids) == 1 else 'multi',
+                    'message_id': index_message_ids[0] if len(index_message_ids) == 1 else None,
+                    'segments': [{'message_id': mid, 'newsgroup': 'alt.binaries.test'} for mid in index_message_ids] if len(index_message_ids) > 1 else None,
+                    'newsgroup': 'alt.binaries.test'
+                }
+            }
+            
+            if encryption_key:
+                share_data['encryption_key'] = encryption_key
+            
+            # Use the security system to create the proper access string
+            access_string_data = self.fm.security.create_access_string(share_data)
+            access_string = f"usenetsync://{access_string_data}"
             
             # Update folder with publishing info
             await self.fm._update_folder_stats(folder_id, {

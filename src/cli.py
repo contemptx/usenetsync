@@ -651,42 +651,9 @@ def download_share(access_string, destination, password):
             config=config
         )
         
-        # Convert access string format for compatibility
-        import base64
-        import json as json_lib
-        
+        # Remove the usenetsync:// prefix if present
         if access_string.startswith('usenetsync://'):
-            # Parse our format
-            encoded = access_string[13:]
-            decoded = base64.urlsafe_b64decode(encoded).decode('utf-8')
-            our_data = json_lib.loads(decoded)
-            
-            # Convert to expected format
-            index_ids = our_data.get('idx', [])
-            # Convert index format
-            if index_ids and len(index_ids) > 0:
-                index_ref = {
-                    'type': 'single',
-                    'message_id': index_ids[0],  # Use first message ID
-                    'newsgroup': 'alt.binaries.test'  # Default newsgroup
-                }
-            else:
-                index_ref = {}
-            
-            converted_data = {
-                'v': our_data.get('v', '1.0'),
-                'share_type': our_data.get('type', 'public'),
-                'folder_id': our_data.get('id', ''),
-                'index': index_ref
-            }
-            
-            if 'key' in our_data:
-                converted_data['key'] = our_data['key']
-            
-            # Re-encode in expected format (without prefix)
-            converted_string = base64.b64encode(
-                json_lib.dumps(converted_data).encode()
-            ).decode('utf-8')
+            converted_string = access_string[13:]  # Remove prefix
         else:
             converted_string = access_string
         
