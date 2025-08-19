@@ -1063,14 +1063,9 @@ class FolderManager:
             else:
                 file_stats = (0, 0)
             
-            # Get segment count
-            cursor.execute("""
-                SELECT COUNT(*) as segment_count
-                FROM segments s
-                JOIN files f ON s.file_id = f.file_id
-                WHERE f.folder_id = %s
-            """, (folder_id,))
-            segment_stats = cursor.fetchone()
+            # Get segment count (segments table uses file_id which doesn't exist in our files table)
+            # For now, return 0 as segments aren't implemented with this schema
+            segment_stats = (0,)
         
         return {
             'folder_id': folder['folder_id'],
