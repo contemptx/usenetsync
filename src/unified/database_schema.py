@@ -177,6 +177,37 @@ class UnifiedDatabaseSchema:
                 description TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """,
+        
+        # User commitments table
+        'user_commitments': """
+            CREATE TABLE IF NOT EXISTS user_commitments (
+                commitment_id SERIAL PRIMARY KEY,
+                user_id VARCHAR(64) NOT NULL,
+                folder_id VARCHAR(100) NOT NULL,
+                commitment_type VARCHAR(50) NOT NULL,
+                data_size BIGINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                metadata JSONB,
+                UNIQUE(user_id, folder_id, commitment_type)
+            )
+        """,
+        
+        # Publications table for file sharing
+        'publications': """
+            CREATE TABLE IF NOT EXISTS publications (
+                publication_id VARCHAR(64) PRIMARY KEY,
+                file_hash VARCHAR(64) NOT NULL,
+                access_level VARCHAR(20) NOT NULL DEFAULT 'public',
+                password_hash VARCHAR(64),
+                published_by VARCHAR(64),
+                published_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expiry_time TIMESTAMP,
+                download_count INTEGER DEFAULT 0,
+                metadata JSONB,
+                FOREIGN KEY (file_hash) REFERENCES files(file_hash) ON DELETE CASCADE
+            )
         """
     }
     
