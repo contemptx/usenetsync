@@ -54,28 +54,52 @@ class UnifiedMigrations:
         
     def _get_migrations(self) -> Dict[int, Dict[str, Any]]:
         """Define all migrations"""
-        return {
-            1: {
-                'name': 'initial_schema',
-                'sql': ["SELECT 1"]  # Schema created by UnifiedSchema
-            },
-            2: {
-                'name': 'add_share_tracking',
-                'sql': [
-                    "ALTER TABLE shares ADD COLUMN IF NOT EXISTS download_count INTEGER DEFAULT 0",
-                    "ALTER TABLE shares ADD COLUMN IF NOT EXISTS last_accessed TIMESTAMP"
-                ]
-            },
-            3: {
-                'name': 'add_user_preferences',
-                'sql': [
-                    """CREATE TABLE IF NOT EXISTS user_preferences (
-                        user_id VARCHAR(255) PRIMARY KEY,
-                        theme VARCHAR(50) DEFAULT 'light',
-                        notifications BOOLEAN DEFAULT TRUE,
-                        auto_index BOOLEAN DEFAULT TRUE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )"""
-                ]
+        # Check if we're using PostgreSQL or SQLite
+        is_postgres = hasattr(self.db, 'config') and str(self.db.config.db_type) == 'DatabaseType.POSTGRESQL'
+        
+        if is_postgres:
+            return {
+                1: {
+                    'name': 'initial_schema',
+                    'sql': ["SELECT 1"]  # Schema created by UnifiedSchema
+                },
+                2: {
+                    'name': 'add_share_tracking',
+                    'sql': [
+                        "ALTER TABLE shares ADD COLUMN IF NOT EXISTS download_count INTEGER DEFAULT 0",
+                        "ALTER TABLE shares ADD COLUMN IF NOT EXISTS last_accessed TIMESTAMP"
+                    ]
+                },
+                3: {
+                    'name': 'add_user_preferences',
+                    'sql': [
+                        """CREATE TABLE IF NOT EXISTS user_preferences (
+                            user_id VARCHAR(255) PRIMARY KEY,
+                            theme VARCHAR(50) DEFAULT 'light',
+                            notifications BOOLEAN DEFAULT TRUE,
+                            auto_index BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )"""
+                    ]
+                }
             }
-        }
+        else:
+            # SQLite doesn't support ADD COLUMN IF NOT EXISTS
+            return {
+                1: {
+                    'name': 'initial_schema',
+                    'sql': ["SELECT 1"]  # Schema created by UnifiedSchema
+                },
+                2: {
+                    'name': 'add_user_preferences',
+                    'sql': [
+                        """CREATE TABLE IF NOT EXISTS user_preferences (
+                            user_id VARCHAR(255) PRIMARY KEY,
+                            theme VARCHAR(50) DEFAULT 'light',
+                            notifications BOOLEAN DEFAULT 1,
+                            auto_index BOOLEAN DEFAULT 1,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )"""
+                    ]
+                }
+            }

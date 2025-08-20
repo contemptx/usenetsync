@@ -1,12 +1,11 @@
 """
-Unified GUI Bridge Module - Tauri integration for React frontend
-Production-ready bridge between Python backend and Tauri/React GUI
+Unified GUI Bridge - Handles all GUI communication
 """
 
-from .tauri_bridge import UnifiedTauriBridge
+# Main bridge
 from .complete_tauri_bridge import CompleteTauriBridge
 
-__all__ = [
-    'UnifiedTauriBridge',
-    'CompleteTauriBridge'
-]
+# Alias for compatibility
+TauriBridge = CompleteTauriBridge
+
+__all__ = ['CompleteTauriBridge', 'TauriBridge']
