@@ -1,9 +1,0 @@
-{
-  "test": "real_data",
-  "timestamp": 1755428628.9295053,
-  "user": "6548227b4215a6637d5cd3efaf48e2cecc280346964a1b3f3ae9d2787deb56b2",
-  "files": [
-    "test_document.txt",
-    "test_binary.dat"
-  ]
-}
