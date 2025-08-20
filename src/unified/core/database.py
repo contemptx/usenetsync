@@ -228,9 +228,11 @@ class UnifiedDatabase:
     
     def _ensure_schema(self):
         """Ensure database schema exists"""
-        from .schema import UnifiedSchema
-        schema = UnifiedSchema(self)
-        schema.create_all_tables()
+        # Disabled - we manage schema manually
+        # from .schema import UnifiedSchema
+        # schema = UnifiedSchema(self)
+        # schema.create_all_tables()
+        pass
     
     @contextmanager
     def transaction(self):

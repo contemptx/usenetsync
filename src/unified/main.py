@@ -71,7 +71,8 @@ class UnifiedSystem:
         )
         
         self.db = UnifiedDatabase(db_config)
-        self.schema = UnifiedSchema(self.db)
+        # Don't use UnifiedSchema - it creates wrong tables
+        # self.schema = UnifiedSchema(self.db)
         
         # Initialize security
         self.encryption = UnifiedEncryption()

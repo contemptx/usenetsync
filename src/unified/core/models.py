@@ -114,13 +114,14 @@ class Folder:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for database"""
+        import time
         data = asdict(self)
         if self.last_indexed:
-            data['last_indexed'] = self.last_indexed.isoformat()
+            data['last_indexed'] = self.last_indexed.timestamp() if isinstance(self.last_indexed, datetime) else self.last_indexed
         if self.last_modified:
-            data['last_modified'] = self.last_modified.isoformat()
-        data['created_at'] = self.created_at.isoformat()
-        data['updated_at'] = self.updated_at.isoformat()
+            data['last_modified'] = self.last_modified.timestamp() if isinstance(self.last_modified, datetime) else self.last_modified
+        data['created_at'] = self.created_at.timestamp() if isinstance(self.created_at, datetime) else time.time()
+        data['updated_at'] = self.updated_at.timestamp() if isinstance(self.updated_at, datetime) else time.time()
         data['metadata'] = json.dumps(self.metadata) if self.metadata else None
         return data
 
