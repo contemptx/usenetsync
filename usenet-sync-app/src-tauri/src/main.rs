@@ -20,7 +20,7 @@ use commands::system::init_system_commands;
 
 // Import unified backend integration
 mod unified_backend;
-use unified_backend::{execute_backend_command, execute_unified_command};
+use unified_backend::execute_unified_command;
 
 // Helper function to get the workspace directory
 fn get_workspace_dir() -> PathBuf {
@@ -507,9 +507,12 @@ async fn get_share_details(share_id: String) -> Result<Share, String> {
             let share: Share = serde_json::from_value(data)
                 .map_err(|e| format!("Failed to parse share details: {}", e))?;
             return Ok(share);
+        } else {
+            return Err("No share data returned".to_string());
         }
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to get share details".to_string()))
     }
-    
 }
 
 // Folder Management Commands
@@ -638,12 +641,19 @@ async fn remove_authorized_user(folder_id: String, user_id: String) -> Result<se
 
 #[tauri::command]
 async fn get_authorized_users(folder_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("get_authorized_users", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     cmd.arg("list-authorized-users")
         .arg("--folder-id").arg(&folder_id);
@@ -659,12 +669,22 @@ async fn get_authorized_users(folder_id: String) -> Result<serde_json::Value, St
 
 #[tauri::command]
 async fn get_folders() -> Result<Vec<serde_json::Value>, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({});
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("get_folders", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        if let Some(data) = result.data {
+            serde_json::from_value(data)
+                .map_err(|e| format!("Failed to parse response: {}", e))
+        } else {
+            Ok(Vec::new())
+        }
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     let output = cmd.arg("list-folders").output().map_err(|e| e.to_string())?;
     
@@ -681,12 +701,17 @@ async fn get_folders() -> Result<Vec<serde_json::Value>, String> {
 // User Management Commands
 #[tauri::command]
 async fn get_user_info() -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({});
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("get_user_info", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     let output = cmd.arg("get-user-info").output().map_err(|e| e.to_string())?;
     
@@ -699,12 +724,21 @@ async fn get_user_info() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn initialize_user(display_name: Option<String>) -> Result<String, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "display_name": display_name
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("initialize_user", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data
+            .and_then(|d| d.as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| String::new()))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     cmd.arg("initialize-user");
     
@@ -730,12 +764,19 @@ async fn initialize_user(display_name: Option<String>) -> Result<String, String>
 
 #[tauri::command]
 async fn is_user_initialized() -> Result<bool, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({});
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("is_user_initialized", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data
+            .and_then(|d| d.as_bool())
+            .unwrap_or(false))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     let output = cmd.arg("check-user").output().map_err(|e| e.to_string())?;
     
@@ -755,12 +796,21 @@ async fn is_user_initialized() -> Result<bool, String> {
 // Additional Folder Management Commands
 #[tauri::command]
 async fn set_folder_access(folder_id: String, access_type: String, password: Option<String>) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id,
+        "access_type": access_type,
+        "password": password
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("set_folder_access", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     cmd.arg("set-folder-access")
        .arg("--folder-id").arg(&folder_id)
@@ -781,12 +831,19 @@ async fn set_folder_access(folder_id: String, access_type: String, password: Opt
 
 #[tauri::command]
 async fn folder_info(folder_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("folder_info", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     cmd.arg("folder-info")
        .arg("--folder-id").arg(&folder_id);
@@ -802,12 +859,19 @@ async fn folder_info(folder_id: String) -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn resync_folder(folder_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("resync_folder", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     cmd.arg("resync-folder")
        .arg("--folder-id").arg(&folder_id);
@@ -823,28 +887,19 @@ async fn resync_folder(folder_id: String) -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn delete_folder(folder_id: String, confirm: bool) -> Result<serde_json::Value, String> {
-    if !confirm {
-        return Err("Deletion not confirmed".to_string());
+    let args = serde_json::json!({
+        "folder_id": folder_id,
+        "confirm": confirm
+    });
+    
+    let result = execute_unified_command("delete_folder", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
-    
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
-    
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
-    }
-    
-    cmd.arg("delete-folder")
-       .arg("--folder-id").arg(&folder_id)
-       .arg("--confirm");
-    
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 // Transfer Operations
@@ -886,12 +941,17 @@ async fn cancel_transfer(state: State<'_, AppState>, transfer_id: String) -> Res
 // Database Commands
 #[tauri::command]
 async fn check_database_status() -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({});
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("check_database_status", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
+}
     
     let output = cmd.arg("check-database").output().map_err(|e| e.to_string())?;
     
@@ -904,59 +964,40 @@ async fn check_database_status() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn setup_postgresql() -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({});
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("setup_postgresql", args)
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Command failed".to_string()))
     }
-    
-    let output = cmd.arg("setup-postgresql").output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 // Server Configuration
 #[tauri::command]
 async fn test_server_connection(config: ServerConfig) -> Result<bool, String> {
-    // Call Python backend to test connection
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    // Use unified backend to test connection
+    let args = serde_json::json!({
+        "hostname": config.hostname,
+        "port": config.port,
+        "username": config.username,
+        "password": config.password,
+        "use_ssl": config.use_ssl
+    });
     
-    // Add unified backend path if not using bundled backend
-    if !is_bundled_backend() {
-        let workspace = get_workspace_dir();
-        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
-        let old_cli = workspace.join("src").join("cli.py");
-        
-        // Use unified backend if it exists, otherwise fallback to old CLI
-        if unified_backend.exists() {
-            cmd.arg(unified_backend);
-            cmd.arg("--mode").arg("command");
-        } else {
-            cmd.arg(old_cli);
-        }
+    let result = execute_unified_command("test_server_connection", args)
+        .map_err(|e| format!("Failed to test connection: {}", e))?;
+    
+    if result.success {
+        Ok(result.data
+            .and_then(|d| d.as_bool())
+            .unwrap_or(false))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Connection test failed".to_string()))
     }
-    
-    let output = cmd
-        .arg("test-connection")
-        .arg("--hostname")
-        .arg(&config.hostname)
-        .arg("--port")
-        .arg(config.port.to_string())
-        .arg("--username")
-        .arg(&config.username)
-        .arg("--password")
-        .arg(&config.password)
-        .arg(if config.use_ssl { "--ssl" } else { "--no-ssl" })
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    Ok(output.status.success())
 }
 
 #[tauri::command]
