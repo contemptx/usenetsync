@@ -29,8 +29,8 @@ REQUIRED_ENV = {
     "NNTP_GROUP": "alt.binaries.test",
     "DATABASE_URL": None,  # Value varies
     "USENET_CLIENT_MODULE": "unified.networking.real_nntp_client:RealNNTPClient",
-    "INDEXING_MODULE": "unified.indexing.scanner:UnifiedIndexingScanner",
-    "SEGMENTATION_MODULE": "unified.segmentation.processor:SegmentationProcessor",
+    "INDEXING_MODULE": "unified.indexing.scanner:UnifiedScanner",
+    "SEGMENTATION_MODULE": "unified.segmentation.processor:UnifiedSegmentProcessor",
 }
 
 def pytest_sessionstart(session):

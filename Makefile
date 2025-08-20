@@ -34,7 +34,7 @@ db-up: env
 
 db-migrate: db-up
 	@echo "$(GREEN)Setting up UsenetSync database...$(NC)"
-	@cd /workspace && source venv/bin/activate && python -c "\
+	@cd /workspace && . venv/bin/activate && python -c "\
 		from src.unified.core.database import UnifiedDatabase, DatabaseConfig, DatabaseType; \
 		from src.unified.core.schema import UnifiedSchema; \
 		import os; \
@@ -53,34 +53,34 @@ db-migrate: db-up
 
 test-setup: env db-up
 	@echo "$(GREEN)Running setup verification...$(NC)"
-	@cd /workspace && source venv/bin/activate && ./run_tests.sh tests/test_setup.py -v
+	@cd /workspace && . venv/bin/activate && ./run_tests.sh tests/test_setup.py -v
 
 test-live: env db-up
 	@echo "$(GREEN)Running live Newshosting tests...$(NC)"
-	@cd /workspace && source venv/bin/activate && ./run_tests.sh tests/test_usenet_live.py -v -m live_nntp
+	@cd /workspace && . venv/bin/activate && ./run_tests.sh tests/test_usenet_live.py -v -m live_nntp
 
 test-integration: env db-up db-migrate
 	@echo "$(GREEN)Running integration tests...$(NC)"
-	@cd /workspace && source venv/bin/activate && ./run_tests.sh tests/test_integration.py -v -m integration
+	@cd /workspace && . venv/bin/activate && ./run_tests.sh tests/test_integration.py -v -m integration
 
 test-all: env db-up db-migrate
 	@echo "$(GREEN)Running all UsenetSync tests...$(NC)"
-	@cd /workspace && source venv/bin/activate && ./run_tests.sh -v
+	@cd /workspace && . venv/bin/activate && ./run_tests.sh -v
 
 py-lint:
 	@echo "$(GREEN)Running Python linter...$(NC)"
-	@cd /workspace && source venv/bin/activate && ruff check src/ --fix
+	@cd /workspace && . venv/bin/activate && ruff check src/ --fix
 
 py-type:
 	@echo "$(GREEN)Running type checker...$(NC)"
-	@cd /workspace && source venv/bin/activate && mypy src/ --ignore-missing-imports
+	@cd /workspace && . venv/bin/activate && mypy src/ --ignore-missing-imports
 
 rust-check:
 	@echo "$(GREEN)Checking Rust code...$(NC)"
-	@cd /workspace/usenet-sync-app/src-tauri && source /usr/local/cargo/env && cargo check
+	@cd /workspace/usenet-sync-app/src-tauri && . /usr/local/cargo/env && cargo check
 
 rust-test:
-	@cd /workspace/usenet-sync-app/src-tauri && source /usr/local/cargo/env && cargo test
+	@cd /workspace/usenet-sync-app/src-tauri && . /usr/local/cargo/env && cargo test
 
 web-build:
 	@echo "$(GREEN)Building frontend...$(NC)"
