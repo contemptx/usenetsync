@@ -43,7 +43,14 @@ ChartJS.register(
 
 export const Dashboard: React.FC = () => {
   const { uploads, downloads, shares, licenseStatus } = useAppStore();
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<any>({
+    totalFiles: 0,
+    totalSize: 0,
+    activeTransfers: 0,
+    networkSpeed: { download: 0, upload: 0 },
+    storageUsed: 0,
+    storageTotal: 100
+  });
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
   const navigate = useNavigate();
   
@@ -116,15 +123,30 @@ export const Dashboard: React.FC = () => {
     const interval = setInterval(async () => {
       try {
         const systemStats = await getSystemStats();
-        setStats(systemStats);
-        
-        // Update speed history
-        setSpeedHistory(prev => {
-          const newHistory = [...prev, systemStats.networkSpeed.download + systemStats.networkSpeed.upload];
-          return newHistory.slice(-30); // Keep last 30 data points
-        });
+        if (systemStats) {
+          setStats(systemStats);
+          
+          // Update speed history - check if networkSpeed exists
+          if (systemStats.networkSpeed) {
+            setSpeedHistory(prev => {
+              const download = systemStats.networkSpeed?.download || 0;
+              const upload = systemStats.networkSpeed?.upload || 0;
+              const newHistory = [...prev, download + upload];
+              return newHistory.slice(-30); // Keep last 30 data points
+            });
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch system stats:', error);
+        // Set default stats to prevent crashes
+        setStats({
+          totalFiles: 0,
+          totalSize: 0,
+          activeTransfers: 0,
+          networkSpeed: { download: 0, upload: 0 },
+          storageUsed: 0,
+          storageTotal: 100
+        });
       }
     }, 1000);
 

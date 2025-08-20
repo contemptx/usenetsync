@@ -10,14 +10,14 @@ import uvicorn
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend', 'src'))
 
 from unified.api.server import create_app
-from unified.core.config import load_config, AppConfig
+from unified.core.config import load_config, UnifiedConfig
 from unified.core.database import UnifiedDatabase, DatabaseConfig, DatabaseType
 from unified.core.schema import UnifiedSchema
 from unified.core.migrations import UnifiedMigrations
 
 if __name__ == "__main__":
     # Load configuration
-    config: AppConfig = load_config()
+    config: UnifiedConfig = load_config()
     
     # Initialize database
     db_config = DatabaseConfig(
