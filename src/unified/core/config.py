@@ -20,7 +20,7 @@ class UnifiedConfig:
     
     # Database settings
     database_type: str = "sqlite"
-    database_path: str = "data/usenetsync.db"
+    database_path: str = os.environ.get('USENETSYNC_DB', "data/usenetsync.db")
     database_host: str = "localhost"
     database_port: int = 5432
     database_name: str = "usenetsync"

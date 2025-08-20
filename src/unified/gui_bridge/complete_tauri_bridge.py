@@ -15,6 +15,17 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
+def json_serializable(obj):
+    """Convert non-serializable objects to serializable format"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, bytes):
+        return obj.hex()
+    elif hasattr(obj, '__dict__'):
+        return str(obj)
+    return obj
+
+
 class CompleteTauriBridge:
     """
     Complete bridge handling all Tauri commands
@@ -112,15 +123,15 @@ class CompleteTauriBridge:
         owner_id = self._get_current_user_id()
         
         if share_type == 'public':
-            share = self.system.security.access_control.create_public_share(
+            share = self.system.create_public_share(
                 folder_id, owner_id, expiry_days=30
             )
         elif share_type == 'private':
-            share = self.system.security.access_control.create_private_share(
+            share = self.system.create_private_share(
                 folder_id, owner_id, allowed_users=[], expiry_days=30
             )
         elif share_type == 'protected':
-            share = self.system.security.access_control.create_protected_share(
+            share = self.system.create_protected_share(
                 folder_id, owner_id, password, expiry_days=30
             )
         else:
@@ -405,15 +416,19 @@ class CompleteTauriBridge:
         )
         
         if user:
-            return dict(user)
+            result = dict(user)
+            # Convert datetime objects to strings
+            for key, value in result.items():
+                result[key] = json_serializable(value)
+            return result
         return {}
     
     def _initialize_user(self, args: Dict[str, Any]) -> str:
         """Initialize new user"""
         display_name = args.get('display_name', 'User')
         
-        # Create user
-        user = self.system.user_manager.create_user(display_name)
+        # Create user using the system's method
+        user = self.system.create_user(display_name)
         
         # Store as current user
         self._set_current_user_id(user['user_id'])
@@ -464,7 +479,7 @@ class CompleteTauriBridge:
     
     def _get_system_stats(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Get system statistics"""
-        stats = self.system.monitoring.metrics_collector.get_metrics()
+        stats = self.system.get_metrics()
         
         return {
             'totalFiles': stats.get('total_files', 0),

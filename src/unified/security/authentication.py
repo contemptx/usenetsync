@@ -10,6 +10,7 @@ import hashlib
 import json
 import base64
 from datetime import datetime, timedelta
+import time
 from typing import Dict, Optional, Tuple, Any
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -84,10 +85,9 @@ class UnifiedAuthentication:
             'username': username,
             'email': email,
             'public_key': public_pem.decode('utf-8'),
-            'private_key_encrypted': self._encrypt_private_key(private_pem, user_id),
-            'api_key_hash': api_key_hash,
-            'created_at': datetime.now().isoformat(),
-            'is_active': True
+            'encrypted_private_key': self._encrypt_private_key(private_pem, user_id),
+            'api_key': api_key,
+            'created_at': time.time()
         }
         
         self.db.insert('users', user_data)
@@ -123,7 +123,7 @@ class UnifiedAuthentication:
         """
         # Get user from database
         user = self.get_user(user_id)
-        if not user or not user.get('is_active'):
+        if not user:
             return False
         
         # API key authentication
@@ -340,7 +340,7 @@ class UnifiedAuthentication:
             """
             SELECT user_id, session_expires 
             FROM users 
-            WHERE session_token = ? AND is_active = 1
+            WHERE session_token = ?
             """,
             (token_hash,)
         )

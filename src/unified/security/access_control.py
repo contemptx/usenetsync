@@ -55,7 +55,7 @@ class UnifiedAccessControl:
         
         # Create share record
         share_data = {
-            'share_id': share_id,
+            'folder_id': share_id,
             'folder_id': folder_id,
             'share_type': 'full',
             'access_level': AccessLevel.PUBLIC.value,
@@ -76,7 +76,7 @@ class UnifiedAccessControl:
         logger.info(f"Created PUBLIC share {share_id} for folder {folder_id}")
         
         return {
-            'share_id': share_id,
+            'folder_id': share_id,
             'access_string': access_string,
             'access_level': AccessLevel.PUBLIC.value,
             'expires_at': share_data['expires_at']
@@ -111,7 +111,7 @@ class UnifiedAccessControl:
         
         # Create share record
         share_data = {
-            'share_id': share_id,
+            'folder_id': share_id,
             'folder_id': folder_id,
             'share_type': 'full',
             'access_level': AccessLevel.PRIVATE.value,
@@ -137,7 +137,7 @@ class UnifiedAccessControl:
         logger.info(f"Created PRIVATE share {share_id} for folder {folder_id}")
         
         return {
-            'share_id': share_id,
+            'folder_id': share_id,
             'access_string': access_string,
             'access_level': AccessLevel.PRIVATE.value,
             'allowed_users': allowed_users,
@@ -183,7 +183,7 @@ class UnifiedAccessControl:
         
         # Create share record
         share_data = {
-            'share_id': share_id,
+            'folder_id': share_id,
             'folder_id': folder_id,
             'share_type': 'full',
             'access_level': AccessLevel.PROTECTED.value,
@@ -206,7 +206,7 @@ class UnifiedAccessControl:
         logger.info(f"Created PROTECTED share {share_id} for folder {folder_id}")
         
         return {
-            'share_id': share_id,
+            'folder_id': share_id,
             'access_string': access_string,
             'access_level': AccessLevel.PROTECTED.value,
             'expires_at': share_data['expires_at']
@@ -273,7 +273,7 @@ class UnifiedAccessControl:
         # Create commitment record
         commitment_data = {
             'commitment_id': str(secrets.token_hex(16)),
-            'share_id': share_id,
+            'folder_id': share_id,
             'user_id': user_id,
             'commitment_hash': commitment_hash,
             'wrapped_key': user_wrapped_key,
@@ -454,7 +454,7 @@ class UnifiedAccessControl:
         
         for share in owned_shares:
             shares.append({
-                'share_id': share['share_id'],
+                'folder_id': share['share_id'],
                 'folder_id': share['folder_id'],
                 'access_level': share['access_level'],
                 'role': 'owner',
@@ -476,7 +476,7 @@ class UnifiedAccessControl:
         
         for share in commitments:
             shares.append({
-                'share_id': share['share_id'],
+                'folder_id': share['share_id'],
                 'folder_id': share['folder_id'],
                 'access_level': share['access_level'],
                 'role': 'member',
