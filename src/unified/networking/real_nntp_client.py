@@ -9,6 +9,8 @@ import logging
 import time
 import hashlib
 import uuid
+import random
+import string
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 
@@ -107,7 +109,7 @@ class RealNNTPClient:
             return False
     
     def post_article(self, subject: str, body: bytes, newsgroups: List[str],
-                     from_header: Optional[str] = None) -> Optional[str]:
+                     from_header: Optional[str] = None, message_id: Optional[str] = None) -> Optional[str]:
         """
         Post REAL article to Usenet
         
@@ -116,6 +118,7 @@ class RealNNTPClient:
             body: Article body (binary data)
             newsgroups: List of newsgroups to post to
             from_header: From header
+            message_id: Optional message ID (will generate if not provided)
             
         Returns:
             REAL Message-ID from server or None
@@ -124,17 +127,20 @@ class RealNNTPClient:
             raise RuntimeError("Not authenticated")
         
         try:
-            # Generate unique Message-ID
-            message_id = f"<{uuid.uuid4()}@usenetsync.local>"
+            # Generate Message-ID in correct format (ngPost.com domain)
+            if not message_id:
+                # Generate 16 random chars @ ngPost.com (blends with legitimate traffic)
+                random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
+                message_id = f"<{random_str}@ngPost.com>"
             
             # Build article headers for pynntp
             headers = {
                 'Subject': subject,
-                'From': from_header or 'UsenetSync <user@usenetsync.local>',
+                'From': from_header or 'UsenetSync <noreply@usenetsync.com>',
                 'Newsgroups': ','.join(newsgroups),
                 'Message-ID': message_id,
                 'Date': datetime.now().strftime('%a, %d %b %Y %H:%M:%S +0000'),
-                'X-UsenetSync': '1.0'
+                'X-UsenetSync-Version': '1.0'
             }
             
             logger.info(f"Posting article to {newsgroups} with Message-ID: {message_id}")
