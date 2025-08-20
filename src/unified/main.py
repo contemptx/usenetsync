@@ -327,15 +327,75 @@ class UnifiedSystem:
     
     def create_public_share(self, folder_id: str, owner_id: str, expiry_days: int = 30) -> Dict[str, Any]:
         """Create public share"""
-        return self.access_control.create_public_share(folder_id, owner_id, expiry_days)
+        share_id = hashlib.sha256(f"{folder_id}_{time.time()}_public".encode()).hexdigest()
+        
+        self.db.insert('shares', {
+            'share_id': share_id,
+            'folder_id': folder_id,
+            'owner_id': owner_id,
+            'share_type': 'public',
+            'created_at': time.time(),
+            'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
+            'size': 0,
+            'file_count': 0,
+            'folder_count': 0
+        })
+        
+        return {
+            'id': share_id,
+            'share_id': share_id,
+            'folder_id': folder_id,
+            'access_type': 'public'
+        }
     
     def create_private_share(self, folder_id: str, owner_id: str, allowed_users: list, expiry_days: int = 30) -> Dict[str, Any]:
         """Create private share"""
-        return self.access_control.create_private_share(folder_id, owner_id, allowed_users, expiry_days)
+        share_id = hashlib.sha256(f"{folder_id}_{time.time()}_private".encode()).hexdigest()
+        
+        self.db.insert('shares', {
+            'share_id': share_id,
+            'folder_id': folder_id,
+            'owner_id': owner_id,
+            'share_type': 'private',
+            'created_at': time.time(),
+            'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
+            'allowed_users': ','.join(allowed_users) if allowed_users else '',
+            'size': 0,
+            'file_count': 0,
+            'folder_count': 0
+        })
+        
+        return {
+            'id': share_id,
+            'share_id': share_id,
+            'folder_id': folder_id,
+            'access_type': 'private'
+        }
     
     def create_protected_share(self, folder_id: str, owner_id: str, password: str, expiry_days: int = 30) -> Dict[str, Any]:
         """Create protected share"""
-        return self.access_control.create_protected_share(folder_id, owner_id, password, expiry_days)
+        share_id = hashlib.sha256(f"{folder_id}_{time.time()}_protected".encode()).hexdigest()
+        password_hash = hashlib.sha256(password.encode()).hexdigest() if password else None
+        
+        self.db.insert('shares', {
+            'share_id': share_id,
+            'folder_id': folder_id,
+            'owner_id': owner_id,
+            'share_type': 'protected',
+            'password_hash': password_hash,
+            'created_at': time.time(),
+            'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
+            'size': 0,
+            'file_count': 0,
+            'folder_count': 0
+        })
+        
+        return {
+            'id': share_id,
+            'share_id': share_id,
+            'folder_id': folder_id,
+            'access_type': 'protected'
+        }
     
     def download_share(self, share_id: str, destination: str, selected_files: list = None) -> None:
         """Download a share"""

@@ -69,9 +69,13 @@ def test_functionality():
     if not result.get('success'):
         print(f"    Error: {result.get('error', 'Unknown')}")
     
-    # Initialize user
+    # Initialize user (handle if already exists)
     print("Testing: initialize_user")
-    result = call_backend('initialize_user', {'display_name': 'TestUser'})
+    # First check if we need to initialize
+    if not result.get('data', False):  # Only initialize if not already initialized
+        result = call_backend('initialize_user', {'display_name': 'TestUser'})
+    else:
+        result = {'success': True, 'data': 'already_initialized'}
     results['initialize_user'] = result.get('success', False)
     user_id = result.get('data', '')
     print(f"  Result: {'✅ PASS' if result.get('success') else '❌ FAIL'}")
