@@ -74,8 +74,13 @@ class UnifiedSystem:
         
         # Initialize schema and run migrations
         from unified.core.schema import UnifiedSchema
+        from unified.core.migrations import UnifiedMigrations
         self.schema = UnifiedSchema(self.db)
         self.schema.create_all_tables()
+        
+        # Run migrations to apply any schema updates
+        migrations = UnifiedMigrations(self.db)
+        migrations.migrate()
         
         # Initialize security
         self.encryption = UnifiedEncryption()

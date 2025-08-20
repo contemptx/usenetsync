@@ -296,12 +296,11 @@ class CompleteTauriBridge:
         
         # Handle access control based on type
         if access_type == 'private' and user_ids:
-            for user_id in user_ids:
-                self.system.db.insert('folder_authorizations', {
-                    'folder_id': folder_id,
-                    'user_id': user_id,
-                    'authorized_at': time.time()
-                })
+            # Store authorized users in the share's allowed_users field
+            self.system.db.execute(
+                "UPDATE shares SET allowed_users = ? WHERE share_id = ?",
+                (json.dumps(user_ids), share_id)
+            )
         elif access_type == 'protected' and password:
             # Store password hash (simplified for now)
             pass
@@ -392,43 +391,71 @@ class CompleteTauriBridge:
     # ==================== USER MANAGEMENT ====================
     
     def _add_authorized_user(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Add authorized user to folder"""
+        """Add authorized user to folder's share"""
         folder_id = args.get('folder_id')
         user_id = args.get('user_id')
         
-        # Add user authorization
-        self.system.db.insert('folder_authorizations', {
-            'folder_id': folder_id,
-            'user_id': user_id,
-            'authorized_at': time.time()
-        })
+        # Get the share for this folder
+        share = self.system.db.fetch_one(
+            "SELECT * FROM shares WHERE folder_id = ?", (folder_id,)
+        )
+        
+        if share:
+            # Update allowed_users in the share
+            allowed_users = json.loads(share.get('allowed_users', '[]'))
+            if user_id not in allowed_users:
+                allowed_users.append(user_id)
+                self.system.db.execute(
+                    "UPDATE shares SET allowed_users = ? WHERE folder_id = ?",
+                    (json.dumps(allowed_users), folder_id)
+                )
         
         return {'added': True}
     
     def _remove_authorized_user(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Remove authorized user from folder"""
+        """Remove authorized user from folder's share"""
         folder_id = args.get('folder_id')
         user_id = args.get('user_id')
         
-        # Remove authorization
-        self.system.db.execute("""
-            DELETE FROM folder_authorizations 
-            WHERE folder_id = ? AND user_id = ?
-        """, (folder_id, user_id))
+        # Get the share for this folder
+        share = self.system.db.fetch_one(
+            "SELECT * FROM shares WHERE folder_id = ?", (folder_id,)
+        )
+        
+        if share:
+            # Update allowed_users in the share
+            allowed_users = json.loads(share.get('allowed_users', '[]'))
+            if user_id in allowed_users:
+                allowed_users.remove(user_id)
+                self.system.db.execute(
+                    "UPDATE shares SET allowed_users = ? WHERE folder_id = ?",
+                    (json.dumps(allowed_users), folder_id)
+                )
         
         return {'removed': True}
     
     def _get_authorized_users(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Get authorized users for folder"""
+        """Get authorized users for folder's share"""
         folder_id = args.get('folder_id')
         
-        users = self.system.db.fetch_all("""
-            SELECT u.* FROM users u
-            JOIN folder_authorizations fa ON u.user_id = fa.user_id
-            WHERE fa.folder_id = ?
-        """, (folder_id,))
+        # Get the share for this folder
+        share = self.system.db.fetch_one(
+            "SELECT allowed_users FROM shares WHERE folder_id = ?", (folder_id,)
+        )
         
-        return {'users': [dict(u) for u in users]}
+        if share and share.get('allowed_users'):
+            user_ids = json.loads(share['allowed_users'])
+            # Get user details
+            users = []
+            for uid in user_ids:
+                user = self.system.db.fetch_one(
+                    "SELECT * FROM users WHERE user_id = ?", (uid,)
+                )
+                if user:
+                    users.append(dict(user))
+            return {'users': users}
+        
+        return {'users': []}
     
     def _get_user_info(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Get current user info"""
