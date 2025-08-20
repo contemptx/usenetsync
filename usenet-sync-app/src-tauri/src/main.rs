@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
@@ -453,39 +454,19 @@ async fn create_share(
 
 #[tauri::command]
 async fn get_shares() -> Result<Vec<Share>, String> {
-    // Call Python backend to get shares
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    // Use unified backend
+    let result = execute_unified_command("get_shares", serde_json::json!({}))
+        .map_err(|e| format!("Failed to get shares: {}", e))?;
     
-    // Add unified backend path if not using bundled backend
-    if !is_bundled_backend() {
-        let workspace = get_workspace_dir();
-        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
-        let old_cli = workspace.join("src").join("cli.py");
-        
-        // Use unified backend if it exists, otherwise fallback to old CLI
-        if unified_backend.exists() {
-            cmd.arg(unified_backend);
-            cmd.arg("--mode").arg("command");
-        } else {
-            cmd.arg(old_cli);
+    if result.success {
+        if let Some(data) = result.data {
+            let shares: Vec<Share> = serde_json::from_value(data)
+                .map_err(|e| format!("Failed to parse shares: {}", e))?;
+            return Ok(shares);
         }
     }
     
-    let output = cmd
-        .arg("list-shares")
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    // Parse JSON response
-    let shares: Vec<Share> = serde_json::from_slice(&output.stdout)
-        .map_err(|e| e.to_string())?;
-    
-    Ok(shares)
+    Err(result.error.unwrap_or_else(|| "Failed to get shares".to_string()))
 }
 
 #[tauri::command]
@@ -494,64 +475,38 @@ async fn download_share(
     destination: String,
     selected_files: Option<Vec<String>>,
 ) -> Result<(), String> {
-    // Call Python backend to download share
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    // Use unified backend
+    let args = serde_json::json!({
+        "share_id": share_id,
+        "destination": destination,
+        "selected_files": selected_files
+    });
     
-    // Add unified backend path if not using bundled backend
-    if !is_bundled_backend() {
-        let workspace = get_workspace_dir();
-        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
-        let old_cli = workspace.join("src").join("cli.py");
-        
-        // Use unified backend if it exists, otherwise fallback to old CLI
-        if unified_backend.exists() {
-            cmd.arg(unified_backend);
-            cmd.arg("--mode").arg("command");
-        } else {
-            cmd.arg(old_cli);
-        }
+    let result = execute_unified_command("download_share", args)
+        .map_err(|e| format!("Failed to download share: {}", e))?;
+    
+    if result.success {
+        Ok(())
+    } else {
+        Err(result.error.unwrap_or_else(|| "Download failed".to_string()))
     }
-    
-    cmd
-        .arg("download-share")
-        .arg("--share-id")
-        .arg(&share_id)
-        .arg("--destination")
-        .arg(&destination);
-    
-    if let Some(files) = selected_files {
-        cmd.arg("--files").args(files);
-    }
-    
-    let output = cmd.output()
-        .map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    Ok(())
 }
 
 #[tauri::command]
 async fn get_share_details(share_id: String) -> Result<Share, String> {
-    // Call Python backend to get share details
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    // Use unified backend
+    let args = serde_json::json!({
+        "share_id": share_id
+    });
     
-    // Add unified backend path if not using bundled backend
-    if !is_bundled_backend() {
-        let workspace = get_workspace_dir();
-        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
-        let old_cli = workspace.join("src").join("cli.py");
-        
-        // Use unified backend if it exists, otherwise fallback to old CLI
-        if unified_backend.exists() {
-            cmd.arg(unified_backend);
-            cmd.arg("--mode").arg("command");
-        } else {
-            cmd.arg(old_cli);
+    let result = execute_unified_command("get_share_details", args)
+        .map_err(|e| format!("Failed to get share details: {}", e))?;
+    
+    if result.success {
+        if let Some(data) = result.data {
+            let share: Share = serde_json::from_value(data)
+                .map_err(|e| format!("Failed to parse share details: {}", e))?;
+            return Ok(share);
         }
     }
     
@@ -575,33 +530,34 @@ async fn get_share_details(share_id: String) -> Result<Share, String> {
 // Folder Management Commands
 #[tauri::command]
 async fn add_folder(path: String, name: Option<String>) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "path": path,
+        "name": name
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("add_folder", args)
+        .map_err(|e| format!("Failed to add folder: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to add folder".to_string()))
     }
-    
-    cmd.arg("add-folder").arg("--path").arg(&path);
-    if let Some(n) = name {
-        cmd.arg("--name").arg(&n);
-    }
-    
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn index_folder_full(folder_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("index_folder", args)
+        .map_err(|e| format!("Failed to index folder: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to index folder".to_string()))
     }
     
     let output = cmd.arg("index-managed-folder").arg("--folder-id").arg(&folder_id)
@@ -616,40 +572,34 @@ async fn index_folder_full(folder_id: String) -> Result<serde_json::Value, Strin
 
 #[tauri::command]
 async fn segment_folder(folder_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("segment_folder", args)
+        .map_err(|e| format!("Failed to segment folder: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to segment folder".to_string()))
     }
-    
-    let output = cmd.arg("segment-folder").arg("--folder-id").arg(&folder_id)
-        .output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn upload_folder(folder_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("upload_folder", args)
+        .map_err(|e| format!("Failed to upload folder: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to upload folder".to_string()))
     }
-    
-    let output = cmd.arg("upload-folder").arg("--folder-id").arg(&folder_id)
-        .output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -659,67 +609,55 @@ async fn publish_folder(
     user_ids: Option<Vec<String>>,
     password: Option<String>
 ) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id,
+        "access_type": access_type.unwrap_or_else(|| "public".to_string()),
+        "user_ids": user_ids,
+        "password": password
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
-    }
+    let result = execute_unified_command("publish_folder", args)
+        .map_err(|e| format!("Failed to publish folder: {}", e))?;
     
-    cmd.arg("publish-folder").arg("--folder-id").arg(&folder_id);
-    if let Some(at) = access_type {
-        cmd.arg("--access-type").arg(&at);
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to publish folder".to_string()))
     }
-    if let Some(ids) = user_ids {
-        if !ids.is_empty() {
-            cmd.arg("--user-ids").arg(ids.join(","));
-        }
-    }
-    if let Some(pwd) = password {
-        cmd.arg("--password").arg(pwd);
-    }
-    
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn add_authorized_user(folder_id: String, user_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id,
+        "user_id": user_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("add_authorized_user", args)
+        .map_err(|e| format!("Failed to add authorized user: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to add authorized user".to_string()))
     }
-    
-    cmd.arg("add-authorized-user")
-        .arg("--folder-id").arg(&folder_id)
-        .arg("--user-id").arg(&user_id);
-    
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn remove_authorized_user(folder_id: String, user_id: String) -> Result<serde_json::Value, String> {
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    let args = serde_json::json!({
+        "folder_id": folder_id,
+        "user_id": user_id
+    });
     
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("remove_authorized_user", args)
+        .map_err(|e| format!("Failed to remove authorized user: {}", e))?;
+    
+    if result.success {
+        Ok(result.data.unwrap_or(serde_json::json!({})))
+    } else {
+        Err(result.error.unwrap_or_else(|| "Failed to remove authorized user".to_string()))
     }
-    
-    cmd.arg("remove-authorized-user")
         .arg("--folder-id").arg(&folder_id)
         .arg("--user-id").arg(&user_id);
     
