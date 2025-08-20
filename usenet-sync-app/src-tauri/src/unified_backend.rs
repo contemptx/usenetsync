@@ -26,6 +26,7 @@ pub fn get_unified_backend_path() -> PathBuf {
 }
 
 /// Check if unified backend exists
+#[allow(dead_code)]
 pub fn unified_backend_exists() -> bool {
     get_unified_backend_path().exists()
 }
@@ -97,6 +98,7 @@ pub fn execute_unified_command(command: &str, args: serde_json::Value) -> Result
 }
 
 /// Helper to convert old CLI arguments to unified format
+#[allow(dead_code)]
 pub fn convert_cli_args_to_unified(command: &str, args: Vec<String>) -> serde_json::Value {
     match command {
         "create-user" => json!({
@@ -127,6 +129,7 @@ pub fn convert_cli_args_to_unified(command: &str, args: Vec<String>) -> serde_js
 }
 
 /// Wrapper to use unified backend with fallback to old CLI
+#[allow(dead_code)]
 pub fn execute_backend_command(command: &str, args: Vec<String>) -> Result<serde_json::Value, String> {
     if unified_backend_exists() {
         // Use unified backend
@@ -145,6 +148,7 @@ pub fn execute_backend_command(command: &str, args: Vec<String>) -> Result<serde
 }
 
 /// Execute old CLI command (fallback)
+#[allow(dead_code)]
 fn execute_old_cli(command: &str, args: Vec<String>) -> Result<serde_json::Value, String> {
     let mut cmd = Command::new(get_python_command());
     cmd.arg(get_workspace_dir().join("src").join("cli.py"));

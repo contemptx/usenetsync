@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 use tauri::State;
-use uuid::Uuid;
+// use uuid::Uuid; // Not needed
 
 // Import TurboActivate integration
 mod turboactivate;
@@ -50,6 +50,7 @@ fn get_workspace_dir() -> PathBuf {
 
 
 // Type definitions
+#[allow(dead_code)]
 struct AppState {
     turboactivate: TurboActivate,
     python_process: Mutex<Option<std::process::Child>>,
@@ -73,6 +74,7 @@ struct ServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(non_snake_case)]
 struct SystemStats {
     totalFiles: u64,
     totalSize: u64,
@@ -121,12 +123,12 @@ struct LicenseStatus {
 
 // License Management Commands
 #[tauri::command]
-async fn activate_license(state: State<'_, AppState>, key: String) -> Result<bool, String> {
+async fn activate_license(_state: State<'_, AppState>, _key: String) -> Result<bool, String> {
     Ok(true) // TurboActivate would be implemented here
 }
 
 #[tauri::command]
-async fn check_license(state: State<'_, AppState>) -> Result<LicenseStatus, String> {
+async fn check_license(_state: State<'_, AppState>) -> Result<LicenseStatus, String> {
     let valid = true; // TurboActivate would check this
     let trial = false;
     let days_remaining = 30;
@@ -139,18 +141,18 @@ async fn check_license(state: State<'_, AppState>) -> Result<LicenseStatus, Stri
 }
 
 #[tauri::command]
-async fn start_trial(state: State<'_, AppState>) -> Result<u32, String> {
+async fn start_trial(_state: State<'_, AppState>) -> Result<u32, String> {
     Ok(30) // Trial days
 }
 
 #[tauri::command]
-async fn deactivate_license(state: State<'_, AppState>) -> Result<(), String> {
+async fn deactivate_license(_state: State<'_, AppState>) -> Result<(), String> {
     Ok(()) // Deactivation would happen here
 }
 
 // File Selection Commands
 #[tauri::command]
-async fn select_files(app: tauri::AppHandle) -> Result<Vec<FileNode>, String> {
+async fn select_files(_app: tauri::AppHandle) -> Result<Vec<FileNode>, String> {
     // This would open a file dialog in production
     // For now, return mock data
     Ok(vec![
@@ -165,7 +167,7 @@ async fn select_files(app: tauri::AppHandle) -> Result<Vec<FileNode>, String> {
 }
 
 #[tauri::command]
-async fn select_folder(app: tauri::AppHandle) -> Result<FileNode, String> {
+async fn select_folder(_app: tauri::AppHandle) -> Result<FileNode, String> {
     // This would open a folder dialog in production
     // For now, return mock data
     Ok(FileNode {
