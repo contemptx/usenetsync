@@ -216,18 +216,17 @@ class CompleteTauriBridge:
         if not folder:
             raise ValueError(f"Folder not found: {folder_id}")
         
-        # Index the folder
-        result = self.system.indexing.scanner.scan_folder(
-            folder['path'], folder_id
+        # Use high-level system method
+        result = self.system.index_folder(
+            folder['path'], 
+            folder.get('owner_id', 'default')
         )
-        
-        # Convert generator to list if needed
-        if hasattr(result, '__iter__') and not hasattr(result, '__len__'):
-            result = list(result)
         
         return {
             'folder_id': folder_id,
-            'files_indexed': len(result) if result else 0,
+            'files_indexed': result.get('files_indexed', 0),
+            'total_size': result.get('total_size', 0),
+            'segments_created': result.get('segments_created', 0),
             'status': 'indexed'
         }
     
