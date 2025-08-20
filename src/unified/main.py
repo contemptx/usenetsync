@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Import all unified modules
 from unified.core.database import UnifiedDatabase, DatabaseConfig, DatabaseType
 from unified.core.schema import UnifiedSchema
+from unified.core.migrations import UnifiedMigrations
+from unified.upload.queue import UnifiedUploadQueue
 from unified.core.config import UnifiedConfig, load_config
 from unified.core.models import *
 
@@ -71,8 +73,10 @@ class UnifiedSystem:
         )
         
         self.db = UnifiedDatabase(db_config)
-        # Don't use UnifiedSchema - it creates wrong tables
-        # self.schema = UnifiedSchema(self.db)
+        # Run database migrations to ensure schema is up to date
+        UnifiedMigrations(self.db).migrate()
+        # Initialize upload queue for API/GUI use
+        self.upload_queue = UnifiedUploadQueue(self.db)
         
         # Initialize security
         self.encryption = UnifiedEncryption()
@@ -296,14 +300,8 @@ class UnifiedSystem:
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get system statistics"""
-        db_stats = self.db.get_stats()
-        schema_stats = self.schema.get_statistics()
-        
-        return {
-            'database': db_stats,
-            'tables': schema_stats,
-            'uptime': db_stats.get('uptime', 0)
-        }
+        # Use metrics as the single source of truth to avoid relying on a schema instance
+        return self.get_metrics()
     
     def close(self):
         """Close system connections"""
@@ -327,85 +325,23 @@ class UnifiedSystem:
         }
     
     def create_public_share(self, folder_id: str, owner_id: str, expiry_days: int = 30) -> Dict[str, Any]:
-        """Create public share"""
-        share_id = hashlib.sha256(f"{folder_id}_{time.time()}_public".encode()).hexdigest()
-        
-        self.db.insert('shares', {
-            'share_id': share_id,
-            'folder_id': folder_id,
-            'owner_id': owner_id,
-            'share_type': 'public',
-            'created_at': time.time(),
-            'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
-            'size': 0,
-            'file_count': 0,
-            'folder_count': 0
-        })
-        
-        return {
-            'id': share_id,
-            'share_id': share_id,
-            'folder_id': folder_id,
-            'access_type': 'public'
-        }
+        """Create public share (delegates to access control and publications)."""
+        return self.access_control.create_public_share(folder_id, owner_id, expiry_days)
     
     def create_private_share(self, folder_id: str, owner_id: str, allowed_users: list, expiry_days: int = 30) -> Dict[str, Any]:
-        """Create private share"""
-        share_id = hashlib.sha256(f"{folder_id}_{time.time()}_private".encode()).hexdigest()
-        
-        self.db.insert('shares', {
-            'share_id': share_id,
-            'folder_id': folder_id,
-            'owner_id': owner_id,
-            'share_type': 'private',
-            'created_at': time.time(),
-            'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
-            'allowed_users': ','.join(allowed_users) if allowed_users else '',
-            'size': 0,
-            'file_count': 0,
-            'folder_count': 0
-        })
-        
-        return {
-            'id': share_id,
-            'share_id': share_id,
-            'folder_id': folder_id,
-            'access_type': 'private'
-        }
+        """Create private share (delegates to access control and publications)."""
+        return self.access_control.create_private_share(folder_id, owner_id, allowed_users, expiry_days)
     
     def create_protected_share(self, folder_id: str, owner_id: str, password: str, expiry_days: int = 30) -> Dict[str, Any]:
-        """Create protected share"""
-        share_id = hashlib.sha256(f"{folder_id}_{time.time()}_protected".encode()).hexdigest()
-        password_hash = hashlib.sha256(password.encode()).hexdigest() if password else None
-        
-        self.db.insert('shares', {
-            'share_id': share_id,
-            'folder_id': folder_id,
-            'owner_id': owner_id,
-            'share_type': 'protected',
-            'password_hash': password_hash,
-            'created_at': time.time(),
-            'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
-            'size': 0,
-            'file_count': 0,
-            'folder_count': 0
-        })
-        
-        return {
-            'id': share_id,
-            'share_id': share_id,
-            'folder_id': folder_id,
-            'access_type': 'protected'
-        }
+        """Create protected share (delegates to access control and publications)."""
+        return self.access_control.create_protected_share(folder_id, owner_id, password, expiry_days)
     
     def download_share(self, share_id: str, destination: str, selected_files: list = None) -> None:
         """Download a share"""
         # Implementation would go here
         pass
     
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get system statistics"""
-        return self.get_metrics()
+    # get_statistics is defined once above and returns get_metrics()
 
 
     def upload_folder(self, folder_id: str) -> Dict[str, Any]:

@@ -145,8 +145,8 @@ class CompleteTauriBridge:
         owner_id = args.get('owner_id', self._get_current_user_id())
         
         shares = self.system.db.fetch_all("""
-            SELECT * FROM shares 
-            WHERE owner_id = ? 
+            SELECT * FROM publications 
+            WHERE created_by = ? AND revoked = 0
             ORDER BY created_at DESC
         """, (owner_id,))
         
@@ -168,7 +168,7 @@ class CompleteTauriBridge:
         share_id = args.get('share_id')
         
         share = self.system.db.fetch_one(
-            "SELECT * FROM shares WHERE share_id = ?",
+            "SELECT * FROM publications WHERE share_id = ?",
             (share_id,)
         )
         
@@ -284,31 +284,18 @@ class CompleteTauriBridge:
         
         owner_id = self._get_current_user_id()
         
-        # Create publication record
-        publication_id = hashlib.sha256(f"{folder_id}_{time.time()}".encode()).hexdigest()
-        self.system.db.insert('publications', {
-            'publication_id': publication_id,
-            'folder_id': folder_id,
-            'owner_id': owner_id,
-            'access_level': access_type,
-            'created_at': time.time(),
-            'total_segments': 0
-        })
-        
-        # Handle access control based on type
-        if access_type == 'private' and user_ids:
-            for user_id in user_ids:
-                self.system.db.insert('folder_authorizations', {
-                    'folder_id': folder_id,
-                    'user_id': user_id,
-                    'authorized_at': time.time()
-                })
-        elif access_type == 'protected' and password:
-            # Store password hash (simplified for now)
-            pass
-        
+        # Delegate publishing/share creation to system access control
+        if access_type == 'public':
+            share = self.system.create_public_share(folder_id, owner_id)
+        elif access_type == 'private':
+            share = self.system.create_private_share(folder_id, owner_id, user_ids)
+        elif access_type == 'protected':
+            share = self.system.create_protected_share(folder_id, owner_id, password)
+        else:
+            raise ValueError(f"Unknown access type: {access_type}")
+
         return {
-            'publication_id': publication_id,
+            'shareId': share.get('share_id', ''),
             'folder_id': folder_id,
             'access_type': access_type,
             'status': 'published'
@@ -397,39 +384,24 @@ class CompleteTauriBridge:
         folder_id = args.get('folder_id')
         user_id = args.get('user_id')
         
-        # Add user authorization
-        self.system.db.insert('folder_authorizations', {
-            'folder_id': folder_id,
-            'user_id': user_id,
-            'authorized_at': time.time()
-        })
-        
-        return {'added': True}
+        # For private shares, add commitment instead (no folder_authorizations table)
+        # This requires a share_id context; here we return an instruction to use share manager flows.
+        return {'added': False, 'message': 'Use private share allowed_users or commitments API'}
     
     def _remove_authorized_user(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Remove authorized user from folder"""
         folder_id = args.get('folder_id')
         user_id = args.get('user_id')
         
-        # Remove authorization
-        self.system.db.execute("""
-            DELETE FROM folder_authorizations 
-            WHERE folder_id = ? AND user_id = ?
-        """, (folder_id, user_id))
-        
-        return {'removed': True}
+        # Defer to commitments revocation in access control layer
+        return {'removed': False, 'message': 'Use commitments revoke on a specific share'}
     
     def _get_authorized_users(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Get authorized users for folder"""
         folder_id = args.get('folder_id')
         
-        users = self.system.db.fetch_all("""
-            SELECT u.* FROM users u
-            JOIN folder_authorizations fa ON u.user_id = fa.user_id
-            WHERE fa.folder_id = ?
-        """, (folder_id,))
-        
-        return {'users': [dict(u) for u in users]}
+        # No folder_authorizations table; return empty until a per-share API is used
+        return {'users': []}
     
     def _get_user_info(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Get current user info"""
@@ -477,7 +449,7 @@ class CompleteTauriBridge:
             self.system.db.fetch_one("SELECT 1")
             
             # Get table counts
-            tables = ['users', 'folders', 'files', 'segments', 'shares']
+            tables = ['users', 'folders', 'files', 'segments', 'publications']
             counts = {}
             
             for table in tables:
