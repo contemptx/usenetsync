@@ -510,21 +510,6 @@ async fn get_share_details(share_id: String) -> Result<Share, String> {
         }
     }
     
-    let output = cmd
-        .arg("share-details")
-        .arg("--share-id")
-        .arg(&share_id)
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    let share: Share = serde_json::from_slice(&output.stdout)
-        .map_err(|e| e.to_string())?;
-    
-    Ok(share)
 }
 
 // Folder Management Commands
@@ -559,15 +544,6 @@ async fn index_folder_full(folder_id: String) -> Result<serde_json::Value, Strin
     } else {
         Err(result.error.unwrap_or_else(|| "Failed to index folder".to_string()))
     }
-    
-    let output = cmd.arg("index-managed-folder").arg("--folder-id").arg(&folder_id)
-        .output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -658,16 +634,6 @@ async fn remove_authorized_user(folder_id: String, user_id: String) -> Result<se
     } else {
         Err(result.error.unwrap_or_else(|| "Failed to remove authorized user".to_string()))
     }
-        .arg("--folder-id").arg(&folder_id)
-        .arg("--user-id").arg(&user_id);
-    
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
