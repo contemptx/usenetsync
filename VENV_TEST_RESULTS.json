@@ -1,0 +1,49 @@
+{
+  "start": "2025-08-20T01:23:35.630132",
+  "python": "/workspace/venv/bin/python",
+  "stages": [
+    {
+      "stage": "import_nntp",
+      "success": true
+    },
+    {
+      "stage": "import_client",
+      "success": true
+    },
+    {
+      "stage": "connect",
+      "success": true
+    },
+    {
+      "stage": "generate",
+      "subject": "jcnwnpdj5frqlkstbww9",
+      "subject_length": 20,
+      "message_id": "<izfzeszrryb0xhxb@ngPost.com>",
+      "message_id_format": "CORRECT"
+    },
+    {
+      "stage": "select_group",
+      "group": "alt.binaries.test",
+      "article_count": 21277826179
+    },
+    {
+      "stage": "post",
+      "posted_id": "<izfzeszrryb0xhxb@ngPost.com>",
+      "success": true
+    },
+    {
+      "stage": "verify_exists",
+      "exists": true
+    },
+    {
+      "stage": "retrieve",
+      "success": true,
+      "article_number": 0,
+      "lines": 13
+    }
+  ],
+  "status": "ERROR",
+  "error": "'slice(None, 20, None)'",
+  "traceback": "Traceback (most recent call last):\n  File \"/workspace/run_with_venv.py\", line 110, in <module>\n    for line in lines[:20]:\n                ~~~~~^^^^^\n  File \"/workspace/venv/lib/python3.13/site-packages/nntp/headerdict.py\", line 60, in __getitem__\n    return self.__proxy[HeaderName(key)]\n           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\nKeyError: 'slice(None, 20, None)'\n",
+  "end": "2025-08-20T01:23:41.469652"
+}

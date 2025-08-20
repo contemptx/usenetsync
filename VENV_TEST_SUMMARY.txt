@@ -1,0 +1,5 @@
+REAL USENET TEST WITH VENV
+==================================================
+
+❌ TEST FAILED
+Error: 'slice(None, 20, None)'
