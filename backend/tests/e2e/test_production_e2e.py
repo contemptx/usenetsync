@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple
 import unittest
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from src.core.main import UsenetSync
 from src.config.configuration_manager import ConfigurationManager

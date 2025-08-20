@@ -26,7 +26,7 @@ from watchdog.events import FileSystemEventHandler
 # Add src to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.networking.production_nntp_client import ProductionNNTPClient
+from networking.production_nntp_client import ProductionNNTPClient
 
 # Configure logging
 logging.basicConfig(

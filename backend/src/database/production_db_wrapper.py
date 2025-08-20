@@ -13,7 +13,7 @@ from typing import Optional, Any, Dict, List
 from datetime import datetime
 from pathlib import Path
 
-from src.database.enhanced_database_manager import EnhancedDatabaseManager, DatabaseConfig
+from database.enhanced_database_manager import EnhancedDatabaseManager, DatabaseConfig
 def dict_factory(cursor, row):
     """Convert sqlite row to dictionary"""
     return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}

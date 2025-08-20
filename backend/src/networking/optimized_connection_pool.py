@@ -118,7 +118,7 @@ class OptimizedConnectionPool:
                 
         try:
             # Import here to avoid circular dependency
-            from src.networking.production_nntp_client import NNTPConnection
+            from networking.production_nntp_client import NNTPConnection
             
             # Create the actual connection
             conn = NNTPConnection(

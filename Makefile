@@ -29,7 +29,7 @@ frontend:
 
 test:
 	@echo "$(GREEN)Running backend tests...$(NC)"
-	@cd backend && PYTHONPATH=src pytest tests/
+	@cd backend && PYTHONPATH=backend/src pytest tests/
 	@echo "$(GREEN)Running frontend tests...$(NC)"
 	@cd frontend && npm test
 

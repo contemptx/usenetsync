@@ -34,13 +34,13 @@ try:
 except ImportError as e:
     # If that fails, try importing from src directory
     try:
-        from src.database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
-        from src.networking.production_nntp_client import ProductionNNTPClient
-        from src.security.enhanced_security_system import EnhancedSecuritySystem
-        from src.indexing.share_id_generator import ShareIDGenerator
-        from src.upload.enhanced_upload import EnhancedUploadSystem
-        from src.download.enhanced_download import EnhancedDownloadSystem
-        from src.core.integrated_backend import IntegratedBackend, create_integrated_backend
+        from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
+        from networking.production_nntp_client import ProductionNNTPClient
+        from security.enhanced_security_system import EnhancedSecuritySystem
+        from indexing.share_id_generator import ShareIDGenerator
+        from upload.enhanced_upload import EnhancedUploadSystem
+        from download.enhanced_download import EnhancedDownloadSystem
+        from core.integrated_backend import IntegratedBackend, create_integrated_backend
     except ImportError:
         # Last resort - print debug info and raise original error
         print(f"Current directory: {current_dir}", file=sys.stderr)

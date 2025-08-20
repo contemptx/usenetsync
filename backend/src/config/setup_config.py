@@ -18,7 +18,7 @@ else:
     # We might already be in src
     sys.path.insert(0, os.path.dirname(__file__))
 
-from src.config.secure_config import NNTPConfig
+from config.secure_config import NNTPConfig
 
 
 def setup_configuration():

@@ -4,7 +4,7 @@ import sys
 
 def test_pythonpath():
     """Test that PYTHONPATH includes src directory"""
-    assert any('src' in path for path in sys.path), "src directory not in PYTHONPATH"
+    assert any('backend/src' in path or path.endswith('/src') for path in sys.path), "src directory not in PYTHONPATH"
 
 def test_env_variables_exist():
     """Test that required environment variables are set"""

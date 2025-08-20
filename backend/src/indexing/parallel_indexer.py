@@ -454,7 +454,7 @@ class IncrementalIndexer(ParallelIndexer):
 
 # Example usage
 if __name__ == "__main__":
-    from src.database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
+    from database.postgresql_manager import ShardedPostgreSQLManager, PostgresConfig
     
     # Setup database
     config = PostgresConfig(embedded=True, shard_count=16)
