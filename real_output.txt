@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/workspace/run_real_test_now.py", line 11, in <module>
+    from unified.networking.real_nntp_client import RealNNTPClient
+  File "/workspace/src/unified/networking/real_nntp_client.py", line 7, in <module>
+    import nntp  # This is pynntp, NOT nntplib
+    ^^^^^^^^^^^
+ModuleNotFoundError: No module named 'nntp'
+Exit code: 1
