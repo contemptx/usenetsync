@@ -421,6 +421,24 @@ class UnifiedSystem:
             'uploaded_segments': 0
         })
         return {'upload_id': upload_id, 'status': 'queued'}
+    
+    def publish_folder(self, folder_id: str, access_type: str = 'public') -> Dict[str, Any]:
+        """Publish folder"""
+        publication_id = hashlib.sha256(f"{folder_id}_{time.time()}".encode()).hexdigest()
+        
+        # Get owner from folder
+        folder = self.db.fetch_one("SELECT owner_id FROM folders WHERE folder_id = ?", (folder_id,))
+        owner_id = folder['owner_id'] if folder else 'unknown'
+        
+        self.db.insert('publications', {
+            'publication_id': publication_id,
+            'folder_id': folder_id,
+            'owner_id': owner_id,
+            'access_level': access_type,
+            'created_at': time.time()
+        })
+        return {'publication_id': publication_id, 'status': 'published'}
+
 
 def main():
     """Main entry point"""

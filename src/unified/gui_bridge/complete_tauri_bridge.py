@@ -190,8 +190,8 @@ class CompleteTauriBridge:
         
         self.system.db.insert('folders', {
             'folder_id': folder_id,
-            'folder_name': name,
-            'folder_path': path,
+            'name': name,
+            'path': path,
             'owner_id': owner_id,
             'created_at': time.time()
         })
@@ -218,7 +218,7 @@ class CompleteTauriBridge:
         
         # Index the folder
         result = self.system.indexing.scanner.scan_folder(
-            folder['folder_path'], folder_id
+            folder['path'], folder_id
         )
         
         # Convert generator to list if needed
