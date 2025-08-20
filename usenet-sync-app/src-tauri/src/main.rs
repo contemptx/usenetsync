@@ -17,14 +17,23 @@ use turboactivate::TurboActivate;
 mod commands;
 use commands::system::init_system_commands;
 
+// Import unified backend integration
+mod unified_backend;
+use unified_backend::{execute_backend_command, execute_unified_command};
+
 // Helper function to get the workspace directory
 fn get_workspace_dir() -> PathBuf {
     std::env::current_dir()
         .ok()
         .and_then(|p| {
-            // Try to find the workspace root by looking for src/cli.py
+            // Try to find the workspace root by looking for src/gui_backend_bridge.py
             let mut current = p.as_path();
             loop {
+                // Check for unified backend first
+                if current.join("src").join("gui_backend_bridge.py").exists() {
+                    return Some(current.to_path_buf());
+                }
+                // Fallback to old CLI for compatibility
                 if current.join("src").join("cli.py").exists() {
                     return Some(current.to_path_buf());
                 }
@@ -420,40 +429,26 @@ async fn create_share(
     share_type: String,
     password: Option<String>,
 ) -> Result<Share, String> {
-    // Call Python backend to create share
-    let python_cmd = get_python_backend();
-    let mut cmd = Command::new(&python_cmd);
+    // Use unified backend with automatic fallback
+    let args = serde_json::json!({
+        "files": files,
+        "share_type": share_type,
+        "password": password
+    });
     
-    // Only add cli.py path if not using bundled backend
-    if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+    let result = execute_unified_command("create_share", args)
+        .map_err(|e| format!("Failed to create share: {}", e))?;
+    
+    // Parse response into Share struct
+    if result.success {
+        if let Some(data) = result.data {
+            let share: Share = serde_json::from_value(data)
+                .map_err(|e| format!("Failed to parse share: {}", e))?;
+            return Ok(share);
+        }
     }
     
-    // Add files with multiple --files flags
-    cmd.arg("create-share");
-    for file in &files {
-        cmd.arg("--files").arg(file);
-    }
-    let output = cmd
-        .arg("--type")
-        .arg(&share_type)
-        .args(if let Some(ref pwd) = password {
-            vec!["--password", pwd]
-        } else {
-            vec![]
-        })
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    // Parse JSON response
-    let share: Share = serde_json::from_slice(&output.stdout)
-        .map_err(|e| e.to_string())?;
-    
-    Ok(share)
+    Err(result.error.unwrap_or_else(|| "Unknown error".to_string()))
 }
 
 #[tauri::command]
@@ -462,9 +457,19 @@ async fn get_shares() -> Result<Vec<Share>, String> {
     let python_cmd = get_python_backend();
     let mut cmd = Command::new(&python_cmd);
     
-    // Only add cli.py path if not using bundled backend
+    // Add unified backend path if not using bundled backend
     if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+        let workspace = get_workspace_dir();
+        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
+        let old_cli = workspace.join("src").join("cli.py");
+        
+        // Use unified backend if it exists, otherwise fallback to old CLI
+        if unified_backend.exists() {
+            cmd.arg(unified_backend);
+            cmd.arg("--mode").arg("command");
+        } else {
+            cmd.arg(old_cli);
+        }
     }
     
     let output = cmd
@@ -493,9 +498,19 @@ async fn download_share(
     let python_cmd = get_python_backend();
     let mut cmd = Command::new(&python_cmd);
     
-    // Only add cli.py path if not using bundled backend
+    // Add unified backend path if not using bundled backend
     if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+        let workspace = get_workspace_dir();
+        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
+        let old_cli = workspace.join("src").join("cli.py");
+        
+        // Use unified backend if it exists, otherwise fallback to old CLI
+        if unified_backend.exists() {
+            cmd.arg(unified_backend);
+            cmd.arg("--mode").arg("command");
+        } else {
+            cmd.arg(old_cli);
+        }
     }
     
     cmd
@@ -525,9 +540,19 @@ async fn get_share_details(share_id: String) -> Result<Share, String> {
     let python_cmd = get_python_backend();
     let mut cmd = Command::new(&python_cmd);
     
-    // Only add cli.py path if not using bundled backend
+    // Add unified backend path if not using bundled backend
     if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+        let workspace = get_workspace_dir();
+        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
+        let old_cli = workspace.join("src").join("cli.py");
+        
+        // Use unified backend if it exists, otherwise fallback to old CLI
+        if unified_backend.exists() {
+            cmd.arg(unified_backend);
+            cmd.arg("--mode").arg("command");
+        } else {
+            cmd.arg(old_cli);
+        }
     }
     
     let output = cmd
@@ -998,9 +1023,19 @@ async fn test_server_connection(config: ServerConfig) -> Result<bool, String> {
     let python_cmd = get_python_backend();
     let mut cmd = Command::new(&python_cmd);
     
-    // Only add cli.py path if not using bundled backend
+    // Add unified backend path if not using bundled backend
     if !is_bundled_backend() {
-        cmd.arg(get_workspace_dir().join("src").join("cli.py"));
+        let workspace = get_workspace_dir();
+        let unified_backend = workspace.join("src").join("gui_backend_bridge.py");
+        let old_cli = workspace.join("src").join("cli.py");
+        
+        // Use unified backend if it exists, otherwise fallback to old CLI
+        if unified_backend.exists() {
+            cmd.arg(unified_backend);
+            cmd.arg("--mode").arg("command");
+        } else {
+            cmd.arg(old_cli);
+        }
     }
     
     let output = cmd

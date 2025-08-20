@@ -2,12 +2,14 @@
 """
 GUI Backend Bridge - Connects Tauri GUI to Unified System
 This replaces the old cli.py with unified system calls
+Supports both old CLI format and new unified format
 """
 
 import sys
 import os
 import json
 import asyncio
+import argparse
 from pathlib import Path
 
 # Add unified system to path
