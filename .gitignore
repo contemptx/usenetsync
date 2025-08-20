@@ -17,6 +17,7 @@ improvement_report.txt
 # Sensitive configuration
 secure_config.py
 .env
+*.env
 *.key
 *.pem
 
