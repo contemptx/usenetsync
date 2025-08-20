@@ -219,17 +219,22 @@ class UnifiedSchema:
                 )
             """,
             
-            # Publications/Shares (complete access control)
-            'publications': f"""
-                CREATE TABLE IF NOT EXISTS publications (
+            # Shares (complete access control)
+            'shares': f"""
+                CREATE TABLE IF NOT EXISTS shares (
                     id {id_type},
                     share_id VARCHAR(255) UNIQUE NOT NULL,
                     folder_id {uuid_type} NOT NULL,
+                    owner_id VARCHAR(255) NOT NULL,
                     share_type VARCHAR(50) NOT NULL,
-                    access_level VARCHAR(50) NOT NULL,
+                    access_type VARCHAR(50) NOT NULL,  -- Alias for access_level
+                    access_level VARCHAR(50) NOT NULL,  -- Keep for compatibility
                     password_hash {text_type},
                     password_salt {text_type},
                     encryption_key {text_type},
+                    encrypted BOOLEAN DEFAULT FALSE,
+                    access_string {text_type},
+                    encrypted_index {text_type},
                     wrapped_keys {json_type},
                     access_control {json_type},
                     allowed_users {json_type},
@@ -246,7 +251,8 @@ class UnifiedSchema:
                     created_at {timestamp_type},
                     updated_at {timestamp_type},
                     CHECK (share_type IN ('full', 'partial', 'incremental')),
-                    CHECK (access_level IN ('public', 'private', 'protected'))
+                    CHECK (access_level IN ('public', 'private', 'protected')),
+                    CHECK (access_type IN ('public', 'private', 'protected'))
                 )
             """,
             

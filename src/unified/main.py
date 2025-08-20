@@ -71,8 +71,11 @@ class UnifiedSystem:
         )
         
         self.db = UnifiedDatabase(db_config)
-        # Don't use UnifiedSchema - it creates wrong tables
-        # self.schema = UnifiedSchema(self.db)
+        
+        # Initialize schema and run migrations
+        from unified.core.schema import UnifiedSchema
+        self.schema = UnifiedSchema(self.db)
+        self.schema.create_all_tables()
         
         # Initialize security
         self.encryption = UnifiedEncryption()
@@ -105,6 +108,10 @@ class UnifiedSystem:
         self.compression = UnifiedCompression(self.config.indexing_compression_level)
         self.headers = UnifiedHeaders()
         
+        
+        # Initialize upload queue
+        from unified.upload.queue import UnifiedUploadQueue
+        self.upload_queue = UnifiedUploadQueue(self.db)
         
         # Create attribute aliases for compatibility
         self.security = self  # Security methods are on main class
@@ -403,9 +410,7 @@ class UnifiedSystem:
         # Implementation would go here
         pass
     
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get system statistics"""
-        return self.get_metrics()
+    # Removed duplicate get_statistics - using the comprehensive one above
 
 
     def upload_folder(self, folder_id: str) -> Dict[str, Any]:

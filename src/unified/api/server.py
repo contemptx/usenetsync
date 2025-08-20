@@ -162,7 +162,7 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=503, detail="System not available")
             
             share = self.system.db.fetch_one(
-                "SELECT * FROM publications WHERE share_id = ?",
+                "SELECT * FROM shares WHERE share_id = ?",
                 (share_id,)
             )
             
@@ -248,6 +248,64 @@ class UnifiedAPIServer:
     def _setup_websocket(self):
         """Setup WebSocket endpoints"""
         from fastapi import WebSocket, WebSocketDisconnect
+        
+        @self.app.get("/api/v1/logs")
+        async def get_logs(limit: int = 100, level: str = None):
+            """Get recent logs"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            # Get logs from the database or log manager
+            logs = []
+            if hasattr(self.system, 'get_logs'):
+                logs = self.system.get_logs(limit, level)
+            
+            return {"logs": logs, "count": len(logs)}
+        
+        @self.app.get("/api/v1/search")
+        async def search(query: str, type: str = None, limit: int = 50):
+            """Search files and folders"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            results = []
+            if query:
+                # Search in files
+                file_results = self.system.db.fetch_all(
+                    "SELECT * FROM files WHERE name LIKE ? LIMIT ?",
+                    (f"%{query}%", limit)
+                )
+                
+                # Search in folders
+                folder_results = self.system.db.fetch_all(
+                    "SELECT * FROM folders WHERE name LIKE ? LIMIT ?",
+                    (f"%{query}%", limit)
+                )
+                
+                results = {
+                    "files": file_results or [],
+                    "folders": folder_results or []
+                }
+            
+            return {"results": results, "query": query}
+        
+        @self.app.get("/api/v1/network/connection_pool")
+        async def get_connection_pool():
+            """Get connection pool stats"""
+            stats = {
+                "active": 0,
+                "idle": 0,
+                "total": 0,
+                "max": 10
+            }
+            
+            # Try to get real stats if available
+            if self.system and hasattr(self.system, 'connection_pool'):
+                pool = self.system.connection_pool
+                if hasattr(pool, 'get_stats'):
+                    stats = pool.get_stats()
+            
+            return {"pool": stats}
         
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
