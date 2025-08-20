@@ -49,7 +49,10 @@ export const Dashboard: React.FC = () => {
     activeTransfers: 0,
     networkSpeed: { download: 0, upload: 0 },
     storageUsed: 0,
-    storageTotal: 100
+    storageTotal: 100,
+    cpuUsage: 0,
+    memoryUsage: 0,
+    diskUsage: 0
   });
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
   const navigate = useNavigate();
@@ -145,7 +148,10 @@ export const Dashboard: React.FC = () => {
           activeTransfers: 0,
           networkSpeed: { download: 0, upload: 0 },
           storageUsed: 0,
-          storageTotal: 100
+          storageTotal: 100,
+          cpuUsage: 0,
+          memoryUsage: 0,
+          diskUsage: 0
         });
       }
     }, 1000);
@@ -247,7 +253,7 @@ export const Dashboard: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">CPU Usage</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats?.cpuUsage.toFixed(1) || '0'}%
+                {stats?.cpuUsage?.toFixed(1) || '0'}%
               </p>
             </div>
             <Cpu className="w-8 h-8 text-blue-500" />
@@ -259,7 +265,7 @@ export const Dashboard: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Memory</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats?.memoryUsage.toFixed(1) || '0'}%
+                {stats?.memoryUsage?.toFixed(1) || '0'}%
               </p>
             </div>
             <Activity className="w-8 h-8 text-green-500" />
@@ -271,7 +277,7 @@ export const Dashboard: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Storage</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats?.diskUsage.toFixed(1) || '0'}%
+                {stats?.diskUsage?.toFixed(1) || '0'}%
               </p>
             </div>
             <HardDrive className="w-8 h-8 text-purple-500" />
