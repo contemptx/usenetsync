@@ -306,3 +306,8 @@ class UnifiedAPIServer:
             port=port,
             log_level="info"
         )
+
+def create_app():
+    """Create and return FastAPI application"""
+    server = UnifiedAPIServer()
+    return server.app

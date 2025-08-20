@@ -31,7 +31,7 @@ class CompleteTauriBridge:
     Complete bridge handling all Tauri commands
     """
     
-    def __init__(self, unified_system):
+    def __init__(self, unified_system=None):
         """Initialize with unified system"""
         self.system = unified_system
         self.commands = {}
@@ -600,3 +600,6 @@ class CompleteTauriBridge:
             'accessCount': share.get('access_count', 0),
             'lastAccessed': None
         }
+
+# Alias for compatibility
+TauriBridge = CompleteTauriBridge
