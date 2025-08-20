@@ -12,8 +12,13 @@ import queue
 import time
 import logging
 import hashlib
-import psycopg2
-import psycopg2.pool
+try:
+    import psycopg2
+    import psycopg2.pool
+    HAS_POSTGRES = True
+except ImportError:
+    HAS_POSTGRES = False
+    psycopg2 = None
 from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
