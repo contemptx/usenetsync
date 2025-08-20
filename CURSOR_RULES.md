@@ -1,60 +1,104 @@
-# Cursor RulePack — Live Usenet, Full-Stack (Py/Rust/React/SQLite/Postgres)
+# UsenetSync Cursor Rules — Live Testing with Real Usenet
 
-## Non-negotiables
-- All tests must hit **real Usenet**: `news.newshosting.com:563` with SSL.
-- Use **pynntp** imported as `nntp`. **Block `nntplib`**.
-- Live group: **`alt.binaries.test`**.
-- Frontend↔Backend↔Usenet E2E must pass. No mocks, no skips.
-- Zero warnings (treat as errors) in Python, Rust, React.
-- CI/dev tests use PostgreSQL. SQLite only for local manual dev, never CI.
-- If required env/infra missing → **fail** (never skip/simulate).
+## Core Principles
+- **REAL COMPONENTS ONLY**: All tests use actual UsenetSync modules with live Usenet
+- **news.newshosting.com:563** with SSL is the ONLY server
+- **Zero mocks/stubs**: Every test hits real infrastructure
+- **Project-specific**: Tests validate actual UsenetSync functionality
 
-## Required Env (.env must exist)
+## Required Environment Configuration
 
-```
+```bash
+# Newshosting Production Server (NEVER use test/mock servers)
 NNTP_HOST=news.newshosting.com
 NNTP_PORT=563
-NNTP_USERNAME=contemptx
-NNTP_PASSWORD=REPLACE_ME_LOCALLY # never commit
 NNTP_SSL=true
+NNTP_USERNAME=contemptx
+NNTP_PASSWORD=Kia211101#
 NNTP_GROUP=alt.binaries.test
 NNTP_TIMEOUT_SECS=30
-NNTP_CONNECT_RETRY=3
-NNTP_READ_CHUNK_SIZE=65536
-NNTP_USER_AGENT=YourTool/1.0 (+contact)
 
+# UsenetSync Database
+DATABASE_URL=postgresql://usenetsync:usenetsync123@localhost:5432/usenetsync
+USENETSYNC_DATABASE_TYPE=postgresql
+USENETSYNC_DATABASE_HOST=localhost
+USENETSYNC_DATABASE_PORT=5432
+USENETSYNC_DATABASE_NAME=usenetsync
+USENETSYNC_DATABASE_USER=usenetsync
+USENETSYNC_DATABASE_PASSWORD=usenetsync123
+
+# UsenetSync API
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8000
-APP_ENV=live
+API_HOST=0.0.0.0
+API_PORT=8000
 
-DATABASE_URL=postgresql://app:app@localhost:5432/app
-SQLITE_PATH=./data/app.db # not used in CI
-
+# UsenetSync Frontend
 FRONTEND_BASE_URL=http://localhost:5173
-
 VITE_BACKEND_URL=http://localhost:8000
 
-# Production NNTP client import path (module:Class) — update to your real one
-PRODUCTION_NNTP_CLIENT_IMPORT=your_project.usenet.client:NNTPClient
+# UsenetSync Components
+USENET_CLIENT_MODULE=unified.networking.real_nntp_client:RealNNTPClient
+INDEXING_MODULE=unified.indexing.scanner:UnifiedIndexingScanner
+SEGMENTATION_MODULE=unified.segmentation.processor:SegmentationProcessor
+ENCRYPTION_MODULE=unified.security.encryption:UnifiedEncryption
 ```
 
-## Make Commands (must pass)
-- `make live` runs: Postgres up → migrations → Python lint/type/tests (incl. live) → Rust lint/tests → React typecheck/build → Playwright E2E.
+## UsenetSync Test Requirements
 
-## Usenet Must-Haves
-- Enforce SSL:563 and `pynntp` (`import nntp`).
-- Handle `CAPABILITIES`, reader mode, multi-line bodies, dot-stuffing.
-- Backoff/retry, bounded streaming, respectful throttling, resume.
+### Must Test These Real Components:
+1. **RealNNTPClient** - Connect to Newshosting, authenticate, post/retrieve
+2. **UnifiedIndexingScanner** - Index real files from filesystem
+3. **SegmentationProcessor** - Segment real files for Usenet posting
+4. **UnifiedEncryption** - Encrypt/decrypt real data
+5. **UnifiedDatabase** - Store/retrieve with PostgreSQL
+6. **UnifiedAPIServer** - Real HTTP endpoints
+7. **TauriBridge** - Real GUI command handling
 
-## Never Do
-- Don't import `nntplib`.
-- Don't mock or skip live NNTP tests.
-- Don't use SQLite in CI.
-- Don't mute/ignore warnings.
-- Don't post binaries in automation.
+### Test Scenarios (All Live):
+- Post a real file to alt.binaries.test
+- Retrieve and verify the posted file
+- Create real user with encryption keys
+- Index a real folder with files
+- Segment files and track in database
+- Share creation with access control
+- Full upload/download cycle
 
-## Final Check
-- ✅ Zero warnings; ✅ Python/Rust/React checks green
-- ✅ Unit/integration + live tests all pass
-- ✅ E2E passes against live backend → live Usenet
-- ✅ README updated; no TODO/FIXME; no secrets committed
+## Enforcement Rules
+
+### Always:
+- ✅ Use `pynntp` as `nntp` (block nntplib)
+- ✅ Connect to news.newshosting.com:563 with SSL
+- ✅ Use real UsenetSync modules (no test doubles)
+- ✅ PostgreSQL for all database operations
+- ✅ Real file I/O (create actual test files)
+
+### Never:
+- ❌ Mock NNTP connections
+- ❌ Skip tests due to missing resources
+- ❌ Use SQLite in tests
+- ❌ Ignore warnings
+- ❌ Use fake/stub modules
+
+## Test Categories
+
+```python
+# Markers for UsenetSync tests
+markers =
+    live_nntp: Tests that connect to real Newshosting server
+    live_database: Tests that use real PostgreSQL
+    live_indexing: Tests that index real files
+    live_encryption: Tests that encrypt/decrypt real data
+    live_api: Tests that hit real API endpoints
+    live_e2e: Full end-to-end with all real components
+```
+
+## Validation Checklist
+- [ ] Can post real article to alt.binaries.test
+- [ ] Can retrieve posted article by Message-ID
+- [ ] Can index folder with 10+ real files
+- [ ] Can segment large file (>1MB) correctly
+- [ ] Can encrypt/decrypt with real keys
+- [ ] Can create share and access it
+- [ ] API returns real data from database
+- [ ] Frontend displays real Usenet articles
