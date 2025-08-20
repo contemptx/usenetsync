@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
 
 from unified.main import UnifiedSystem
-from unified.gui_bridge.tauri_bridge import UnifiedTauriBridge
+from unified.gui_bridge.complete_tauri_bridge import CompleteTauriBridge
 from unified.api.server import UnifiedAPIServer
 
 # Global system instance
@@ -29,7 +29,7 @@ def initialize_system():
     
     if SYSTEM is None:
         SYSTEM = UnifiedSystem()
-        BRIDGE = UnifiedTauriBridge(SYSTEM)
+        BRIDGE = CompleteTauriBridge(SYSTEM)
     
     return SYSTEM, BRIDGE
 
