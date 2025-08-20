@@ -3,7 +3,8 @@
  * Provides functions for all backend operations
  */
 
-import { invoke } from '@tauri-apps/api/tauri';
+// @ts-ignore
+import { invoke } from './tauri-wrapper';
 
 // File operations
 export async function uploadFile(filePath: string, shareId: string, password?: string) {

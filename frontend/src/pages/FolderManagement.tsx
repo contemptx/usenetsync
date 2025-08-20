@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
+// @ts-ignore
+import { invoke } from '../lib/tauri-wrapper';
+// Dialog will be handled through invoke commands
 import { PrivateShareManager } from '../components/PrivateShareManager';
 import { 
   getFolders, 

@@ -4,7 +4,8 @@ import { Share2, Copy, Trash2, Eye, Calendar, Users, History, X } from 'lucide-r
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import { VersionHistory } from '../components/VersionHistory';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { invoke } from '@tauri-apps/api/core';
+// @ts-ignore
+import { invoke } from '../lib/tauri-wrapper';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
