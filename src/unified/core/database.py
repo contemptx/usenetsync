@@ -311,16 +311,24 @@ class UnifiedDatabase:
                     
                     return cursor
                     
-            except (sqlite3.OperationalError, psycopg2.OperationalError) as e:
+            except sqlite3.OperationalError as e:
                 last_error = e
                 if "locked" in str(e).lower() or "busy" in str(e).lower():
                     time.sleep(self.config.retry_delay * (2 ** attempt))
                 else:
+                    self._monitor['errors'][str(e)] = self._monitor['errors'].get(str(e), 0) + 1
                     raise
-                    
             except Exception as e:
-                self._monitor['errors'][str(e)] = self._monitor['errors'].get(str(e), 0) + 1
-                raise
+                if HAS_POSTGRES and psycopg2 and hasattr(psycopg2, 'OperationalError') and isinstance(e, psycopg2.OperationalError):
+                    last_error = e
+                    if "locked" in str(e).lower() or "busy" in str(e).lower():
+                        time.sleep(self.config.retry_delay * (2 ** attempt))
+                    else:
+                        self._monitor['errors'][str(e)] = self._monitor['errors'].get(str(e), 0) + 1
+                        raise
+                else:
+                    self._monitor['errors'][str(e)] = self._monitor['errors'].get(str(e), 0) + 1
+                    raise
         
         if last_error:
             raise last_error

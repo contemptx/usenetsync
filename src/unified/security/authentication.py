@@ -85,7 +85,7 @@ class UnifiedAuthentication:
             'username': username,
             'email': email,
             'public_key': public_pem.decode('utf-8'),
-            'encrypted_private_key': self._encrypt_private_key(private_pem, user_id),
+            'private_key_encrypted': self._encrypt_private_key(private_pem, user_id),
             'api_key': api_key,
             'created_at': time.time()
         }
