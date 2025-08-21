@@ -9,7 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
+from datetime import datetime
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -292,6 +294,17 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=400, detail="Folder ID is required")
             
             # Create segments for the folder
+            # Get folder info first
+            folder = self.system.db.fetch_one(
+                "SELECT path FROM folders WHERE folder_id = ?",
+                (folder_id,)
+            )
+            
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
+            
+            folder_path = folder['path']
+            
             # Get files from the folder
             files = self.system.db.fetch_all(
                 "SELECT * FROM files WHERE folder_id = ?",
@@ -299,15 +312,31 @@ class UnifiedAPIServer:
             )
             
             segments_created = 0
+            total_size = 0
             if files:
                 for file in files:
+                    # Build full file path
+                    file_path = os.path.join(folder_path, file['path'])
+                    
                     # Process each file into segments
-                    segments = self.system.segment_processor.process_file(
-                        file['file_id'],
-                        file['path'],
-                        file['size']
+                    segments = self.system.segment_processor.segment_file(
+                        file_path,
+                        file_id=file['file_id']
                     )
                     segments_created += len(segments)
+                    total_size += file.get('size', 0)
+                    
+                    # Store segments in database
+                    for segment in segments:
+                        self.system.db.insert('segments', {
+                            'segment_id': segment.segment_id,
+                            'file_id': file['file_id'],
+                            'folder_id': folder_id,
+                            '`index`': segment.index,  # index is a reserved word
+                            'size': segment.size,
+                            'hash': segment.hash,
+                            'created_at': datetime.now().isoformat()
+                        })
             
             return {"success": True, "segments_created": segments_created}
         
