@@ -193,7 +193,7 @@ class CompleteTauriBridge:
             'name': name,
             'path': path,
             'owner_id': owner_id,
-            'created_at': time.time()
+            'created_at': datetime.now().isoformat()
         })
         
         return {
@@ -284,9 +284,9 @@ class CompleteTauriBridge:
         owner_id = self._get_current_user_id()
         
         # Create publication record
-        publication_id = hashlib.sha256(f"{folder_id}_{time.time()}".encode()).hexdigest()
-        self.system.db.insert('publications', {
-            'publication_id': publication_id,
+        share_id = hashlib.sha256(f"{folder_id}_{time.time()}".encode()).hexdigest()
+        self.system.db.insert('shares', {
+            'share_id': share_id,
             'folder_id': folder_id,
             'owner_id': owner_id,
             'access_level': access_type,
@@ -306,7 +306,7 @@ class CompleteTauriBridge:
             pass
         
         return {
-            'publication_id': publication_id,
+            'share_id': share_id,
             'folder_id': folder_id,
             'access_type': access_type,
             'status': 'published'
