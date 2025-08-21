@@ -331,8 +331,7 @@ class UnifiedAPIServer:
                         self.system.db.insert('segments', {
                             'segment_id': segment.segment_id,
                             'file_id': file['file_id'],
-                            'folder_id': folder_id,
-                            '`index`': segment.index,  # index is a reserved word
+                            'segment_index': segment.segment_index,  # Use correct attribute name
                             'size': segment.size,
                             'hash': segment.hash,
                             'created_at': datetime.now().isoformat()
