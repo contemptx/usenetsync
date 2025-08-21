@@ -155,13 +155,17 @@ jobs:
         
     - name: Create issue for failures
       if: steps.ai-triage.outputs.create-issue == 'true'
-      uses: peter-evans/create-issue@v5
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: actions/github-script@v7
       with:
-        title: "GUI Test Failures - AI Analysis"
-        body: ${{ steps.ai-triage.outputs.issue-body }}
-        labels: "bug,gui-test,ai-triage"
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: "GUI Test Failures - AI Analysis",
+            body: ${{ toJSON(steps.ai-triage.outputs.issue-body) }},
+            labels: ["bug", "gui-test", "ai-triage"]
+          })
         
   autofix:
     needs: ai-triage
