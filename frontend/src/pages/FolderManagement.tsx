@@ -290,17 +290,66 @@ export const FolderManagement: React.FC = () => {
     try {
       setActiveOperations(prev => ({
         ...prev,
-        [folderId]: { operation: 'segmenting', progress: 0 }
+        [folderId]: { 
+          operation: 'segmenting', 
+          progress: 0,
+          message: 'Starting segmentation...',
+          status: 'starting'
+        }
       }));
 
       const result = await segmentFolder(folderId);
+      const progressId = result.progress_id;
       
-      toast.success(`Created ${result.segments_created || 0} segments`);
-      await loadFolders();
-      await loadFolderDetails(folderId);
+      if (progressId) {
+        // Poll for progress updates
+        const pollInterval = setInterval(async () => {
+          try {
+            const response = await fetch(`http://localhost:8000/api/v1/progress/${progressId}`);
+            const progress = await response.json();
+            
+            setActiveOperations(prev => ({
+              ...prev,
+              [folderId]: {
+                operation: 'segmenting',
+                progress: progress.percentage || 0,
+                message: progress.message || 'Processing...',
+                status: progress.status || 'processing'
+              }
+            }));
+            
+            if (progress.status === 'completed' || progress.percentage >= 100) {
+              clearInterval(pollInterval);
+              toast.success(`Created ${progress.message || 'segments'}`);
+              await loadFolders();
+              await loadFolderDetails(folderId);
+              
+              setTimeout(() => {
+                setActiveOperations(prev => {
+                  const newOps = { ...prev };
+                  delete newOps[folderId];
+                  return newOps;
+                });
+              }, 2000);
+            }
+          } catch (error) {
+            console.error('Progress poll error:', error);
+          }
+        }, 500);
+        
+        setTimeout(() => clearInterval(pollInterval), 120000);
+      } else {
+        toast.success(`Created ${result.segments_created || 0} segments`);
+        await loadFolders();
+        await loadFolderDetails(folderId);
+        setActiveOperations(prev => {
+          const newOps = { ...prev };
+          delete newOps[folderId];
+          return newOps;
+        });
+      }
     } catch (error: any) {
       toast.error(`Segmentation failed: ${error.message || error}`);
-    } finally {
       setActiveOperations(prev => {
         const newOps = { ...prev };
         delete newOps[folderId];
@@ -313,16 +362,64 @@ export const FolderManagement: React.FC = () => {
     try {
       setActiveOperations(prev => ({
         ...prev,
-        [folderId]: { operation: 'uploading', progress: 0 }
+        [folderId]: { 
+          operation: 'uploading', 
+          progress: 0,
+          message: 'Connecting to news.newshosting.com...',
+          status: 'starting'
+        }
       }));
 
       const result = await uploadFolder(folderId);
+      const progressId = result.progress_id;
       
-      toast.success('Upload started');
-      await loadFolders();
+      if (progressId) {
+        // Poll for progress updates
+        const pollInterval = setInterval(async () => {
+          try {
+            const response = await fetch(`http://localhost:8000/api/v1/progress/${progressId}`);
+            const progress = await response.json();
+            
+            setActiveOperations(prev => ({
+              ...prev,
+              [folderId]: {
+                operation: 'uploading',
+                progress: progress.percentage || 0,
+                message: progress.message || 'Uploading...',
+                status: progress.status || 'processing'
+              }
+            }));
+            
+            if (progress.status === 'completed' || progress.percentage >= 100) {
+              clearInterval(pollInterval);
+              toast.success('Upload to Usenet completed!');
+              await loadFolders();
+              
+              setTimeout(() => {
+                setActiveOperations(prev => {
+                  const newOps = { ...prev };
+                  delete newOps[folderId];
+                  return newOps;
+                });
+              }, 2000);
+            }
+          } catch (error) {
+            console.error('Progress poll error:', error);
+          }
+        }, 500);
+        
+        setTimeout(() => clearInterval(pollInterval), 300000); // 5 minutes for uploads
+      } else {
+        toast.success('Upload started');
+        await loadFolders();
+        setActiveOperations(prev => {
+          const newOps = { ...prev };
+          delete newOps[folderId];
+          return newOps;
+        });
+      }
     } catch (error: any) {
       toast.error(`Upload failed: ${error.message || error}`);
-    } finally {
       setActiveOperations(prev => {
         const newOps = { ...prev };
         delete newOps[folderId];
