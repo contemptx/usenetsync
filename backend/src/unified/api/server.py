@@ -96,6 +96,17 @@ class UnifiedAPIServer:
             """Get transfer events (SSE endpoint placeholder)"""
             return {"events": []}
         
+        @self.app.get("/api/v1/database/status")
+        async def get_database_status():
+            """Get database status"""
+            if self.system and self.system.db:
+                return {
+                    "connected": True,
+                    "type": "sqlite",
+                    "path": getattr(self.system.db, 'db_path', 'unknown')
+                }
+            return {"connected": False}
+        
         # User endpoints
         @self.app.post("/api/v1/users")
         async def create_user(username: str, email: Optional[str] = None):
@@ -113,6 +124,15 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=400, detail=str(e))
         
         # Folder endpoints
+        @self.app.get("/api/v1/folders")
+        async def get_folders():
+            """Get all folders"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            folders = self.system.db.fetch_all("SELECT * FROM folders ORDER BY created_at DESC")
+            return [dict(f) for f in folders] if folders else []
+        
         @self.app.post("/api/v1/folders/index")
         async def index_folder(folder_path: str, owner_id: str):
             """Index folder"""
