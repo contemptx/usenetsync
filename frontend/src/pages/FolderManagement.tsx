@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 // @ts-ignore
 import { invoke } from '../lib/tauri-wrapper';
-// Dialog will be handled through invoke commands
 import { PrivateShareManager } from '../components/PrivateShareManager';
 import { 
   getFolders, 
@@ -36,7 +35,21 @@ import {
   Lock,
   Unlock,
   Users,
-  Settings
+  Settings,
+  ChevronRight,
+  ChevronDown,
+  File,
+  Database,
+  Activity,
+  Download,
+  Trash2,
+  Eye,
+  Copy,
+  Shield,
+  Globe,
+  Key,
+  Hash,
+  Server
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -51,6 +64,27 @@ interface ManagedFolder {
   share_id?: string;
   published: boolean;
   created_at: string;
+  access_type?: 'public' | 'private' | 'protected';
+  file_count?: number;
+}
+
+interface FileInfo {
+  file_id: string;
+  name: string;
+  path: string;
+  size: number;
+  hash?: string;
+  segments?: SegmentInfo[];
+  indexed_at?: string;
+}
+
+interface SegmentInfo {
+  segment_id: string;
+  sequence: number;
+  size: number;
+  hash: string;
+  uploaded: boolean;
+  message_ids?: string[];
 }
 
 interface FolderOperation {
@@ -61,136 +95,116 @@ interface FolderOperation {
   eta_seconds?: number;
 }
 
+interface ShareInfo {
+  share_id: string;
+  share_type: 'public' | 'private' | 'protected';
+  access_string?: string;
+  created_at: string;
+  expires_at?: string;
+  download_count?: number;
+}
+
 export const FolderManagement: React.FC = () => {
   const [folders, setFolders] = useState<ManagedFolder[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<ManagedFolder | null>(null);
   const [activeOperations, setActiveOperations] = useState<Record<string, FolderOperation>>({});
-  const [activeTab, setActiveTab] = useState<'overview' | 'access' | 'files' | 'actions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'files' | 'segments' | 'shares' | 'actions'>('overview');
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [databaseType, setDatabaseType] = useState<'sqlite' | 'postgresql' | null>(null);
   
-  // Access control state
-  const [selectedAccessType, setSelectedAccessType] = useState<'public' | 'private' | 'protected'>('public');
+  // File tree state
+  const [files, setFiles] = useState<FileInfo[]>([]);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null);
+  
+  // Share management state
+  const [shares, setShares] = useState<ShareInfo[]>([]);
+  const [shareType, setShareType] = useState<'public' | 'private' | 'protected'>('public');
   const [authorizedUsers, setAuthorizedUsers] = useState<string[]>([]);
-  const [protectedPassword, setProtectedPassword] = useState('');
-
+  const [sharePassword, setSharePassword] = useState('');
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  
   // Load folders on mount
   useEffect(() => {
     loadFolders();
-    // Set up interval to refresh folders (only if no error)
+    checkDatabase();
     const interval = setInterval(() => {
-      // Only refresh if not loading and no error
       if (!dbError && !loading) {
         loadFolders();
       }
-    }, 30000); // Increased to 30 seconds to reduce database load
+    }, 30000);
     return () => clearInterval(interval);
-  }, []); // Remove dbError dependency to avoid re-creating interval
+  }, []);
 
-  // Load authorized users when folder is selected
+  // Load folder details when selected
   useEffect(() => {
-    if (selectedFolder && selectedFolder.access_type === 'private') {
-      loadAuthorizedUsers(selectedFolder.folder_id);
-      setSelectedAccessType('private');
-    } else if (selectedFolder) {
-      setSelectedAccessType(selectedFolder.access_type || 'public');
-      setAuthorizedUsers([]);
+    if (selectedFolder) {
+      loadFolderDetails(selectedFolder.folder_id);
     }
   }, [selectedFolder]);
 
-  const loadFolders = async () => {
+  const checkDatabase = async () => {
     try {
-      // First check database status
-      try {
-        const dbStatus = await checkDatabaseStatus();
-        if (dbStatus?.type) {
-          setDatabaseType(dbStatus.type);
-        }
-      } catch (dbError) {
-        console.log('Could not check database status:', dbError);
-      }
-      
+      const status = await checkDatabaseStatus();
+      setDatabaseType(status.type || 'sqlite');
+    } catch (error) {
+      console.error('Failed to check database:', error);
+    }
+  };
+
+  const loadFolders = async () => {
+    if (loading) return;
+    
+    try {
+      setLoading(true);
       const result = await getFolders();
-      // Ensure result is an array
+      
       if (Array.isArray(result)) {
         setFolders(result as ManagedFolder[]);
       } else {
         console.warn('getFolders returned non-array:', result);
         setFolders([]);
       }
-      setDbError(null); // Clear any previous errors
+      setDbError(null);
     } catch (error: any) {
       console.error('Failed to load folders:', error);
-      
-      // Don't show error popup, just log it
-      // The UI will show an appropriate message based on the database type
-      
-      // Set empty folders array to prevent undefined errors
-      setFolders([]);
-      
-      // Still set database type if possible
-      try {
-        const dbStatus = await checkDatabaseStatus();
-        if (dbStatus?.type) {
-          setDatabaseType(dbStatus.type);
-        }
-      } catch (dbError) {
-        console.log('Could not check database status:', dbError);
+      if (error?.message?.includes('database') || error?.message?.includes('table')) {
+        setDbError(error.message);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
-  const loadAuthorizedUsers = async (folderId: string) => {
+  const loadFolderDetails = async (folderId: string) => {
     try {
-      const result = await getAuthorizedUsers(folderId);
-      const userIds = result.users.map((u: any) => u.user_id || u);
-      setAuthorizedUsers(userIds);
+      // Load files for this folder
+      const folderInfo = await getFolderInfo(folderId);
+      if (folderInfo?.files) {
+        setFiles(folderInfo.files);
+      }
+      
+      // Load shares for this folder
+      // TODO: Implement getShares API call
+      // const folderShares = await getShares(folderId);
+      // setShares(folderShares);
     } catch (error) {
-      console.error('Failed to load authorized users:', error);
-      setAuthorizedUsers([]);
+      console.error('Failed to load folder details:', error);
     }
   };
 
   const handleAddFolder = async () => {
     try {
-      // Use invoke to open folder dialog
-      const selected = await invoke('select_folder_dialog', {
-        title: 'Select Folder to Manage'
-      });
-
-      if (selected) {
-        setLoading(true);
-        const result = await addFolder(
-          selected as string,
-          (selected as string).split('/').pop() || 'Unnamed Folder'
-        );
-        
-        toast.success('Folder added successfully');
+      const folderPath = await invoke('select_folder_dialog', { title: 'Select Folder to Manage' });
+      
+      if (folderPath) {
+        const result = await addFolder(folderPath);
+        toast.success(`Folder added: ${folderPath}`);
         await loadFolders();
       }
-    } catch (error) {
-      // If the command doesn't exist, provide a mock response for dev
-      if ((error as string).includes('select_folder_dialog')) {
-        console.log('Using mock folder selection for development');
-        const mockPath = '/home/user/test-folder';
-        setLoading(true);
-        try {
-          const result = await addFolder(
-            mockPath,
-            'test-folder'
-          );
-          toast.success('Folder added successfully (mock)');
-          await loadFolders();
-        } catch (addError) {
-          toast.error(`Failed to add folder: ${addError}`);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        toast.error(`Failed to add folder: ${error}`);
-        setLoading(false);
-      }
+    } catch (error: any) {
+      toast.error(`Failed to add folder: ${error.message || error}`);
     }
   };
 
@@ -203,15 +217,16 @@ export const FolderManagement: React.FC = () => {
 
       const result = await indexFolderFull(folderId);
       
-      toast.success('Indexing completed');
+      toast.success(`Indexed ${result.files_indexed || 0} files`);
       await loadFolders();
-    } catch (error) {
-      toast.error(`Indexing failed: ${error}`);
+      await loadFolderDetails(folderId);
+    } catch (error: any) {
+      toast.error(`Indexing failed: ${error.message || error}`);
     } finally {
       setActiveOperations(prev => {
-        const ops = { ...prev };
-        delete ops[folderId];
-        return ops;
+        const newOps = { ...prev };
+        delete newOps[folderId];
+        return newOps;
       });
     }
   };
@@ -225,15 +240,16 @@ export const FolderManagement: React.FC = () => {
 
       const result = await segmentFolder(folderId);
       
-      toast.success('Segmentation completed');
+      toast.success(`Created ${result.segments_created || 0} segments`);
       await loadFolders();
-    } catch (error) {
-      toast.error(`Segmentation failed: ${error}`);
+      await loadFolderDetails(folderId);
+    } catch (error: any) {
+      toast.error(`Segmentation failed: ${error.message || error}`);
     } finally {
       setActiveOperations(prev => {
-        const ops = { ...prev };
-        delete ops[folderId];
-        return ops;
+        const newOps = { ...prev };
+        delete newOps[folderId];
+        return newOps;
       });
     }
   };
@@ -247,132 +263,62 @@ export const FolderManagement: React.FC = () => {
 
       const result = await uploadFolder(folderId);
       
-      toast.success('Upload completed');
+      toast.success('Upload started');
       await loadFolders();
-    } catch (error) {
-      toast.error(`Upload failed: ${error}`);
+    } catch (error: any) {
+      toast.error(`Upload failed: ${error.message || error}`);
     } finally {
       setActiveOperations(prev => {
-        const ops = { ...prev };
-        delete ops[folderId];
-        return ops;
+        const newOps = { ...prev };
+        delete newOps[folderId];
+        return newOps;
       });
     }
   };
 
-  const publishFolder = async (
-    folderId: string, 
-    accessType: string = 'public',
-    userIds?: string[],
-    password?: string
-  ) => {
-    try {
-      setActiveOperations(prev => ({
-        ...prev,
-        [folderId]: { operation: 'publishing', progress: 0 }
-      }));
+  const handleCreateShare = async () => {
+    if (!selectedFolder) return;
 
-      const params: any = { folderId, accessType };
-      
-      // Add user IDs for private shares
-      if (accessType === 'private' && userIds && userIds.length > 0) {
-        params.userIds = userIds;
-      }
-      
-      // Add password for protected shares
-      if (accessType === 'protected' && password) {
-        params.password = password;
-      }
+    try {
+      const shareData = {
+        folderId: selectedFolder.folder_id,
+        shareType: shareType,
+        password: shareType === 'protected' ? sharePassword : undefined,
+        allowedUsers: shareType === 'private' ? authorizedUsers : undefined
+      };
 
       const result = await publishFolderApi(
-        folderId,
-        accessType,
-        userIds,
-        password
+        selectedFolder.folder_id,
+        shareType,
+        shareType === 'private' ? authorizedUsers : undefined,
+        shareType === 'protected' ? sharePassword : undefined
       );
-      
-      toast.success('Publishing completed');
+
+      toast.success(`Share created: ${result.share_id}`);
+      setShowShareDialog(false);
       await loadFolders();
-    } catch (error) {
-      toast.error(`Publishing failed: ${error}`);
-    } finally {
-      setActiveOperations(prev => {
-        const ops = { ...prev };
-        delete ops[folderId];
-        return ops;
-      });
+      // TODO: Reload shares
+    } catch (error: any) {
+      toast.error(`Failed to create share: ${error.message || error}`);
     }
   };
 
-  const getStateIcon = (state: string) => {
-    switch (state) {
-      case 'added': return <Folder className="w-4 h-4 text-gray-500" />;
-      case 'indexing': return <Clock className="w-4 h-4 text-blue-500 animate-spin" />;
-      case 'indexed': return <FileText className="w-4 h-4 text-green-500" />;
-      case 'segmenting': return <Package className="w-4 h-4 text-blue-500 animate-spin" />;
-      case 'segmented': return <Layers className="w-4 h-4 text-green-500" />;
-      case 'uploading': return <Upload className="w-4 h-4 text-blue-500 animate-pulse" />;
-      case 'uploaded': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'publishing': return <Share2 className="w-4 h-4 text-blue-500 animate-pulse" />;
-      case 'published': return <Share2 className="w-4 h-4 text-green-500" />;
-      case 'error': return <AlertCircle className="w-4 h-4 text-red-500" />;
-      default: return <Folder className="w-4 h-4 text-gray-500" />;
+  const handleDeleteFolder = async (folderId: string) => {
+    if (!confirm('Are you sure you want to delete this folder? This will remove all indexed data.')) {
+      return;
+    }
+
+    try {
+      await deleteFolder(folderId);
+      toast.success('Folder deleted');
+      setSelectedFolder(null);
+      await loadFolders();
+    } catch (error: any) {
+      toast.error(`Failed to delete folder: ${error.message || error}`);
     }
   };
 
-  const getNextAction = (folder: ManagedFolder) => {
-    // Handle both old states and new 'active' state from consolidated database
-    if (folder.state === 'active' || folder.state === 'added') {
-      // Check if folder has been indexed by looking at file count
-      if (folder.total_files && folder.total_files > 0) {
-        // Has files, check if segmented
-        if (folder.total_segments && folder.total_segments > 0) {
-          // Has segments, check if published
-          if (folder.published) {
-            return { label: 'Re-sync', action: async () => {
-              try {
-                const result = await resyncFolder(folder.folder_id);
-                toast.success(`Resync complete: ${result.message || 'No changes detected'}`);
-                await loadFolders();
-              } catch (error) {
-                toast.error(`Resync failed: ${error}`);
-              }
-            }, icon: <RefreshCw className="w-4 h-4" /> };
-          } else {
-            return { label: 'Upload', action: () => handleUploadFolder(folder.folder_id), icon: <Upload className="w-4 h-4" /> };
-          }
-        } else {
-          return { label: 'Segment', action: () => handleSegmentFolder(folder.folder_id), icon: <Package className="w-4 h-4" /> };
-        }
-      } else {
-        return { label: 'Index', action: () => handleIndexFolder(folder.folder_id), icon: <FileText className="w-4 h-4" /> };
-      }
-    }
-    
-    // Keep old state handling for compatibility
-    switch (folder.state) {
-      case 'indexed':
-        return { label: 'Segment', action: () => handleSegmentFolder(folder.folder_id), icon: <Package className="w-4 h-4" /> };
-      case 'segmented':
-        return { label: 'Upload', action: () => handleUploadFolder(folder.folder_id), icon: <Upload className="w-4 h-4" /> };
-      case 'uploaded':
-        return { label: 'Publish', action: () => publishFolder(folder.folder_id, selectedAccessType, authorizedUsers, protectedPassword), icon: <Share2 className="w-4 h-4" /> };
-      case 'published':
-        return { label: 'Re-sync', action: async () => {
-          try {
-            const result = await resyncFolder(folder.folder_id);
-            toast.success(`Resync complete: ${result.message || 'No changes detected'}`);
-            await loadFolders();
-          } catch (error) {
-            toast.error(`Resync failed: ${error}`);
-          }
-        }, icon: <RefreshCw className="w-4 h-4" /> };
-      default:
-        return null;
-    }
-  };
-
-  const formatBytes = (bytes: number) => {
+  const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -380,23 +326,43 @@ export const FolderManagement: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const getStateIcon = (state: string) => {
+    switch (state) {
+      case 'added': return <Folder className="w-4 h-4 text-gray-500" />;
+      case 'indexing': return <Activity className="w-4 h-4 text-blue-500 animate-pulse" />;
+      case 'indexed': return <FileText className="w-4 h-4 text-green-500" />;
+      case 'segmenting': return <Package className="w-4 h-4 text-yellow-500 animate-pulse" />;
+      case 'segmented': return <Layers className="w-4 h-4 text-purple-500" />;
+      case 'uploading': return <Upload className="w-4 h-4 text-cyan-500 animate-pulse" />;
+      case 'uploaded': return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'publishing': return <Share2 className="w-4 h-4 text-indigo-500 animate-pulse" />;
+      case 'published': return <Globe className="w-4 h-4 text-green-700" />;
+      case 'error': return <AlertCircle className="w-4 h-4 text-red-500" />;
+      default: return <Clock className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const toggleFileExpanded = (fileId: string) => {
+    setExpandedFiles(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(fileId)) {
+        newSet.delete(fileId);
+      } else {
+        newSet.add(fileId);
+      }
+      return newSet;
+    });
+  };
+
   return (
-    <div className="flex h-full">
+    <div className="h-full flex">
       {/* Database Error Alert */}
       {dbError && (
-        <div className="absolute top-4 right-4 left-4 z-50 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+        <div className="absolute top-4 right-4 max-w-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3 z-50">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-red-800 dark:text-red-200 font-medium">{dbError}</p>
-            <button
-              onClick={() => {
-                setDbError(null);
-                loadFolders();
-              }}
-              className="mt-2 text-sm text-red-700 dark:text-red-300 hover:underline"
-            >
-              Retry
-            </button>
+            <h4 className="font-medium text-red-800 dark:text-red-200">Database Error</h4>
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">{dbError}</p>
           </div>
           <button
             onClick={() => setDbError(null)}
@@ -407,41 +373,40 @@ export const FolderManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Folder List */}
-      <div className="w-1/3 border-r border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface">
+      {/* Left Sidebar - Folder List */}
+      <div className="w-80 border-r border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-dark-border">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Managed Folders</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Folders</h2>
               {databaseType && (
                 <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
-                  {databaseType === 'postgresql' ? 'PostgreSQL' : 'SQLite'}
+                  {databaseType === 'postgresql' ? <><Database className="w-3 h-3 inline mr-1" />PostgreSQL</> : 'SQLite'}
                 </span>
               )}
             </div>
             <button
               onClick={handleAddFolder}
               disabled={loading}
-              className="px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
+              title="Add Folder"
             >
-              <FolderOpen className="w-4 h-4" />
-              Add Folder
+              <FolderOpen className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div className="overflow-y-auto" style={{ height: 'calc(100% - 88px)' }}>
+        <div className="flex-1 overflow-y-auto">
           {folders.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <Folder className="w-12 h-12 mx-auto mb-4 text-gray-400" />
               <p>No folders added yet</p>
-              <p className="text-sm mt-2">Click "Add Folder" to get started</p>
+              <p className="text-sm mt-2">Click the + button to add a folder</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-dark-border">
               {folders.map(folder => {
                 const operation = activeOperations[folder.folder_id];
-                const nextAction = getNextAction(folder);
                 
                 return (
                   <div
@@ -451,21 +416,18 @@ export const FolderManagement: React.FC = () => {
                       selectedFolder?.folder_id === folder.folder_id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                     }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-1">{getStateIcon(folder.state)}</div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          {getStateIcon(folder.state)}
-                          <h3 className="font-medium text-gray-900 dark:text-white truncate">
-                            {folder.name}
-                          </h3>
-                        </div>
+                        <h3 className="font-medium text-gray-900 dark:text-white truncate">
+                          {folder.name}
+                        </h3>
+                        <p className="text-xs text-gray-500 truncate mt-1">{folder.path}</p>
                         
-                        <p className="text-xs text-gray-500 truncate mb-2">{folder.path}</p>
-                        
-                        <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-3 mt-2 text-xs text-gray-600 dark:text-gray-400">
                           <span className="flex items-center gap-1">
                             <Files className="w-3 h-3" />
-                            {folder.total_files || 0} files
+                            {folder.file_count || folder.total_files || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <HardDrive className="w-3 h-3" />
@@ -474,7 +436,7 @@ export const FolderManagement: React.FC = () => {
                           {folder.total_segments > 0 && (
                             <span className="flex items-center gap-1">
                               <Layers className="w-3 h-3" />
-                              {folder.total_segments} segments
+                              {folder.total_segments}
                             </span>
                           )}
                         </div>
@@ -485,34 +447,22 @@ export const FolderManagement: React.FC = () => {
                               <span className="text-blue-600 capitalize">{operation.operation}...</span>
                               <span>{operation.progress}%</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                            <div className="w-full bg-gray-200 rounded-full h-1">
                               <div 
-                                className="bg-blue-600 h-1.5 rounded-full transition-all"
+                                className="bg-blue-600 h-1 rounded-full transition-all"
                                 style={{ width: `${operation.progress}%` }}
                               />
                             </div>
                           </div>
                         )}
 
-                        {folder.published && folder.share_id && (
-                          <div className="mt-2 px-2 py-1 bg-green-100 dark:bg-green-900/20 rounded text-xs text-green-700 dark:text-green-400">
-                            Share ID: {folder.share_id}
+                        {folder.published && (
+                          <div className="mt-2 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                            <Share2 className="w-3 h-3" />
+                            Published
                           </div>
                         )}
                       </div>
-
-                      {nextAction && !operation && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            nextAction.action();
-                          }}
-                          className="ml-2 px-2 py-1 bg-primary text-white rounded text-xs hover:bg-primary-dark transition-colors flex items-center gap-1"
-                        >
-                          {nextAction.icon}
-                          {nextAction.label}
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
@@ -522,401 +472,554 @@ export const FolderManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Folder Details */}
-      <div className="flex-1 bg-gray-50 dark:bg-dark-bg">
+      {/* Main Content Area */}
+      <div className="flex-1 bg-gray-50 dark:bg-dark-bg flex flex-col">
         {selectedFolder ? (
-          <div className="h-full flex flex-col">
+          <>
             {/* Header */}
-            <div className="bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-dark-border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    {selectedFolder.name}
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1">{selectedFolder.path}</p>
+            <div className="bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-dark-border">
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {getStateIcon(selectedFolder.state)}
+                    <div>
+                      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                        {selectedFolder.name}
+                      </h2>
+                      <p className="text-sm text-gray-500">{selectedFolder.path}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Quick Actions */}
+                  <div className="flex items-center gap-2">
+                    {selectedFolder.state === 'added' && (
+                      <button
+                        onClick={() => handleIndexFolder(selectedFolder.folder_id)}
+                        className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 text-sm"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Index
+                      </button>
+                    )}
+                    {selectedFolder.state === 'indexed' && (
+                      <button
+                        onClick={() => handleSegmentFolder(selectedFolder.folder_id)}
+                        className="px-3 py-1.5 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-2 text-sm"
+                      >
+                        <Package className="w-4 h-4" />
+                        Segment
+                      </button>
+                    )}
+                    {selectedFolder.state === 'segmented' && (
+                      <button
+                        onClick={() => handleUploadFolder(selectedFolder.folder_id)}
+                        className="px-3 py-1.5 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors flex items-center gap-2 text-sm"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload
+                      </button>
+                    )}
+                    {selectedFolder.state === 'uploaded' && !selectedFolder.published && (
+                      <button
+                        onClick={() => setShowShareDialog(true)}
+                        className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Share
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        try {
+                          const result = await resyncFolder(selectedFolder.folder_id);
+                          toast.success('Folder resynced');
+                          await loadFolders();
+                        } catch (error: any) {
+                          toast.error(`Resync failed: ${error.message || error}`);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Resync
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFolder(selectedFolder.folder_id)}
+                      className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 text-sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {getStateIcon(selectedFolder.state)}
-                  <span className="text-sm font-medium capitalize">{selectedFolder.state}</span>
-                </div>
-              </div>
 
-              {/* Tabs */}
-              <div className="flex gap-4 mt-4 border-b border-gray-200 dark:border-dark-border -mb-4">
-                {(['overview', 'access', 'files', 'actions'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`pb-2 px-1 text-sm font-medium capitalize transition-colors ${
-                      activeTab === tab
-                        ? 'text-primary border-b-2 border-primary'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {tab === 'access' ? 'Access Control' : tab === 'files' ? 'Files & Segments' : tab}
-                  </button>
-                ))}
+                {/* Tabs */}
+                <div className="flex gap-6 mt-4 border-b border-gray-200 dark:border-dark-border -mb-4">
+                  {(['overview', 'files', 'segments', 'shares', 'actions'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`pb-3 px-1 text-sm font-medium capitalize transition-colors ${
+                        activeTab === tab
+                          ? 'text-primary border-b-2 border-primary'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* Tab Content */}
             <div className="flex-1 overflow-y-auto p-6">
+              {/* Overview Tab */}
               {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white dark:bg-dark-surface rounded-lg p-4">
-                      <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Statistics</h3>
-                      <dl className="space-y-2">
-                        <div className="flex justify-between">
-                          <dt className="text-sm text-gray-500">Total Files:</dt>
-                          <dd className="text-sm font-medium">{selectedFolder.total_files || 0}</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-sm text-gray-500">Total Size:</dt>
-                          <dd className="text-sm font-medium">{formatBytes(selectedFolder.total_size || 0)}</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-sm text-gray-500">Segments:</dt>
-                          <dd className="text-sm font-medium">{selectedFolder.total_segments || 0}</dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <div className="bg-white dark:bg-dark-surface rounded-lg p-4">
-                      <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Status</h3>
-                      <dl className="space-y-2">
-                        <div className="flex justify-between">
-                          <dt className="text-sm text-gray-500">State:</dt>
-                          <dd className="text-sm font-medium capitalize">{selectedFolder.state}</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-sm text-gray-500">Published:</dt>
-                          <dd className="text-sm font-medium">{selectedFolder.published ? 'Yes' : 'No'}</dd>
-                        </div>
-                        {selectedFolder.share_id && (
-                          <div className="flex justify-between">
-                            <dt className="text-sm text-gray-500">Share ID:</dt>
-                            <dd className="text-sm font-medium font-mono">{selectedFolder.share_id.slice(0, 8)}...</dd>
-                          </div>
-                        )}
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* Workflow Progress */}
+                <div className="grid grid-cols-3 gap-6">
                   <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
-                    <h3 className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-6">Workflow Progress</h3>
-                    <div className="flex items-center justify-between">
-                      {['Added', 'Indexed', 'Segmented', 'Uploaded', 'Published'].map((step, index) => {
-                        const states = ['added', 'indexed', 'segmented', 'uploaded', 'published', 'active'];
-                        const currentState = selectedFolder.state.toLowerCase();
-                        
-                        // For 'active' state, determine progress based on data
-                        let currentIndex = states.indexOf(currentState);
-                        if (currentState === 'active') {
-                          if (selectedFolder.published) {
-                            currentIndex = 4; // published
-                          } else if (selectedFolder.total_segments > 0) {
-                            currentIndex = 2; // segmented
-                          } else if (selectedFolder.total_files > 0) {
-                            currentIndex = 1; // indexed
-                          } else {
-                            currentIndex = 0; // added
-                          }
-                        }
-                        
-                        const isComplete = currentIndex >= index;
-                        const isCurrent = currentIndex === index;
-                        
-                        return (
-                          <React.Fragment key={step}>
-                            <div className="flex flex-col items-center">
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                                isComplete 
-                                  ? 'bg-green-600 text-white shadow-md' 
-                                  : isCurrent 
-                                    ? 'bg-blue-600 text-white animate-pulse shadow-md' 
-                                    : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
-                              }`}>
-                                {isComplete ? '✓' : index + 1}
-                              </div>
-                              <span className="text-sm font-medium mt-2 text-gray-700 dark:text-gray-300">{step}</span>
-                            </div>
-                            {index < 4 && (
-                              <div className={`flex-1 h-1 mx-2 rounded-full transition-all ${
-                                currentIndex > index ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'
-                              }`} />
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
+                    <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                      <Database className="w-5 h-5 text-gray-500" />
+                      Folder Statistics
+                    </h3>
+                    <dl className="space-y-3">
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Total Files:</dt>
+                        <dd className="font-medium">{selectedFolder.file_count || selectedFolder.total_files || 0}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Total Size:</dt>
+                        <dd className="font-medium">{formatBytes(selectedFolder.total_size || 0)}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Segments:</dt>
+                        <dd className="font-medium">{selectedFolder.total_segments || 0}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Created:</dt>
+                        <dd className="font-medium text-sm">
+                          {new Date(selectedFolder.created_at).toLocaleDateString()}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                    <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-gray-500" />
+                      Processing Status
+                    </h3>
+                    <dl className="space-y-3">
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Current State:</dt>
+                        <dd className="font-medium capitalize flex items-center gap-2">
+                          {getStateIcon(selectedFolder.state)}
+                          {selectedFolder.state}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Indexed:</dt>
+                        <dd className="font-medium">
+                          {['indexed', 'segmented', 'uploaded', 'published'].includes(selectedFolder.state) ? 'Yes' : 'No'}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Segmented:</dt>
+                        <dd className="font-medium">
+                          {['segmented', 'uploaded', 'published'].includes(selectedFolder.state) ? 'Yes' : 'No'}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Uploaded:</dt>
+                        <dd className="font-medium">
+                          {['uploaded', 'published'].includes(selectedFolder.state) ? 'Yes' : 'No'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                    <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                      <Share2 className="w-5 h-5 text-gray-500" />
+                      Sharing Status
+                    </h3>
+                    <dl className="space-y-3">
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Published:</dt>
+                        <dd className="font-medium">{selectedFolder.published ? 'Yes' : 'No'}</dd>
+                      </div>
+                      {selectedFolder.share_id && (
+                        <>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-500">Share ID:</dt>
+                            <dd className="font-mono text-xs">{selectedFolder.share_id.slice(0, 12)}...</dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-500">Access Type:</dt>
+                            <dd className="font-medium capitalize">
+                              {selectedFolder.access_type || 'Public'}
+                            </dd>
+                          </div>
+                        </>
+                      )}
+                      {!selectedFolder.published && (
+                        <button
+                          onClick={() => setShowShareDialog(true)}
+                          disabled={selectedFolder.state !== 'uploaded'}
+                          className="w-full mt-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          Create Share
+                        </button>
+                      )}
+                    </dl>
                   </div>
                 </div>
               )}
 
-              {activeTab === 'access' && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Access Control Settings</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Access Type
-                      </label>
-                      <div className="flex gap-4">
-                        <label className="flex items-center cursor-pointer text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                          <input 
-                            type="radio" 
-                            name="access" 
-                            value="public" 
-                            checked={selectedAccessType === 'public'}
-                            onChange={() => setSelectedAccessType('public')}
-                            className="mr-2 text-blue-600 focus:ring-blue-500" 
-                          />
-                          <Unlock className="w-4 h-4 mr-1" />
-                          <span className="font-medium">Public</span>
-                        </label>
-                        <label className="flex items-center cursor-pointer text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                          <input 
-                            type="radio" 
-                            name="access" 
-                            value="private" 
-                            checked={selectedAccessType === 'private'}
-                            onChange={() => setSelectedAccessType('private')}
-                            className="mr-2 text-blue-600 focus:ring-blue-500" 
-                          />
-                          <Lock className="w-4 h-4 mr-1" />
-                          <span className="font-medium">Private</span>
-                        </label>
-                        <label className="flex items-center cursor-pointer text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                          <input 
-                            type="radio" 
-                            name="access" 
-                            value="protected" 
-                            checked={selectedAccessType === 'protected'}
-                            onChange={() => setSelectedAccessType('protected')}
-                            className="mr-2 text-blue-600 focus:ring-blue-500" 
-                          />
-                          <Users className="w-4 h-4 mr-1" />
-                          <span className="font-medium">Protected</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Show PrivateShareManager for private access */}
-                    {selectedAccessType === 'private' && (
-                      <PrivateShareManager
-                        authorizedUsers={authorizedUsers}
-                        onUsersChange={setAuthorizedUsers}
-                        disabled={!selectedFolder || selectedFolder.state !== 'uploaded'}
-                      />
-                    )}
-
-                    {/* Show password field for protected access */}
-                    {selectedAccessType === 'protected' && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Password
-                        </label>
-                        <input
-                          type="password"
-                          value={protectedPassword}
-                          onChange={(e) => setProtectedPassword(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter password for protected access"
-                        />
-                      </div>
-                    )}
-
-                    <div className="flex gap-3">
-                      <button 
-                        onClick={async () => {
-                          if (selectedFolder) {
-                            try {
-                              await setFolderAccess(
-                                selectedFolder.folder_id,
-                                selectedAccessType,
-                                selectedAccessType === 'protected' ? protectedPassword : undefined
-                              );
-                              toast.success(`Access control set to ${selectedAccessType}`);
-                              await loadFolders();
-                            } catch (error) {
-                              toast.error(`Failed to set access control: ${error}`);
-                            }
-                          }
-                        }}
-                        disabled={!selectedFolder}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Update Access Control
-                      </button>
-
-                      <button 
-                        onClick={() => {
-                          if (selectedFolder) {
-                            publishFolder(
-                              selectedFolder.folder_id, 
-                              selectedAccessType,
-                              selectedAccessType === 'private' ? authorizedUsers : undefined,
-                              selectedAccessType === 'protected' ? protectedPassword : undefined
-                            );
-                          }
-                        }}
-                        disabled={!selectedFolder || selectedFolder.state !== 'uploaded'}
-                        className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {selectedFolder?.published ? 'Re-publish with New Settings' : 'Publish Folder'}
-                      </button>
-                    </div>
-                    
-                    {selectedFolder?.published && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                        Share ID: <span className="font-mono">{selectedFolder.share_id}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
+              {/* Files Tab */}
               {activeTab === 'files' && (
                 <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
-                  <h3 className="text-lg font-medium mb-4">Files & Segments</h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    File listing and segment details will appear here once the folder is indexed.
-                  </p>
-                  {selectedFolder.state === 'added' && (
-                    <button
-                      onClick={() => handleIndexFolder(selectedFolder.folder_id)}
-                      className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
-                    >
-                      Index Folder to View Files
-                    </button>
+                  <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                    <Files className="w-5 h-5 text-gray-500" />
+                    Files in Folder
+                  </h3>
+                  
+                  {files.length === 0 ? (
+                    <div className="text-center py-8">
+                      <FileText className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                      <p className="text-gray-500">
+                        {selectedFolder.state === 'added' 
+                          ? 'Folder not indexed yet. Click "Index" to scan files.'
+                          : 'No files found in this folder.'}
+                      </p>
+                      {selectedFolder.state === 'added' && (
+                        <button
+                          onClick={() => handleIndexFolder(selectedFolder.folder_id)}
+                          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                          Index Folder
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {files.map(file => (
+                        <div key={file.file_id} className="border border-gray-200 dark:border-gray-700 rounded-lg">
+                          <div
+                            onClick={() => toggleFileExpanded(file.file_id)}
+                            className="p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                {expandedFiles.has(file.file_id) ? (
+                                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                                )}
+                                <File className="w-4 h-4 text-blue-500" />
+                                <span className="font-medium">{file.name}</span>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm text-gray-500">
+                                <span>{formatBytes(file.size)}</span>
+                                {file.segments && (
+                                  <span className="flex items-center gap-1">
+                                    <Layers className="w-3 h-3" />
+                                    {file.segments.length} segments
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {expandedFiles.has(file.file_id) && (
+                            <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900">
+                              <dl className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <dt className="text-gray-500">Path:</dt>
+                                  <dd className="font-mono text-xs">{file.path}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-gray-500">Size:</dt>
+                                  <dd>{formatBytes(file.size)}</dd>
+                                </div>
+                                {file.hash && (
+                                  <div>
+                                    <dt className="text-gray-500">Hash:</dt>
+                                    <dd className="font-mono text-xs">{file.hash.slice(0, 16)}...</dd>
+                                  </div>
+                                )}
+                                {file.indexed_at && (
+                                  <div>
+                                    <dt className="text-gray-500">Indexed:</dt>
+                                    <dd>{new Date(file.indexed_at).toLocaleString()}</dd>
+                                  </div>
+                                )}
+                              </dl>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
 
-              {activeTab === 'actions' && (
+              {/* Segments Tab */}
+              {activeTab === 'segments' && (
                 <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
-                  <h3 className="text-lg font-medium mb-4">Folder Actions</h3>
-                  <div className="space-y-3">
-                    {/* Processing Actions */}
-                    <div className="border-b border-gray-200 dark:border-dark-border pb-3 mb-3">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Processing</h4>
-                      <div className="space-y-2">
+                  <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-gray-500" />
+                    Segments
+                  </h3>
+                  
+                  {selectedFolder.total_segments === 0 ? (
+                    <div className="text-center py-8">
+                      <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                      <p className="text-gray-500">
+                        {selectedFolder.state === 'indexed' 
+                          ? 'Folder not segmented yet. Click "Segment" to create segments.'
+                          : selectedFolder.state === 'added'
+                          ? 'Index the folder first before creating segments.'
+                          : 'No segments created for this folder.'}
+                      </p>
+                      {selectedFolder.state === 'indexed' && (
                         <button
-                          onClick={() => handleIndexFolder(selectedFolder.folder_id)}
-                          className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                          onClick={() => handleSegmentFolder(selectedFolder.folder_id)}
+                          className="mt-4 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
                         >
-                          <FileText className="w-4 h-4" />
-                          {selectedFolder.state === 'added' ? 'Index Folder' : 'Re-index Folder'}
+                          Create Segments
                         </button>
-
-                        {selectedFolder.state !== 'added' && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const result = await resyncFolder(selectedFolder.folder_id);
-                                toast.success(`Resync complete: ${result.message || 'No changes detected'}`);
-                                await loadFolders();
-                              } catch (error) {
-                                toast.error(`Resync failed: ${error}`);
-                              }
-                            }}
-                            className="w-full px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                            Resync for Changes
-                          </button>
-                        )}
-
-                        {selectedFolder.state === 'indexed' && (
-                          <button
-                            onClick={() => handleSegmentFolder(selectedFolder.folder_id)}
-                            className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Package className="w-4 h-4" />
-                            Create Segments
-                          </button>
-                        )}
-
-                        {selectedFolder.state === 'segmented' && (
-                          <button
-                            onClick={() => handleUploadFolder(selectedFolder.folder_id)}
-                            className="w-full px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Upload className="w-4 h-4" />
-                            Upload to Usenet
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
-
-                    {/* Publishing Actions */}
-                    <div className="border-b border-gray-200 dark:border-dark-border pb-3 mb-3">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Publishing</h4>
-                      <div className="space-y-2">
-                        {selectedFolder.state === 'uploaded' && !selectedFolder.published && (
-                          <button
-                            onClick={() => publishFolder(selectedFolder.folder_id, 'public')}
-                            className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Share2 className="w-4 h-4" />
-                            Publish Share
-                          </button>
-                        )}
-
-                        {selectedFolder.published && (
-                          <button
-                            onClick={() => publishFolder(selectedFolder.folder_id)}
-                            className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Share2 className="w-4 h-4" />
-                            Re-publish Share
-                          </button>
-                        )}
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4 mb-6">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                            {selectedFolder.total_segments}
+                          </div>
+                          <div className="text-sm text-gray-500">Total Segments</div>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                            {formatBytes((selectedFolder.total_size || 0) / (selectedFolder.total_segments || 1))}
+                          </div>
+                          <div className="text-sm text-gray-500">Avg Segment Size</div>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                            {selectedFolder.state === 'uploaded' || selectedFolder.state === 'published' ? '100%' : '0%'}
+                          </div>
+                          <div className="text-sm text-gray-500">Uploaded</div>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Information Actions */}
-                    <div className="border-b border-gray-200 dark:border-dark-border pb-3 mb-3">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Information</h4>
-                      <div className="space-y-2">
-                        <button
-                          onClick={async () => {
-                            try {
-                              const info = await getFolderInfo(selectedFolder.folder_id);
-                              toast.success(`Folder: ${info.name}\nFiles: ${info.total_files}\nSize: ${info.total_size} bytes\nState: ${info.state}`);
-                            } catch (error) {
-                              toast.error(`Failed to get folder info: ${error}`);
-                            }
-                          }}
-                          className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Settings className="w-4 h-4" />
-                          Get Detailed Info
-                        </button>
-                      </div>
+                      {selectedFile && selectedFile.segments && (
+                        <div>
+                          <h4 className="font-medium mb-2">Segments for {selectedFile.name}</h4>
+                          <div className="space-y-2">
+                            {selectedFile.segments.map(segment => (
+                              <div key={segment.segment_id} className="flex items-center justify-between p-2 border border-gray-200 dark:border-gray-700 rounded">
+                                <div className="flex items-center gap-2">
+                                  <Hash className="w-4 h-4 text-gray-500" />
+                                  <span className="font-mono text-sm">Segment {segment.sequence}</span>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-gray-500">
+                                  <span>{formatBytes(segment.size)}</span>
+                                  {segment.uploaded && (
+                                    <CheckCircle className="w-4 h-4 text-green-500" />
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  )}
+                </div>
+              )}
 
-                    {/* Danger Zone */}
-                    <div>
-                      <h4 className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">Danger Zone</h4>
+              {/* Shares Tab */}
+              {activeTab === 'shares' && (
+                <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium flex items-center gap-2">
+                      <Share2 className="w-5 h-5 text-gray-500" />
+                      Shares
+                    </h3>
+                    <button
+                      onClick={() => setShowShareDialog(true)}
+                      disabled={selectedFolder.state !== 'uploaded'}
+                      className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      New Share
+                    </button>
+                  </div>
+
+                  {shares.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Share2 className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                      <p className="text-gray-500">
+                        {selectedFolder.state !== 'uploaded' 
+                          ? 'Upload the folder first before creating shares.'
+                          : 'No shares created for this folder.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {shares.map(share => (
+                        <div key={share.share_id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {share.share_type === 'public' && <Globe className="w-5 h-5 text-green-500" />}
+                              {share.share_type === 'private' && <Lock className="w-5 h-5 text-yellow-500" />}
+                              {share.share_type === 'protected' && <Shield className="w-5 h-5 text-blue-500" />}
+                              <div>
+                                <div className="font-medium capitalize">{share.share_type} Share</div>
+                                <div className="text-sm text-gray-500">
+                                  Created {new Date(share.created_at).toLocaleDateString()}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(share.share_id);
+                                  toast.success('Share ID copied');
+                                }}
+                                className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                                title="Copy Share ID"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                                title="View Share"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-500">Share ID:</span>
+                              <span className="font-mono text-xs">{share.share_id}</span>
+                            </div>
+                            {share.expires_at && (
+                              <div className="flex items-center justify-between text-sm mt-1">
+                                <span className="text-gray-500">Expires:</span>
+                                <span>{new Date(share.expires_at).toLocaleDateString()}</span>
+                              </div>
+                            )}
+                            {share.download_count !== undefined && (
+                              <div className="flex items-center justify-between text-sm mt-1">
+                                <span className="text-gray-500">Downloads:</span>
+                                <span>{share.download_count}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions Tab */}
+              {activeTab === 'actions' && (
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                    <h3 className="text-lg font-medium mb-4">Processing Actions</h3>
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => handleIndexFolder(selectedFolder.folder_id)}
+                        className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <FileText className="w-5 h-5" />
+                        {selectedFolder.state === 'added' ? 'Index Folder' : 'Re-index Folder'}
+                      </button>
+
+                      <button
+                        onClick={() => handleSegmentFolder(selectedFolder.folder_id)}
+                        disabled={!['indexed', 'segmented', 'uploaded', 'published'].includes(selectedFolder.state)}
+                        className="w-full px-4 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <Package className="w-5 h-5" />
+                        {selectedFolder.total_segments > 0 ? 'Re-segment Folder' : 'Create Segments'}
+                      </button>
+
+                      <button
+                        onClick={() => handleUploadFolder(selectedFolder.folder_id)}
+                        disabled={!['segmented', 'uploaded', 'published'].includes(selectedFolder.state)}
+                        className="w-full px-4 py-3 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <Upload className="w-5 h-5" />
+                        {['uploaded', 'published'].includes(selectedFolder.state) ? 'Re-upload to Usenet' : 'Upload to Usenet'}
+                      </button>
+
+                      <button
+                        onClick={() => setShowShareDialog(true)}
+                        disabled={selectedFolder.state !== 'uploaded'}
+                        className="w-full px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <Share2 className="w-5 h-5" />
+                        {selectedFolder.published ? 'Create New Share' : 'Publish Folder'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                    <h3 className="text-lg font-medium mb-4">Maintenance Actions</h3>
+                    <div className="space-y-3">
                       <button
                         onClick={async () => {
-                          if (confirm(`Are you sure you want to delete the folder "${selectedFolder.name}"? This action cannot be undone.`)) {
-                            try {
-                              await deleteFolder(selectedFolder.folder_id, true);
-                              toast.success('Folder deleted successfully');
-                              setSelectedFolder(null);
-                              await loadFolders();
-                            } catch (error) {
-                              toast.error(`Failed to delete folder: ${error}`);
-                            }
+                          try {
+                            const result = await resyncFolder(selectedFolder.folder_id);
+                            toast.success('Folder resynced successfully');
+                            await loadFolders();
+                            await loadFolderDetails(selectedFolder.folder_id);
+                          } catch (error: any) {
+                            toast.error(`Resync failed: ${error.message || error}`);
                           }
                         }}
-                        className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+                        className="w-full px-4 py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
                       >
-                        <AlertCircle className="w-4 h-4" />
+                        <RefreshCw className="w-5 h-5" />
+                        Resync for Changes
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          // TODO: Implement republish
+                          toast.info('Republish functionality coming soon');
+                        }}
+                        disabled={!selectedFolder.published}
+                        className="w-full px-4 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <Server className="w-5 h-5" />
+                        Republish to Usenet
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          // TODO: Implement download
+                          toast.info('Download functionality coming soon');
+                        }}
+                        disabled={!selectedFolder.published}
+                        className="w-full px-4 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <Download className="w-5 h-5" />
+                        Test Download
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteFolder(selectedFolder.folder_id)}
+                        className="w-full px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Trash2 className="w-5 h-5" />
                         Delete Folder
                       </button>
                     </div>
@@ -924,17 +1027,111 @@ export const FolderManagement: React.FC = () => {
                 </div>
               )}
             </div>
-          </div>
+          </>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-500">
+          <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <Folder className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg">Select a folder to view details</p>
-              <p className="text-sm mt-2">Add folders to manage them through the complete workflow</p>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                Select a Folder
+              </h3>
+              <p className="text-gray-500">
+                Choose a folder from the list to view details and manage it
+              </p>
             </div>
           </div>
         )}
       </div>
+
+      {/* Share Dialog */}
+      {showShareDialog && selectedFolder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-dark-surface rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">Create Share</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Share Type</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      value="public"
+                      checked={shareType === 'public'}
+                      onChange={(e) => setShareType(e.target.value as any)}
+                    />
+                    <Globe className="w-4 h-4 text-green-500" />
+                    <span>Public - Anyone can access</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      value="private"
+                      checked={shareType === 'private'}
+                      onChange={(e) => setShareType(e.target.value as any)}
+                    />
+                    <Lock className="w-4 h-4 text-yellow-500" />
+                    <span>Private - Specific users only</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      value="protected"
+                      checked={shareType === 'protected'}
+                      onChange={(e) => setShareType(e.target.value as any)}
+                    />
+                    <Shield className="w-4 h-4 text-blue-500" />
+                    <span>Protected - Password required</span>
+                  </label>
+                </div>
+              </div>
+
+              {shareType === 'private' && (
+                <PrivateShareManager
+                  authorizedUsers={authorizedUsers}
+                  onUsersChange={setAuthorizedUsers}
+                  disabled={false}
+                />
+              )}
+
+              {shareType === 'protected' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={sharePassword}
+                    onChange={(e) => setSharePassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg"
+                    placeholder="Enter password"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleCreateShare}
+                  className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                >
+                  Create Share
+                </button>
+                <button
+                  onClick={() => setShowShareDialog(false)}
+                  className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+// Add Plus icon since it's not imported
+const Plus = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+);
