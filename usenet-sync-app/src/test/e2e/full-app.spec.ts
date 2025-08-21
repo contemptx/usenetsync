@@ -9,6 +9,22 @@ test.describe('UsenetSync Full Application Test', () => {
     await page.goto('/');
     // Wait for app to load
     await page.waitForLoadState('networkidle');
+
+    // Dismiss license/startup screen if present by starting trial
+    const startTrial = page.locator('button:has-text("Start Trial")');
+    const continueBtn = page.locator('button:has-text("Continue")');
+    const skipBtn = page.locator('button:has-text("Skip")');
+
+    try {
+      if (await startTrial.isVisible({ timeout: 1500 })) {
+        await startTrial.click();
+        await page.waitForLoadState('networkidle');
+      } else if (await continueBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await continueBtn.click();
+      } else if (await skipBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await skipBtn.click();
+      }
+    } catch {}
   });
 
   test('Complete user journey - Upload, Share, Download', async () => {
