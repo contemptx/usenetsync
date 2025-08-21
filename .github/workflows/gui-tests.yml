@@ -214,4 +214,4 @@ jobs:
           
           Please review these changes carefully before merging.
         branch: ai-autofix/gui-tests-${{ github.run_number }}
-        labels: "autofix,gui-test,ai-generated"
+        labels: "autofix,gui-test,ai-generated"# Workflow trigger: Thu Aug 21 08:58:06 AM UTC 2025
