@@ -138,6 +138,50 @@ class UnifiedAPIServer:
                 }
             return {"connected": False}
         
+        @self.app.post("/api/v1/get_logs")
+        async def get_logs(request: dict = {}):
+            """Get system logs from database"""
+            if not self.system or not self.system.db:
+                return {"logs": []}
+            
+            # Get logs from operations table (real system logs)
+            limit = request.get("limit", 100)
+            level = request.get("level", {})
+            
+            # Build query based on level filter
+            query = "SELECT * FROM operations"
+            conditions = []
+            params = []
+            
+            if level:
+                if level.get("error"):
+                    conditions.append("status = 'failed'")
+                elif level.get("warning"):
+                    conditions.append("status IN ('failed', 'warning')")
+                elif level.get("info"):
+                    conditions.append("status IN ('completed', 'in_progress', 'failed', 'warning')")
+            
+            if conditions:
+                query += " WHERE " + " OR ".join(conditions)
+            
+            query += " ORDER BY started_at DESC LIMIT ?"
+            params.append(limit)
+            
+            operations = self.system.db.fetch_all(query, tuple(params))
+            
+            logs = []
+            if operations:
+                for op in operations:
+                    log_level = "error" if op.get("status") == "failed" else "info"
+                    logs.append({
+                        "timestamp": op.get("started_at", ""),
+                        "level": log_level,
+                        "message": f"{op.get('operation_type', 'Operation')}: {op.get('details', '')}",
+                        "source": op.get("entity_type", "system")
+                    })
+            
+            return {"logs": logs}
+        
         # User endpoints
         @self.app.post("/api/v1/users")
         async def create_user(username: str, email: Optional[str] = None):

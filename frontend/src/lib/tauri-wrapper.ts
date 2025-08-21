@@ -128,11 +128,32 @@ if (!tauriInvoke) {
           return await downloadResp.json();
         
         case 'select_folder_dialog':
-          // For file selection, we need to use HTML5 file input
-          // This is a browser limitation - we cannot access the file system directly
-          console.warn('File selection requires Tauri environment or file input element');
-          // Return empty to indicate no selection
-          return null;
+          // Create a hidden input element for folder selection
+          return new Promise((resolve) => {
+            const input = document.createElement('input') as HTMLInputElement & {
+              webkitdirectory: boolean;
+              directory: boolean;
+            };
+            input.type = 'file';
+            input.webkitdirectory = true;
+            input.directory = true;
+            input.multiple = false;
+            
+            input.onchange = (e: any) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                // Get the folder path from the first file
+                const path = files[0].webkitRelativePath || files[0].name;
+                const folderPath = path.split('/')[0];
+                resolve(folderPath);
+              } else {
+                resolve(null);
+              }
+            };
+            
+            input.oncancel = () => resolve(null);
+            input.click();
+          });
         
         case 'select_files':
         case 'select_folder':
