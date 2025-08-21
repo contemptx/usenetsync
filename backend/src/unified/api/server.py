@@ -182,6 +182,189 @@ class UnifiedAPIServer:
             
             return {"logs": logs}
         
+        @self.app.post("/api/v1/get_user_info")
+        async def get_user_info():
+            """Get user information from database"""
+            if not self.system or not self.system.db:
+                return {"username": "default", "email": "user@example.com"}
+            
+            # Get first user from users table
+            users = self.system.db.fetch_all("SELECT * FROM users LIMIT 1")
+            if users and len(users) > 0:
+                user = users[0]
+                return {
+                    "username": user.get("username", "default"),
+                    "email": user.get("email", "user@example.com"),
+                    "created_at": user.get("created_at", "")
+                }
+            return {"username": "default", "email": "user@example.com"}
+        
+        @self.app.post("/api/v1/initialize_user")
+        async def initialize_user(request: dict = {}):
+            """Initialize or update user"""
+            if not self.system or not self.system.db:
+                return {"success": False, "error": "System not available"}
+            
+            display_name = request.get("displayName", "User")
+            
+            # Create or update user
+            self.system.db.execute(
+                "INSERT OR REPLACE INTO users (username, email, created_at) VALUES (?, ?, datetime('now'))",
+                (display_name, f"{display_name.lower()}@example.com")
+            )
+            
+            return {"success": True}
+        
+        @self.app.post("/api/v1/test_server_connection")
+        async def test_server_connection(request: dict = {}):
+            """Test NNTP server connection"""
+            if not self.system:
+                return {"success": False, "error": "System not available"}
+            
+            # Test the NNTP connection
+            try:
+                if hasattr(self.system, 'nntp_client') and self.system.nntp_client:
+                    # Try to connect
+                    connected = self.system.nntp_client.connect()
+                    if connected:
+                        return {"success": True, "message": "Connection successful"}
+                return {"success": False, "error": "NNTP client not configured"}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        
+        @self.app.post("/api/v1/save_server_config")
+        async def save_server_config(request: dict = {}):
+            """Save server configuration"""
+            if not self.system or not self.system.db:
+                return {"success": False, "error": "System not available"}
+            
+            config = request.get("config", {})
+            
+            # Save to configuration table
+            for key, value in config.items():
+                self.system.db.execute(
+                    "INSERT OR REPLACE INTO configuration (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                    (key, str(value))
+                )
+            
+            return {"success": True}
+        
+        # Folder management endpoints
+        @self.app.post("/api/v1/add_folder")
+        async def add_folder(request: dict):
+            """Add a new folder to the system"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            path = request.get("path")
+            if not path:
+                raise HTTPException(status_code=400, detail="Path is required")
+            
+            # Index folder (which adds it to the system)
+            owner_id = "default_user"  # TODO: Get from auth
+            result = self.system.index_folder(path, owner_id)
+            folder_id = result.get("folder_id")
+            return {"success": True, "folder_id": folder_id, "files_indexed": result.get("files_indexed", 0)}
+        
+        @self.app.post("/api/v1/index_folder")
+        async def index_folder(request: dict):
+            """Index a folder"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            folder_path = request.get("folderPath") or request.get("path")
+            if not folder_path:
+                raise HTTPException(status_code=400, detail="Folder path is required")
+            
+            # Index the folder
+            owner_id = "default_user"  # TODO: Get from auth
+            result = self.system.index_folder(folder_path, owner_id)
+            return {"success": True, "folder_id": result.get("folder_id"), "files_indexed": result.get("files_indexed", 0)}
+        
+        @self.app.post("/api/v1/process_folder")
+        async def process_folder(request: dict):
+            """Process folder segments"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            folder_id = request.get("folderId")
+            if not folder_id:
+                raise HTTPException(status_code=400, detail="Folder ID is required")
+            
+            # Create segments for the folder
+            # Get files from the folder
+            files = self.system.db.fetch_all(
+                "SELECT * FROM files WHERE folder_id = ?",
+                (folder_id,)
+            )
+            
+            segments_created = 0
+            if files:
+                for file in files:
+                    # Process each file into segments
+                    segments = self.system.segment_processor.process_file(
+                        file['file_id'],
+                        file['path'],
+                        file['size']
+                    )
+                    segments_created += len(segments)
+            
+            return {"success": True, "segments_created": segments_created}
+        
+        @self.app.post("/api/v1/upload_folder")
+        async def upload_folder(request: dict):
+            """Upload folder to Usenet"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            folder_id = request.get("folderId")
+            if not folder_id:
+                raise HTTPException(status_code=400, detail="Folder ID is required")
+            
+            # Upload the folder
+            result = self.system.upload_folder(folder_id)
+            return {"success": result.get("success", False), "message": result.get("message", "Upload initiated")}
+        
+        @self.app.post("/api/v1/create_share")
+        async def create_share(request: dict):
+            """Create a share for a folder"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            folder_id = request.get("folderId")
+            share_type = request.get("shareType", "public")
+            password = request.get("password")
+            
+            if not folder_id:
+                raise HTTPException(status_code=400, detail="Folder ID is required")
+            
+            # Create share based on type
+            owner_id = "default_user"  # TODO: Get from auth
+            
+            if share_type == "protected" and password:
+                result = self.system.create_protected_share(folder_id, owner_id, password)
+            elif share_type == "private":
+                allowed_users = request.get("allowedUsers", [])
+                result = self.system.create_private_share(folder_id, owner_id, allowed_users)
+            else:
+                result = self.system.create_public_share(folder_id, owner_id)
+            
+            return {"success": result.get("success", False), "share_id": result.get("share_id")}
+        
+        @self.app.delete("/api/v1/folders/{folder_id}")
+        async def delete_folder(folder_id: str):
+            """Delete a folder"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            # Delete folder and all related data
+            self.system.db.execute("DELETE FROM files WHERE folder_id = ?", (folder_id,))
+            self.system.db.execute("DELETE FROM segments WHERE folder_id = ?", (folder_id,))
+            self.system.db.execute("DELETE FROM shares WHERE folder_id = ?", (folder_id,))
+            self.system.db.execute("DELETE FROM folders WHERE folder_id = ?", (folder_id,))
+            
+            return {"success": True}
+        
         # User endpoints
         @self.app.post("/api/v1/users")
         async def create_user(username: str, email: Optional[str] = None):
@@ -206,7 +389,18 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=503, detail="System not available")
             
             folders = self.system.db.fetch_all("SELECT * FROM folders ORDER BY created_at DESC")
-            return [dict(f) for f in folders] if folders else []
+            result = []
+            if folders:
+                for f in folders:
+                    folder_dict = dict(f)
+                    # Add file count
+                    files = self.system.db.fetch_all(
+                        "SELECT COUNT(*) as count FROM files WHERE folder_id = ?",
+                        (folder_dict['folder_id'],)
+                    )
+                    folder_dict['file_count'] = files[0]['count'] if files else 0
+                    result.append(folder_dict)
+            return result
         
         @self.app.post("/api/v1/folders/index")
         async def index_folder(folder_path: str, owner_id: str):

@@ -347,11 +347,13 @@ class UnifiedSystem:
             'folder_id': folder_id,
             'owner_id': owner_id,
             'share_type': 'public',
+            'access_type': 'public',
+            'access_level': 'read',
             'created_at': time.time(),
             'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
-            'size': 0,
-            'file_count': 0,
-            'folder_count': 0
+            
+            
+            
         })
         
         return {
@@ -373,9 +375,9 @@ class UnifiedSystem:
             'created_at': time.time(),
             'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
             'allowed_users': ','.join(allowed_users) if allowed_users else '',
-            'size': 0,
-            'file_count': 0,
-            'folder_count': 0
+            
+            
+            
         })
         
         return {
@@ -398,9 +400,9 @@ class UnifiedSystem:
             'password_hash': password_hash,
             'created_at': time.time(),
             'expires_at': time.time() + (expiry_days * 86400) if expiry_days else None,
-            'size': 0,
-            'file_count': 0,
-            'folder_count': 0
+            
+            
+            
         })
         
         return {
@@ -422,15 +424,14 @@ class UnifiedSystem:
         """Upload a folder to Usenet"""
         # Create upload record
         upload_id = hashlib.sha256(f"{folder_id}_{time.time()}".encode()).hexdigest()
-        self.db.insert('uploads', {
-            'upload_id': upload_id,
+        self.db.insert('upload_queue', {
+            'queue_id': upload_id,
             'folder_id': folder_id,
-            'status': 'queued',
+            'state': 'queued', 'priority': 5,
             'created_at': time.time(),
-            'total_segments': 0,
-            'uploaded_segments': 0
+            'progress': 0
         })
-        return {'upload_id': upload_id, 'status': 'queued'}
+        return {'queue_id': upload_id, 'state': 'queued', 'priority': 5}
     
     def publish_folder(self, folder_id: str, access_type: str = 'public') -> Dict[str, Any]:
         """Publish folder"""
