@@ -58,7 +58,7 @@ if (!tauriInvoke) {
         
         case 'add_folder':
           // Real backend folder addition
-          const addResp = await fetch(`${BACKEND_URL}/api/v1/folders`, {
+          const addResp = await fetch(`${BACKEND_URL}/api/v1/add_folder`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -71,22 +71,35 @@ if (!tauriInvoke) {
         case 'index_folder':
         case 'index_folder_full':
           // Real backend indexing
-          const indexResp = await fetch(`${BACKEND_URL}/api/v1/folders/${args?.folder_id}/index`, {
-            method: 'POST'
+          const indexResp = await fetch(`${BACKEND_URL}/api/v1/index_folder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              folderId: args?.folder_id || args?.folderId,
+              path: args?.path
+            })
           });
           return await indexResp.json();
         
         case 'segment_folder':
           // Real backend segmentation
-          const segmentResp = await fetch(`${BACKEND_URL}/api/v1/folders/${args?.folder_id}/segment`, {
-            method: 'POST'
+          const segmentResp = await fetch(`${BACKEND_URL}/api/v1/process_folder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              folderId: args?.folder_id || args?.folderId
+            })
           });
           return await segmentResp.json();
         
         case 'upload_folder':
           // Real backend upload
-          const uploadResp = await fetch(`${BACKEND_URL}/api/v1/folders/${args?.folder_id}/upload`, {
-            method: 'POST'
+          const uploadResp = await fetch(`${BACKEND_URL}/api/v1/upload_folder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              folderId: args?.folder_id || args?.folderId
+            })
           });
           return await uploadResp.json();
         
