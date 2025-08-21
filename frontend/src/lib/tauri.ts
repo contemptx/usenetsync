@@ -92,7 +92,20 @@ export async function initializeUser(displayName?: string): Promise<string> {
 }
 
 export async function isUserInitialized(): Promise<boolean> {
-  return await invoke('is_user_initialized');
+  try {
+    const response = await fetch(`http://localhost:8000/api/v1/is_user_initialized`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    return data.initialized || false;
+  } catch (error) {
+    console.error('Error checking user initialization:', error);
+    // Fallback to Tauri command if available
+    return await invoke('is_user_initialized').catch(() => false);
+  }
 }
 
 // Folder Management Operations
@@ -218,7 +231,19 @@ export async function setFolderAccess(
 }
 
 export async function getFolderInfo(folderId: string): Promise<any> {
-  return await invoke('folder_info', { folderId });
+  try {
+    const response = await fetch(`http://localhost:8000/api/v1/folder_info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId })
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error getting folder info:', error);
+    // Fallback to Tauri command if available
+    return await invoke('folder_info', { folderId }).catch(() => ({ files: [], segments: [] }));
+  }
 }
 
 export async function resyncFolder(folderId: string): Promise<any> {

@@ -1,0 +1,130 @@
+{
+  "timestamp": "2025-08-21T23:42:11.335Z",
+  "url": "http://localhost:1420",
+  "workingFeatures": [
+    "React app initialization",
+    "Navigation: Home",
+    "Navigation: Folders",
+    "Navigation: Upload",
+    "Navigation: Download",
+    "Navigation: Settings",
+    "Folder list display",
+    "Action: Index",
+    "Action: Segment",
+    "API: Get Folders",
+    "API: User Check",
+    "API: Progress Status"
+  ],
+  "issues": [
+    "Action: Upload disabled",
+    "Action: Create Share not found",
+    "Add Folder button missing"
+  ],
+  "consoleErrors": [
+    {
+      "type": "error",
+      "text": "[Backend] Unknown command: is_user_initialized",
+      "location": {
+        "url": "http://localhost:1420/src/lib/tauri-wrapper.ts",
+        "lineNumber": 189,
+        "columnNumber": 18
+      }
+    },
+    {
+      "type": "error",
+      "text": "[Backend] Unknown command: is_user_initialized",
+      "location": {
+        "url": "http://localhost:1420/src/lib/tauri-wrapper.ts",
+        "lineNumber": 189,
+        "columnNumber": 18
+      }
+    },
+    {
+      "type": "error",
+      "text": "EventSource's response has a MIME type (\"application/json\") that is not \"text/event-stream\". Aborting the connection.",
+      "location": {
+        "url": "http://localhost:1420/",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "error",
+      "text": "EventSource's response has a MIME type (\"application/json\") that is not \"text/event-stream\". Aborting the connection.",
+      "location": {
+        "url": "http://localhost:1420/folders",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "error",
+      "text": "[Backend] Unknown command: is_user_initialized",
+      "location": {
+        "url": "http://localhost:1420/src/lib/tauri-wrapper.ts",
+        "lineNumber": 189,
+        "columnNumber": 18
+      }
+    },
+    {
+      "type": "error",
+      "text": "[Backend] Unknown command: is_user_initialized",
+      "location": {
+        "url": "http://localhost:1420/src/lib/tauri-wrapper.ts",
+        "lineNumber": 189,
+        "columnNumber": 18
+      }
+    },
+    {
+      "type": "error",
+      "text": "[Backend] Unknown command: folder_info",
+      "location": {
+        "url": "http://localhost:1420/src/lib/tauri-wrapper.ts",
+        "lineNumber": 189,
+        "columnNumber": 18
+      }
+    },
+    {
+      "type": "error",
+      "text": "Access to fetch at 'http://localhost:8000/api/v1/folder_info' from origin 'http://localhost:1420' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "location": {
+        "url": "http://localhost:1420/folders",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "location": {
+        "url": "http://localhost:8000/api/v1/folder_info",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "error",
+      "text": "Failed to call backend for folder_info: TypeError: Failed to fetch\n    at tauriInvoke (http://localhost:1420/src/lib/tauri-wrapper.ts:192:39)\n    at getFolderInfo (http://localhost:1420/src/lib/tauri.ts:141:16)\n    at loadFolderDetails (http://localhost:1420/src/pages/FolderManagement.tsx:127:32)\n    at http://localhost:1420/src/pages/FolderManagement.tsx:93:7\n    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=164bcb70:17486:20)\n    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=164bcb70:1485:72)\n    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=164bcb70:8460:122)\n    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=164bcb70:8518:60)\n    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=164bcb70:9887:29)\n    at recursivelyTraversePassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=164bcb70:9868:13)",
+      "location": {
+        "url": "http://localhost:1420/src/lib/tauri-wrapper.ts",
+        "lineNumber": 198,
+        "columnNumber": 20
+      }
+    }
+  ],
+  "networkErrors": [
+    {
+      "url": "http://localhost:8000/api/v1/folder_info",
+      "failure": {
+        "errorText": "net::ERR_FAILED"
+      }
+    }
+  ],
+  "screenshots": 8,
+  "summary": {
+    "totalTests": 15,
+    "passed": 12,
+    "failed": 3,
+    "healthScore": 80
+  }
+}
