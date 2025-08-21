@@ -1,0 +1,24 @@
+{
+  "servers": [
+    {
+      "name": "Newshosting Primary",
+      "host": "news.newshosting.com",
+      "port": 563,
+      "username": "contemptx",
+      "password": "Kia211101#",
+      "ssl": true,
+      "max_connections": 10,
+      "priority": 1
+    }
+  ],
+  "default_newsgroups": [
+    "alt.binaries.test",
+    "alt.binaries.misc"
+  ],
+  "upload_settings": {
+    "segment_size": 768000,
+    "redundancy_level": 3,
+    "compression_enabled": true,
+    "encryption_enabled": true
+  }
+}

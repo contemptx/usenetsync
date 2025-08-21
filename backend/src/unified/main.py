@@ -119,6 +119,27 @@ class UnifiedSystem:
         from unified.upload.queue import UnifiedUploadQueue
         self.upload_queue = UnifiedUploadQueue(self.db)
         
+        # Initialize NNTP client with real credentials
+        try:
+            from unified.networking.real_nntp_client import RealNNTPClient
+            self.nntp_client = RealNNTPClient()
+            # Connect with real Newshosting credentials
+            connected = self.nntp_client.connect(
+                host='news.newshosting.com',
+                port=563,
+                use_ssl=True,
+                username='contemptx',
+                password='Kia211101#'
+            )
+            if connected:
+                logger.info("✓ NNTP client connected to Newshosting")
+            else:
+                logger.warning("Could not connect to Newshosting")
+                self.nntp_client = None
+        except Exception as e:
+            logger.warning(f"Could not initialize NNTP client: {e}")
+            self.nntp_client = None
+        
         # Create attribute aliases for compatibility
         self.security = self  # Security methods are on main class
         self.user_manager = self  # User management is on main class
@@ -448,9 +469,9 @@ class UnifiedSystem:
         articles_uploaded = 0
         message_ids = []
         
-        # Get segments for this folder
+        # Get segments for this folder  
         segments = self.db.fetch_all(
-            "SELECT * FROM segments WHERE folder_id = ? ORDER BY file_id, index",
+            "SELECT * FROM segments WHERE file_id IN (SELECT file_id FROM files WHERE folder_id = ?) ORDER BY file_id, segment_index",
             (folder_id,)
         )
         
@@ -458,11 +479,11 @@ class UnifiedSystem:
             for segment in segments[:10]:  # Upload first 10 segments as test
                 try:
                     # Create article content
-                    article_data = f"Segment {segment['index']} of folder {folder_id}".encode()
+                    article_data = f"Segment {segment.get('segment_index', 0)} of folder {folder_id}".encode()
                     message_id = self.nntp_client.post_article(
-                        subject=f"[{folder_id}] Segment {segment['index']}",
+                        subject=f"[{folder_id}] Segment {segment.get('segment_index', 0)}",
                         body=article_data,
-                        groups=['alt.binaries.test']
+                        newsgroups=['alt.binaries.test']
                     )
                     if message_id:
                         message_ids.append(message_id)
