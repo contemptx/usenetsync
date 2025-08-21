@@ -311,7 +311,7 @@ export const Dashboard: React.FC = () => {
             <div>
               <p className="text-xs text-gray-600 dark:text-gray-400">Upload</p>
               <p className="text-sm font-medium text-gray-900 dark:text-white">
-                {formatBytes(stats?.networkSpeed.upload || 0)}/s
+                {formatBytes(stats?.networkSpeed?.upload || 0)}/s
               </p>
             </div>
           </div>
@@ -320,7 +320,7 @@ export const Dashboard: React.FC = () => {
             <div>
               <p className="text-xs text-gray-600 dark:text-gray-400">Download</p>
               <p className="text-sm font-medium text-gray-900 dark:text-white">
-                {formatBytes(stats?.networkSpeed.download || 0)}/s
+                {formatBytes(stats?.networkSpeed?.download || 0)}/s
               </p>
             </div>
           </div>
