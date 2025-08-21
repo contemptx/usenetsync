@@ -277,33 +277,38 @@ class CompleteTauriBridge:
     def _publish_folder(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Publish folder with access control"""
         folder_id = args.get('folder_id')
+        share_type = args.get('share_type', 'full')
         access_type = args.get('access_type', 'public')
         user_ids = args.get('user_ids', [])
         password = args.get('password')
         
-        owner_id = self._get_current_user_id()
+        owner_id = args.get('owner_id', self._get_current_user_id())
         
-        # Create publication record
+        # Create share record
         share_id = hashlib.sha256(f"{folder_id}_{time.time()}".encode()).hexdigest()
-        self.system.db.insert('shares', {
+        
+        # Prepare share data
+        share_data = {
             'share_id': share_id,
             'folder_id': folder_id,
             'owner_id': owner_id,
+            'share_type': share_type,
             'access_level': access_type,
-            'created_at': time.time(),
-            'total_segments': 0
-        })
+            'access_type': access_type,  # Alias for compatibility
+            'created_at': datetime.now().isoformat(),
+            'created_by': owner_id
+        }
         
-        # Handle access control based on type
+        # Handle access control
         if access_type == 'private' and user_ids:
-            # Store authorized users in the share's allowed_users field
-            self.system.db.execute(
-                "UPDATE shares SET allowed_users = ? WHERE share_id = ?",
-                (json.dumps(user_ids), share_id)
-            )
-        elif access_type == 'protected' and password:
-            # Store password hash (simplified for now)
-            pass
+            share_data['allowed_users'] = json.dumps(user_ids)
+        else:
+            share_data['allowed_users'] = '[]'
+            
+        if access_type == 'protected' and password:
+            share_data['password_hash'] = hashlib.sha256(password.encode()).hexdigest()
+        
+        self.system.db.insert('shares', share_data)
         
         return {
             'share_id': share_id,
