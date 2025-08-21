@@ -116,7 +116,8 @@ jobs:
         path: frontend/allure-report/
         
     - name: Setup tmate session for debugging
-      if: ${{ failure() && github.event.inputs.debug_enabled }}
+      if: ${{ failure() && github.event.inputs.debug_enabled == 'true' }}
+      timeout-minutes: 15
       uses: mxschmitt/action-tmate@v3
       with:
         limit-access-to-actor: true
