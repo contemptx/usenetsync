@@ -440,7 +440,7 @@ class UnifiedAPIServer:
                         'message': f'Indexing file {indexed_count}/{total_files}: {file}'
                     }
                     # Small delay to simulate processing
-                    time.sleep(0.01)
+                    time.sleep(0.1)  # Slower for visibility
             
             # Actually index the folder
             result = self.system.index_folder(folder_path, owner_id)
@@ -557,7 +557,7 @@ class UnifiedAPIServer:
                     segments_created += 1
                 
                 # Small delay to show progress
-                time.sleep(0.05)
+                time.sleep(0.15)  # Slower for visibility
             
             # Update final progress
             self.app.state.progress[progress_id] = {
@@ -644,7 +644,7 @@ class UnifiedAPIServer:
                 }
                 
                 # Small delay to simulate upload
-                time.sleep(0.02)
+                time.sleep(0.08)  # Slower for visibility
                 uploaded_count += 1
             
             # Actually trigger the upload

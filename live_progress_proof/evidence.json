@@ -1,0 +1,69 @@
+{
+  "timestamp": "2025-08-21T23:02:27.948Z",
+  "captures": [
+    {
+      "time": 0,
+      "percentage": 0,
+      "message": "Operation in Progressindexing0%Starting indexing...Folder StatisticsTotal Files:3Total Size:4.57 KBSegments:0Created:8/21/2025Processing StatusCurrent State:Indexed:NoSegmented:NoUploaded:NoSharing StatusPublished:NoCreate Share",
+      "screenshot": "/workspace/live_progress_proof/progress_0ms_unknownpct.png",
+      "htmlLength": 678,
+      "hasProgressBar": true,
+      "hasPercentText": true
+    },
+    {
+      "time": 500,
+      "percentage": 100,
+      "message": "indexing100%100%Successfully indexed 3 files",
+      "screenshot": "/workspace/live_progress_proof/progress_500ms_100pct.png",
+      "htmlLength": 797,
+      "hasProgressBar": true,
+      "hasPercentText": true
+    },
+    {
+      "time": 1000,
+      "percentage": 100,
+      "message": "indexing100%100%Successfully indexed 3 files",
+      "screenshot": "/workspace/live_progress_proof/progress_1000ms_100pct.png",
+      "htmlLength": 797,
+      "hasProgressBar": true,
+      "hasPercentText": true
+    },
+    {
+      "time": 1500,
+      "percentage": 100,
+      "message": "indexing100%100%Successfully indexed 3 files",
+      "screenshot": "/workspace/live_progress_proof/progress_1500ms_100pct.png",
+      "htmlLength": 797,
+      "hasProgressBar": true,
+      "hasPercentText": true
+    }
+  ],
+  "htmlSnapshots": [
+    {
+      "time": 0,
+      "percentage": 0,
+      "html": "<h3 class=\"text-lg font-medium mb-4 flex items-center gap-2\"><div class=\"animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full\"></div>Operation in Progress</h3><div class=\"w-full space-y-2\"><div class=\"flex items-center justify-between text-sm\"><span class=\"font-medium capitalize\">indexing</span><span class=\"text-gray-600 dark:text-gray-400\">0%</span></div><div class=\"w-full bg-gray-200 dark:bg-gray-700 rounded-full h-6 overflow-hidden\"><div class=\"bg-blue-500 h-6 round..."
+    },
+    {
+      "time": 500,
+      "percentage": 100,
+      "html": "<h3 class=\"text-lg font-medium mb-4 flex items-center gap-2\"><div class=\"animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full\"></div>Operation in Progress</h3><div class=\"w-full space-y-2\"><div class=\"flex items-center justify-between text-sm\"><span class=\"font-medium capitalize\">indexing</span><span class=\"text-gray-600 dark:text-gray-400\">100%</span></div><div class=\"w-full bg-gray-200 dark:bg-gray-700 rounded-full h-6 overflow-hidden\"><div class=\"bg-green-600 h-6 ro..."
+    },
+    {
+      "time": 1000,
+      "percentage": 100,
+      "html": "<h3 class=\"text-lg font-medium mb-4 flex items-center gap-2\"><div class=\"animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full\"></div>Operation in Progress</h3><div class=\"w-full space-y-2\"><div class=\"flex items-center justify-between text-sm\"><span class=\"font-medium capitalize\">indexing</span><span class=\"text-gray-600 dark:text-gray-400\">100%</span></div><div class=\"w-full bg-gray-200 dark:bg-gray-700 rounded-full h-6 overflow-hidden\"><div class=\"bg-green-600 h-6 ro..."
+    },
+    {
+      "time": 1500,
+      "percentage": 100,
+      "html": "<h3 class=\"text-lg font-medium mb-4 flex items-center gap-2\"><div class=\"animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full\"></div>Operation in Progress</h3><div class=\"w-full space-y-2\"><div class=\"flex items-center justify-between text-sm\"><span class=\"font-medium capitalize\">indexing</span><span class=\"text-gray-600 dark:text-gray-400\">100%</span></div><div class=\"w-full bg-gray-200 dark:bg-gray-700 rounded-full h-6 overflow-hidden\"><div class=\"bg-green-600 h-6 ro..."
+    }
+  ],
+  "progressValues": [
+    0,
+    100,
+    100,
+    100
+  ]
+}
