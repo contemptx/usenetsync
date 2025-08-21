@@ -1,3 +1,0 @@
-@echo off 
-echo Starting Consolidated GitHub Workflow Manager... 
-python consolidated_github_workflow.py start --daemon 

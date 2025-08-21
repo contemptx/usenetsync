@@ -17,6 +17,7 @@ improvement_report.txt
 # Sensitive configuration
 secure_config.py
 .env
+*.env
 *.key
 *.pem
 
@@ -73,3 +74,6 @@ htmlcov/
 
 # Documentation
 docs/_build/
+
+# Obsolete code and documentation
+obsolete/

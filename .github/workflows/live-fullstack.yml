@@ -1,0 +1,57 @@
+name: live-fullstack
+on: [push, pull_request]
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    env:
+      NNTP_HOST: ${{ secrets.NNTP_HOST }}
+      NNTP_PORT: ${{ secrets.NNTP_PORT }}
+      NNTP_USERNAME: ${{ secrets.NNTP_USERNAME }}
+      NNTP_PASSWORD: ${{ secrets.NNTP_PASSWORD }}
+      NNTP_SSL: ${{ secrets.NNTP_SSL }}
+      NNTP_GROUP: ${{ secrets.NNTP_GROUP }}
+      NNTP_TIMEOUT_SECS: "30"
+      NNTP_CONNECT_RETRY: "3"
+      NNTP_READ_CHUNK_SIZE: "65536"
+      NNTP_USER_AGENT: "CI/1.0 (+contact)"
+      DATABASE_URL: postgresql://app:app@localhost:5432/app
+      FRONTEND_BASE_URL: http://localhost:5173
+      VITE_BACKEND_URL: http://localhost:8000
+      PRODUCTION_NNTP_CLIENT_IMPORT: ${{ secrets.PRODUCTION_NNTP_CLIENT_IMPORT }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U app -d app"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Python
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r backend-python/requirements.txt || true
+      - run: pip install -r backend-python/requirements-dev.txt || true
+      - run: make py-lint
+      - run: make py-type
+      - run: make py-live    # connects to real NNTP; fails if env/secrets missing
+
+      # Rust (optional until present)
+      - uses: dtolnay/rust-toolchain@stable
+      - run: make rust-lint
+      - run: make rust-test
+
+      # Frontend + E2E (assumes running locally or against deployed backend)
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: cd frontend-react && npm ci && npm run typecheck && npm run build
+      - run: cd frontend-react && npx playwright install --with-deps
+      - run: cd frontend-react && npx playwright test --reporter=line

@@ -1,7 +1,0 @@
-{
-  "host": "localhost",
-  "port": 5432,
-  "database": "usenetsync",
-  "user": "usenet",
-  "password": "usenet_secure_2024"
-}
