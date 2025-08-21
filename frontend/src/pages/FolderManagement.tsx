@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 // @ts-ignore
 import { invoke } from '../lib/tauri-wrapper';
 import { PrivateShareManager } from '../components/PrivateShareManager';
+import { ProgressBar } from '../components/ProgressBar';
 import { 
   getFolders, 
   addFolder, 
@@ -212,17 +213,71 @@ export const FolderManagement: React.FC = () => {
     try {
       setActiveOperations(prev => ({
         ...prev,
-        [folderId]: { operation: 'indexing', progress: 0 }
+        [folderId]: { 
+          operation: 'indexing', 
+          progress: 0,
+          message: 'Starting indexing...',
+          status: 'starting'
+        }
       }));
 
+      // Start the indexing operation
       const result = await indexFolderFull(folderId);
+      const progressId = result.progress_id;
       
-      toast.success(`Indexed ${result.files_indexed || 0} files`);
-      await loadFolders();
-      await loadFolderDetails(folderId);
+      if (progressId) {
+        // Poll for progress updates
+        const pollInterval = setInterval(async () => {
+          try {
+            const response = await fetch(`http://localhost:8000/api/v1/progress/${progressId}`);
+            const progress = await response.json();
+            
+            setActiveOperations(prev => ({
+              ...prev,
+              [folderId]: {
+                operation: 'indexing',
+                progress: progress.percentage || 0,
+                message: progress.message || 'Processing...',
+                status: progress.status || 'processing'
+              }
+            }));
+            
+            // Stop polling when complete
+            if (progress.status === 'completed' || progress.percentage >= 100) {
+              clearInterval(pollInterval);
+              toast.success(`Indexed ${progress.total || 0} files`);
+              await loadFolders();
+              await loadFolderDetails(folderId);
+              
+              // Keep the progress bar visible for a moment
+              setTimeout(() => {
+                setActiveOperations(prev => {
+                  const newOps = { ...prev };
+                  delete newOps[folderId];
+                  return newOps;
+                });
+              }, 2000);
+            }
+          } catch (error) {
+            console.error('Progress poll error:', error);
+          }
+        }, 500); // Poll every 500ms
+        
+        // Safety timeout to stop polling after 2 minutes
+        setTimeout(() => clearInterval(pollInterval), 120000);
+      } else {
+        // Fallback for old API
+        toast.success(`Indexed ${result.files_indexed || 0} files`);
+        await loadFolders();
+        await loadFolderDetails(folderId);
+        setActiveOperations(prev => {
+          const newOps = { ...prev };
+          delete newOps[folderId];
+          return newOps;
+        });
+      }
     } catch (error: any) {
       toast.error(`Indexing failed: ${error.message || error}`);
-    } finally {
       setActiveOperations(prev => {
         const newOps = { ...prev };
         delete newOps[folderId];
@@ -576,12 +631,30 @@ export const FolderManagement: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
-                <div className="grid grid-cols-3 gap-6">
-                  <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
-                    <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-                      <Database className="w-5 h-5 text-gray-500" />
-                      Folder Statistics
-                    </h3>
+                <div className="space-y-6">
+                  {/* Progress Bar for Active Operations */}
+                  {activeOperations[selectedFolder?.folder_id] && (
+                    <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                      <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                        <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full" />
+                        Operation in Progress
+                      </h3>
+                      <ProgressBar
+                        percentage={activeOperations[selectedFolder.folder_id].progress || 0}
+                        message={activeOperations[selectedFolder.folder_id].message}
+                        status={activeOperations[selectedFolder.folder_id].status}
+                        operation={activeOperations[selectedFolder.folder_id].operation}
+                        showPercentage={true}
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="bg-white dark:bg-dark-surface rounded-lg p-6">
+                      <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                        <Database className="w-5 h-5 text-gray-500" />
+                        Folder Statistics
+                      </h3>
                     <dl className="space-y-3">
                       <div className="flex justify-between">
                         <dt className="text-gray-500">Total Files:</dt>
@@ -674,6 +747,7 @@ export const FolderManagement: React.FC = () => {
                       )}
                     </dl>
                   </div>
+                </div>
                 </div>
               )}
 

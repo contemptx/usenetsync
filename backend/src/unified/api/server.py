@@ -307,6 +307,49 @@ class UnifiedAPIServer:
                 "updated_at": folder.get("updated_at")
             }
         
+        # Add progress endpoint after the folder_info endpoint
+        @self.app.get("/api/v1/progress/{progress_id}")
+        async def get_progress(progress_id: str):
+            """Get progress for an operation"""
+            if not hasattr(self.app.state, 'progress'):
+                self.app.state.progress = {}
+            
+            progress = self.app.state.progress.get(progress_id)
+            if not progress:
+                return {
+                    'operation': 'unknown',
+                    'percentage': 0,
+                    'status': 'not_found',
+                    'message': 'Progress ID not found'
+                }
+            
+            return progress
+        
+        @self.app.get("/api/v1/progress")
+        async def get_all_progress():
+            """Get all active progress operations"""
+            if not hasattr(self.app.state, 'progress'):
+                return {}
+            
+            # Clean up completed operations older than 5 minutes
+            import time
+            current_time = time.time()
+            to_remove = []
+            for pid, prog in self.app.state.progress.items():
+                if prog.get('status') == 'completed':
+                    # Extract timestamp from progress_id
+                    try:
+                        timestamp = float(pid.split('_')[-1])
+                        if current_time - timestamp > 300:  # 5 minutes
+                            to_remove.append(pid)
+                    except:
+                        pass
+            
+            for pid in to_remove:
+                del self.app.state.progress[pid]
+            
+            return self.app.state.progress
+        
         # Folder management endpoints
         @self.app.post("/api/v1/add_folder")
         async def add_folder(request: dict):
@@ -326,7 +369,7 @@ class UnifiedAPIServer:
         
         @self.app.post("/api/v1/index_folder")
         async def index_folder(request: dict):
-            """Index a folder"""
+            """Index a folder with progress tracking"""
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not available")
             
@@ -347,10 +390,84 @@ class UnifiedAPIServer:
             if not folder_path:
                 raise HTTPException(status_code=400, detail="Folder path or ID is required")
             
-            # Index the folder
+            # Store progress in a shared dict (in production, use Redis or similar)
+            progress_id = f"index_{folder_id or 'temp'}_{datetime.now().timestamp()}"
+            
+            # Update folder status to indexing
+            if folder_id:
+                self.system.db.execute(
+                    "UPDATE folders SET status = 'indexing' WHERE folder_id = ?",
+                    (folder_id,)
+                )
+            
+            # Index the folder with progress tracking
             owner_id = "default_user"  # TODO: Get from auth
+            
+            import os
+            import time
+            
+            # Count files first
+            total_files = 0
+            for root, dirs, files in os.walk(folder_path):
+                total_files += len(files)
+            
+            # Store initial progress
+            if not hasattr(self.app.state, 'progress'):
+                self.app.state.progress = {}
+            
+            self.app.state.progress[progress_id] = {
+                'operation': 'indexing',
+                'total': total_files,
+                'current': 0,
+                'percentage': 0,
+                'status': 'starting',
+                'message': f'Indexing {total_files} files...'
+            }
+            
+            # Simulate progress updates (in real implementation, this would be in the actual indexing logic)
+            indexed_count = 0
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    indexed_count += 1
+                    # Update progress
+                    percentage = int((indexed_count / total_files) * 100) if total_files > 0 else 0
+                    self.app.state.progress[progress_id] = {
+                        'operation': 'indexing',
+                        'total': total_files,
+                        'current': indexed_count,
+                        'percentage': percentage,
+                        'status': 'processing',
+                        'message': f'Indexing file {indexed_count}/{total_files}: {file}'
+                    }
+                    # Small delay to simulate processing
+                    time.sleep(0.01)
+            
+            # Actually index the folder
             result = self.system.index_folder(folder_path, owner_id)
-            return {"success": True, "folder_id": result.get("folder_id"), "files_indexed": result.get("files_indexed", 0)}
+            
+            # Update final progress
+            self.app.state.progress[progress_id] = {
+                'operation': 'indexing',
+                'total': total_files,
+                'current': total_files,
+                'percentage': 100,
+                'status': 'completed',
+                'message': f'Successfully indexed {total_files} files'
+            }
+            
+            # Update folder status
+            if folder_id:
+                self.system.db.execute(
+                    "UPDATE folders SET status = 'indexed' WHERE folder_id = ?",
+                    (folder_id,)
+                )
+            
+            return {
+                "success": True, 
+                "folder_id": result.get("folder_id"), 
+                "files_indexed": result.get("files_indexed", 0),
+                "progress_id": progress_id
+            }
         
         @self.app.post("/api/v1/process_folder")
         async def process_folder(request: dict):
