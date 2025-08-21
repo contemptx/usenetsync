@@ -522,9 +522,9 @@ class UnifiedSchema:
             "CREATE INDEX IF NOT EXISTS idx_upload_queue_state ON upload_queue(state, priority)",
             "CREATE INDEX IF NOT EXISTS idx_upload_queue_session ON upload_queue(session_id)",
             
-            # Publications indexes
-            "CREATE INDEX IF NOT EXISTS idx_publications_folder ON publications(folder_id)",
-            "CREATE INDEX IF NOT EXISTS idx_publications_type ON publications(share_type, access_level)",
+            # Shares indexes
+            "CREATE INDEX IF NOT EXISTS idx_shares_folder ON shares(folder_id)",
+            "CREATE INDEX IF NOT EXISTS idx_shares_type ON shares(share_type, access_level)",
             
             # Messages indexes
             "CREATE INDEX IF NOT EXISTS idx_messages_newsgroup ON messages(newsgroup)",
