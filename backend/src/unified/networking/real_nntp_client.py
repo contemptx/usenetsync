@@ -25,6 +25,7 @@ class RealNNTPClient:
     def __init__(self):
         """Initialize REAL NNTP client"""
         self.client = None
+        self.connection = None  # Expose raw connection for direct access
         self.connected = False
         self.authenticated = False
         self.server_info = {}
@@ -64,6 +65,7 @@ class RealNNTPClient:
                 )
             
             self.connected = True
+            self.connection = self.client  # Expose raw connection
             self.server_info = {
                 'host': host,
                 'port': port,
@@ -145,7 +147,8 @@ class RealNNTPClient:
             
             logger.info(f"Posting article to {newsgroups} with Message-ID: {message_id}")
             
-            # POST to REAL Usenet server using pynntp format
+            # POST to REAL Usenet server
+            # pynntp's post method expects headers dict and body separately
             response = self.client.post(headers=headers, body=body)
             
             logger.info(f"✅ POSTED successfully: {message_id}")
