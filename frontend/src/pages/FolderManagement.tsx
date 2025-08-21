@@ -112,7 +112,13 @@ export const FolderManagement: React.FC = () => {
       }
       
       const result = await getFolders();
-      setFolders(result as ManagedFolder[]);
+      // Ensure result is an array
+      if (Array.isArray(result)) {
+        setFolders(result as ManagedFolder[]);
+      } else {
+        console.warn('getFolders returned non-array:', result);
+        setFolders([]);
+      }
       setDbError(null); // Clear any previous errors
     } catch (error: any) {
       console.error('Failed to load folders:', error);

@@ -93,8 +93,39 @@ class UnifiedAPIServer:
         
         @self.app.get("/api/v1/events/transfers")
         async def get_transfer_events():
-            """Get transfer events (SSE endpoint placeholder)"""
-            return {"events": []}
+            """Get real transfer events from the system"""
+            if not self.system or not self.system.db:
+                return {"events": []}
+            
+            # Get recent transfer events from upload and download queues
+            uploads = self.system.db.fetch_all(
+                "SELECT * FROM upload_queue WHERE state IN ('uploading', 'completed') ORDER BY started_at DESC LIMIT 10"
+            )
+            downloads = self.system.db.fetch_all(
+                "SELECT * FROM download_queue WHERE state IN ('downloading', 'completed') ORDER BY started_at DESC LIMIT 10"
+            )
+            
+            events = []
+            if uploads:
+                for u in uploads:
+                    events.append({
+                        "type": "upload",
+                        "id": u.get("queue_id"),
+                        "state": u.get("state"),
+                        "progress": u.get("progress", 0),
+                        "timestamp": u.get("started_at")
+                    })
+            if downloads:
+                for d in downloads:
+                    events.append({
+                        "type": "download",
+                        "id": d.get("queue_id"),
+                        "state": d.get("state"),
+                        "progress": d.get("progress", 0),
+                        "timestamp": d.get("started_at")
+                    })
+            
+            return {"events": events}
         
         @self.app.get("/api/v1/database/status")
         async def get_database_status():
@@ -162,6 +193,17 @@ class UnifiedAPIServer:
             return dict(folder)
         
         # Share endpoints
+        @self.app.get("/api/v1/shares")
+        async def get_shares():
+            """Get all shares from the database"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            shares = self.system.db.fetch_all(
+                "SELECT * FROM shares ORDER BY created_at DESC"
+            )
+            return [dict(s) for s in shares] if shares else []
+        
         @self.app.post("/api/v1/shares")
         async def create_share(
             folder_id: str,
