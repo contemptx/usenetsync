@@ -1,0 +1,315 @@
+name: Tauri App E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Enable debug mode'
+        required: false
+        default: false
+
+env:
+  RUST_BACKTRACE: 1
+  TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+  TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [18.x, 20.x]
+        include:
+          - os: ubuntu-latest
+            rust-target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            rust-target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.rust-target }}
+
+    - name: Rust cache
+      uses: swatinem/rust-cache@v2
+      with:
+        workspaces: './src-tauri -> target'
+
+    - name: Install Linux dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.0-dev \
+          libgtk-3-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev \
+          patchelf \
+          xvfb \
+          x11-utils \
+          x11-xserver-utils \
+          dbus-x11 \
+          at-spi2-core
+
+    - name: Install Windows dependencies
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install visualstudio2022-workload-vctools -y
+
+    - name: Install tauri-driver
+      run: |
+        cargo install tauri-driver --locked
+
+    - name: Install Node dependencies
+      run: npm ci
+
+    - name: Build Tauri app
+      run: npm run tauri build
+      env:
+        CI: true
+
+    - name: Setup display (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        export DISPLAY=:99
+        sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+        sleep 3
+
+    - name: Run E2E tests (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        export DISPLAY=:99
+        npm run test:e2e
+      env:
+        CI: true
+
+    - name: Run E2E tests (Windows)
+      if: matrix.os == 'windows-latest'
+      run: npm run test:e2e
+      env:
+        CI: true
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}-node${{ matrix.node-version }}
+        path: |
+          allure-results/
+          test/visual/screenshots/
+          test-results/
+        retention-days: 30
+
+    - name: Upload visual regression baselines
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: visual-baselines-${{ matrix.os }}
+        path: test/visual/baseline/
+        retention-days: 7
+
+    - name: Generate Allure Report
+      if: always()
+      run: |
+        npm run allure:generate
+        
+    - name: Upload Allure Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: allure-report-${{ matrix.os }}-node${{ matrix.node-version }}
+        path: allure-report/
+        retention-days: 30
+
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Read test results
+          let testSummary = '## Test Results\n\n';
+          testSummary += `Platform: ${{ matrix.os }} | Node: ${{ matrix.node-version }}\n`;
+          testSummary += `Status: ${{ job.status }}\n\n`;
+          
+          // Add link to artifacts
+          testSummary += `[View detailed test report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+          
+          // Comment on PR
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: testSummary
+          });
+
+  visual-diff-check:
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: test-results-*
+        merge-multiple: true
+
+    - name: Analyze visual differences
+      run: |
+        echo "Analyzing visual regression results..."
+        # This would run a script to analyze visual diffs
+
+    - name: Create visual diff report
+      if: failure()
+      run: |
+        echo "Visual differences detected. Creating report..."
+        # Generate HTML report of visual differences
+
+  ai-triage:
+    needs: [test, visual-diff-check]
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download test artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: test-results-*
+        merge-multiple: true
+
+    - name: Setup Python for AI analysis
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install AI triage dependencies
+      run: |
+        pip install openai pandas numpy scikit-learn
+
+    - name: Run AI-powered test triage
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        python scripts/ai_triage.py
+
+    - name: Create AI analysis report
+      id: ai_report
+      run: |
+        echo "ai_suggestions=$(cat ai_analysis.json)" >> $GITHUB_OUTPUT
+
+    - name: Comment AI suggestions on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const aiSuggestions = ${{ steps.ai_report.outputs.ai_suggestions }};
+          
+          let comment = '## 🤖 AI Test Analysis\n\n';
+          comment += '### Failure Analysis\n';
+          comment += aiSuggestions.analysis + '\n\n';
+          comment += '### Suggested Fixes\n';
+          comment += aiSuggestions.suggestions + '\n\n';
+          comment += '### Auto-fix Available\n';
+          if (aiSuggestions.autofix_available) {
+            comment += '✅ Auto-fix can be applied. Reply with `/autofix` to apply.\n';
+          } else {
+            comment += '❌ Manual intervention required.\n';
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+  autofix:
+    needs: ai-triage
+    runs-on: ubuntu-latest
+    if: |
+      failure() && 
+      github.event_name == 'issue_comment' && 
+      contains(github.event.comment.body, '/autofix')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download AI analysis
+      uses: actions/download-artifact@v4
+      with:
+        name: ai-analysis
+
+    - name: Apply auto-fixes
+      run: |
+        python scripts/apply_autofix.py
+
+    - name: Commit and push fixes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "🤖 Apply AI-suggested fixes for test failures"
+        git push
+
+    - name: Re-run tests
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.actions.createWorkflowDispatch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'test.yml',
+            ref: context.ref
+          });
+
+  deploy-test-report:
+    needs: [test, visual-diff-check]
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Download all reports
+      uses: actions/download-artifact@v4
+      with:
+        pattern: allure-report-*
+        merge-multiple: true
+        path: public/
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./public
+        publish_branch: gh-pages
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
