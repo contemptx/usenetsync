@@ -34,9 +34,23 @@ if (!tauriInvoke) {
           const licenseResp = await fetch(`${BACKEND_URL}/api/v1/license/status`);
           if (!licenseResp.ok) {
             // If no license endpoint, return trial for development
-            return { valid: true, type: 'trial', expires: Date.now() + 86400000 };
+            return { 
+              activated: true, 
+              genuine: true, 
+              type: 'trial', 
+              expires: Date.now() + 86400000,
+              valid: true 
+            };
           }
-          return await licenseResp.json();
+          const licenseData = await licenseResp.json();
+          // Ensure the response has the expected format
+          return {
+            activated: licenseData.activated ?? true,
+            genuine: licenseData.genuine ?? true,
+            type: licenseData.type ?? 'trial',
+            expires: licenseData.expires ?? Date.now() + 86400000,
+            valid: licenseData.valid ?? true
+          };
         
         case 'get_system_stats':
           // Real backend stats
