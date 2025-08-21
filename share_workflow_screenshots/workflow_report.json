@@ -1,0 +1,32 @@
+{
+  "timestamp": "2025-08-21T21:31:54.044Z",
+  "test_type": "Complete Share Workflow",
+  "screenshots": 22,
+  "share_ids": {
+    "public": "PUB_MTc1NTgxMTkwODIy",
+    "private": "PRIV_MTc1NTgxMTkwNzkx",
+    "protected": "PROT_MTc1NTgxMTkwODEy"
+  },
+  "users_configured": [
+    "alice@example.com",
+    "bob@example.com",
+    "charlie@example.com",
+    "david@example.com",
+    "eve@example.com"
+  ],
+  "usenet_server": "news.newshosting.com:563",
+  "message_ids": [
+    "<qymfgijbpb2yet1y@ngPost.com>",
+    "<0ylnqbb0skg5or30@ngPost.com>",
+    "<fg1ip901zkhwwcq5@ngPost.com>"
+  ],
+  "operations": [
+    "Indexing in progress",
+    "Segmenting in progress",
+    "Uploading in progress",
+    "User management for private shares",
+    "Share ID generation",
+    "Download process with access control"
+  ],
+  "status": "SUCCESS"
+}
