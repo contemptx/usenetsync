@@ -28,7 +28,23 @@ from enum import Enum
 
 # Fix for SQLite datetime deprecation warning (Python 3.12+)
 sqlite3.register_adapter(datetime, lambda dt: dt.isoformat())
-sqlite3.register_converter("timestamp", lambda b: datetime.fromisoformat(b.decode()))
+
+def convert_timestamp(b):
+    """Convert timestamp from database - handles both Unix timestamps and ISO format"""
+    value = b.decode()
+    try:
+        # Try to parse as float (Unix timestamp)
+        return datetime.fromtimestamp(float(value))
+    except ValueError:
+        # Try to parse as ISO format string
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            # If all else fails, return current time
+            logger.warning(f"Could not parse timestamp: {value}")
+            return datetime.now()
+
+sqlite3.register_converter("timestamp", convert_timestamp)
 
 logger = logging.getLogger(__name__)
 
