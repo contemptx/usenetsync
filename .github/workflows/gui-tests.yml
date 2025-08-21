@@ -86,7 +86,7 @@ jobs:
         
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results-${{ matrix.os }}-node${{ matrix.node-version }}
         path: |
@@ -96,7 +96,7 @@ jobs:
           
     - name: Upload visual regression baselines
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: visual-baselines-${{ matrix.os }}
         path: frontend/tests/visual-baseline/
@@ -110,7 +110,7 @@ jobs:
         
     - name: Upload Allure Report
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: allure-report-${{ matrix.os }}-node${{ matrix.node-version }}
         path: frontend/allure-report/
@@ -131,12 +131,12 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Download test artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         path: test-artifacts/
         
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         
@@ -146,6 +146,7 @@ jobs:
         pip install xmltodict json5
         
     - name: Run AI triage script
+      id: ai-triage
       run: python .github/scripts/ai-triage.py
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -153,7 +154,7 @@ jobs:
         
     - name: Create issue for failures
       if: steps.ai-triage.outputs.create-issue == 'true'
-      uses: actions/create-issue@v2
+      uses: peter-evans/create-issue@v5
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -173,7 +174,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Download triage results
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: ai-triage-results
         path: triage-results/
@@ -184,6 +185,7 @@ jobs:
         node-version: '20.x'
         
     - name: Apply AI-suggested fixes
+      id: autofix
       run: |
         node .github/scripts/apply-autofix.js
         
