@@ -251,6 +251,62 @@ class UnifiedAPIServer:
             
             return {"success": True}
         
+        @self.app.post("/api/v1/is_user_initialized")
+        async def is_user_initialized():
+            """Check if user is initialized"""
+            if not self.system or not self.system.db:
+                return {"initialized": False}
+            
+            # Check if any users exist
+            users = self.system.db.fetch_all("SELECT COUNT(*) as count FROM users")
+            if users and len(users) > 0 and users[0].get("count", 0) > 0:
+                return {"initialized": True}
+            return {"initialized": False}
+        
+        @self.app.post("/api/v1/folder_info")
+        async def folder_info(request: dict = {}):
+            """Get folder information"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not available")
+            
+            folder_id = request.get("folderId") or request.get("folder_id")
+            if not folder_id:
+                raise HTTPException(status_code=400, detail="Folder ID is required")
+            
+            # Get folder info
+            folders = self.system.db.fetch_all(
+                "SELECT * FROM folders WHERE folder_id = ?", (folder_id,)
+            )
+            
+            if not folders or len(folders) == 0:
+                raise HTTPException(status_code=404, detail=f"Folder {folder_id} not found")
+            
+            folder = folders[0]
+            
+            # Get file count
+            files = self.system.db.fetch_all(
+                "SELECT COUNT(*) as count FROM files WHERE folder_id = ?", (folder_id,)
+            )
+            file_count = files[0].get("count", 0) if files else 0
+            
+            # Get segment count
+            segments = self.system.db.fetch_all(
+                "SELECT COUNT(*) as count FROM segments WHERE folder_id = ?", (folder_id,)
+            )
+            segment_count = segments[0].get("count", 0) if segments else 0
+            
+            return {
+                "folder_id": folder_id,
+                "name": folder.get("name"),
+                "path": folder.get("path"),
+                "state": folder.get("state"),
+                "total_files": file_count,
+                "total_segments": segment_count,
+                "total_size": folder.get("total_size", 0),
+                "created_at": folder.get("created_at"),
+                "updated_at": folder.get("updated_at")
+            }
+        
         # Folder management endpoints
         @self.app.post("/api/v1/add_folder")
         async def add_folder(request: dict):
@@ -274,9 +330,22 @@ class UnifiedAPIServer:
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not available")
             
+            # Get folder ID from request
+            folder_id = request.get("folderId") or request.get("folder_id")
             folder_path = request.get("folderPath") or request.get("path")
+            
+            # If we have a folder ID, get the path from database
+            if folder_id and not folder_path:
+                folders = self.system.db.fetch_all(
+                    "SELECT path FROM folders WHERE folder_id = ?", (folder_id,)
+                )
+                if folders and len(folders) > 0:
+                    folder_path = folders[0].get("path")
+                else:
+                    raise HTTPException(status_code=404, detail=f"Folder {folder_id} not found")
+            
             if not folder_path:
-                raise HTTPException(status_code=400, detail="Folder path is required")
+                raise HTTPException(status_code=400, detail="Folder path or ID is required")
             
             # Index the folder
             owner_id = "default_user"  # TODO: Get from auth
