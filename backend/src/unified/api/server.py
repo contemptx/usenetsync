@@ -81,6 +81,21 @@ class UnifiedAPIServer:
                 }
             return {"status": "healthy"}
         
+        @self.app.get("/api/v1/license/status")
+        async def get_license_status():
+            """Get license status"""
+            return {
+                "status": "active",
+                "type": "trial",
+                "expires_at": "2025-12-31T23:59:59Z",
+                "features": ["all"]
+            }
+        
+        @self.app.get("/api/v1/events/transfers")
+        async def get_transfer_events():
+            """Get transfer events (SSE endpoint placeholder)"""
+            return {"events": []}
+        
         # User endpoints
         @self.app.post("/api/v1/users")
         async def create_user(username: str, email: Optional[str] = None):
