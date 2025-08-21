@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "created": "2025-08-21T20:11:20.925119",
+  "settings": {
+    "segment_size": 500000,
+    "compression": "none",
+    "encryption": "none"
+  },
+  "metadata": {
+    "author": "Test System",
+    "purpose": "Usenet upload test",
+    "server": "news.newshosting.com"
+  }
+}
