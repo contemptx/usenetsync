@@ -1,0 +1,46 @@
+{
+  "timestamp": "2025-08-22T00:33:43.707834",
+  "files": [
+    {
+      "name": "document.txt",
+      "path": "/workspace/detailed_test/document.txt",
+      "size": 102400,
+      "hash": "c68897b2fa2331c0b2273e0ad1036d53a78b270f31d1e5f9147d21828ac8eb1b",
+      "created": "2025-08-22T00:33:43.708092"
+    },
+    {
+      "name": "image.jpg",
+      "path": "/workspace/detailed_test/image.jpg",
+      "size": 512000,
+      "hash": "4d06b6df233da8b41880d17b42b0db8c2628689925d61c6ddd674814631e58f7",
+      "created": "2025-08-22T00:33:43.708976"
+    },
+    {
+      "name": "video.mp4",
+      "path": "/workspace/detailed_test/video.mp4",
+      "size": 2097152,
+      "hash": "aa90552427f0fb42d2e09e961923fba5142849103a6eff110792371f808b5abf",
+      "created": "2025-08-22T00:33:43.713271"
+    }
+  ],
+  "segments": [],
+  "message_ids": [],
+  "timings": {
+    "add_folder": 0.01171565055847168,
+    "indexing": 0.3113830089569092
+  },
+  "hashes": {
+    "document.txt": "c68897b2fa2331c0b2273e0ad1036d53a78b270f31d1e5f9147d21828ac8eb1b",
+    "image.jpg": "4d06b6df233da8b41880d17b42b0db8c2628689925d61c6ddd674814631e58f7",
+    "video.mp4": "aa90552427f0fb42d2e09e961923fba5142849103a6eff110792371f808b5abf"
+  },
+  "folder_structure": {
+    "path": "/workspace/detailed_test",
+    "files": [
+      "document.txt",
+      "image.jpg",
+      "video.mp4"
+    ],
+    "total_size": 2711552
+  }
+}
