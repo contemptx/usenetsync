@@ -1,0 +1,26 @@
+{
+  "timestamp": "2025-08-22T00:02:29.001Z",
+  "healthScore": 100,
+  "totalTests": 16,
+  "passed": [
+    "Navigate to Folders",
+    "Add Folder button visible",
+    "Add Folder button has plus icon",
+    "Select folder",
+    "overview tab",
+    "files tab",
+    "segments tab",
+    "shares tab",
+    "actions tab",
+    "Index button exists",
+    "Segment Files button exists",
+    "Upload to Usenet button exists",
+    "Create Share button exists",
+    "Folders API",
+    "Progress API",
+    "User Check API"
+  ],
+  "failed": [],
+  "warnings": [],
+  "screenshots": 6
+}

@@ -540,10 +540,11 @@ export const FolderManagement: React.FC = () => {
             <button
               onClick={handleAddFolder}
               disabled={loading}
-              className="p-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 flex items-center gap-2"
               title="Add Folder"
             >
-              <FolderOpen className="w-5 h-5" />
+              <span className="text-lg">+</span>
+              <span>Add Folder</span>
             </button>
           </div>
         </div>
@@ -1115,29 +1116,29 @@ export const FolderManagement: React.FC = () => {
 
                       <button
                         onClick={() => handleSegmentFolder(selectedFolder.folder_id)}
-                        disabled={!['indexed', 'segmented', 'uploaded', 'published'].includes(selectedFolder.state)}
+                        disabled={!['indexed', 'segmented', 'uploaded', 'published'].includes(selectedFolder.state || selectedFolder.status)}
                         className="w-full px-4 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <Package className="w-5 h-5" />
-                        {selectedFolder.total_segments > 0 ? 'Re-segment Folder' : 'Create Segments'}
+                        Segment Files
                       </button>
 
                       <button
                         onClick={() => handleUploadFolder(selectedFolder.folder_id)}
-                        disabled={!['segmented', 'uploaded', 'published'].includes(selectedFolder.state)}
+                        disabled={!['segmented', 'uploaded', 'published'].includes(selectedFolder.state || selectedFolder.status)}
                         className="w-full px-4 py-3 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <Upload className="w-5 h-5" />
-                        {['uploaded', 'published'].includes(selectedFolder.state) ? 'Re-upload to Usenet' : 'Upload to Usenet'}
+                        Upload to Usenet
                       </button>
 
                       <button
                         onClick={() => setShowShareDialog(true)}
-                        disabled={selectedFolder.state !== 'uploaded'}
+                        disabled={!['segmented', 'uploaded', 'published'].includes(selectedFolder.state || selectedFolder.status)}
                         className="w-full px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <Share2 className="w-5 h-5" />
-                        {selectedFolder.published ? 'Create New Share' : 'Publish Folder'}
+                        Create Share
                       </button>
                     </div>
                   </div>
