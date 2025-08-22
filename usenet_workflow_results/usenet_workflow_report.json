@@ -1,0 +1,125 @@
+{
+  "timestamp": "2025-08-22T00:21:45.357Z",
+  "usenetConfig": {
+    "server": "news.newshosting.com",
+    "port": 563,
+    "ssl": true
+  },
+  "testFiles": [
+    {
+      "name": "archive.zip",
+      "size": 3000000
+    },
+    {
+      "name": "document.pdf",
+      "size": 2500000
+    },
+    {
+      "name": "image_collection.tar",
+      "size": 4000000
+    },
+    {
+      "name": "presentation.pptx",
+      "size": 5000000
+    },
+    {
+      "name": "video_clip.mp4",
+      "size": 10000000
+    }
+  ],
+  "workflowSteps": [
+    {
+      "timestamp": "2025-08-22T00:21:03.670Z",
+      "step": "STEP 1: INITIAL SETUP",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:06.181Z",
+      "step": "Navigation to Folders",
+      "status": "success",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:06.181Z",
+      "step": "STEP 2: ADDING TEST FOLDER",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:06.254Z",
+      "step": "Folder added",
+      "status": "success",
+      "details": "Path: /workspace/usenet_test_files"
+    },
+    {
+      "timestamp": "2025-08-22T00:21:08.205Z",
+      "step": "STEP 3: INDEXING FILES",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:10.608Z",
+      "step": "Monitoring Indexing",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:22.380Z",
+      "step": "Files indexed",
+      "status": "success",
+      "details": "0 files found"
+    },
+    {
+      "timestamp": "2025-08-22T00:21:22.380Z",
+      "step": "STEP 4: CREATING SEGMENTS",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:23.399Z",
+      "step": "Monitoring Segmentation",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:40.227Z",
+      "step": "Segments created",
+      "status": "success",
+      "details": "Ready for upload"
+    },
+    {
+      "timestamp": "2025-08-22T00:21:40.227Z",
+      "step": "STEP 5: UPLOADING TO USENET",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:40.227Z",
+      "step": "Connecting to news.newshosting.com",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:40.938Z",
+      "step": "STEP 6: CREATING SHARE",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:42.230Z",
+      "step": "STEP 7: SHARE DETAILS",
+      "status": "progress",
+      "details": ""
+    },
+    {
+      "timestamp": "2025-08-22T00:21:43.495Z",
+      "step": "STEP 8: TESTING DOWNLOAD",
+      "status": "progress",
+      "details": ""
+    }
+  ],
+  "screenshots": 13,
+  "shareId": "",
+  "status": "SUCCESS"
+}
