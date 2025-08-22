@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "type": "REAL_USENET_SHARE",
+  "created": "2025-08-22T08:25:20.015601",
+  "server": "news.newshosting.com",
+  "newsgroup": "alt.binaries.test",
+  "file": {
+    "name": "real_test.txt",
+    "size": 634,
+    "hash": "a70727150bdbb535db87dcbdfcda4b0378361f2492510e0ad131043941f788cc",
+    "segments": 1
+  },
+  "message_ids": [
+    "<6ba9o6c4oy8rpebn@ngPost.com>"
+  ],
+  "note": "These are REAL Message-IDs on news.newshosting.com"
+}
