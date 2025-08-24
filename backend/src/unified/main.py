@@ -494,6 +494,212 @@ class UnifiedSystem:
             logger.error(f"Failed to get download progress for {download_id}: {e}")
             raise
     
+    def get_file_version_by_hash(self, file_hash: str) -> Dict[str, Any]:
+        """
+        Get file version information by file hash
+        
+        Args:
+            file_hash: SHA256 hash of the file
+            
+        Returns:
+            Dict with file version information
+        """
+        try:
+            # Find all files with this hash
+            files = self.db.fetch_all(
+                """SELECT f.file_id, f.name, f.path, f.size, f.hash, 
+                          f.version, f.previous_version, f.change_type,
+                          f.created_at, f.modified_at,
+                          fo.folder_id, fo.path as folder_path, fo.name as folder_name
+                   FROM files f
+                   JOIN folders fo ON f.folder_id = fo.folder_id
+                   WHERE f.hash = ?
+                   ORDER BY f.version DESC""",
+                (file_hash,)
+            )
+            
+            if not files:
+                raise ValueError(f"No files found with hash {file_hash}")
+            
+            # Get the latest version
+            latest = dict(files[0])
+            
+            # Get version history for the primary file
+            version_history = []
+            if len(files) > 0:
+                file_id = latest['file_id']
+                
+                # Get all versions of this specific file
+                versions = self.db.fetch_all(
+                    """SELECT version, hash, size, change_type, modified_at
+                       FROM files
+                       WHERE file_id = ?
+                       ORDER BY version DESC""",
+                    (file_id,)
+                )
+                
+                if versions:
+                    version_history = [dict(v) for v in versions]
+            
+            # Count how many files have this hash
+            file_count = len(files)
+            
+            # Get segment information if available
+            segments = self.db.fetch_all(
+                """SELECT s.segment_id, s.segment_index, s.size, s.hash, s.message_id
+                   FROM segments s
+                   JOIN files f ON s.file_id = f.file_id
+                   WHERE f.hash = ?
+                   ORDER BY s.segment_index""",
+                (file_hash,)
+            )
+            
+            result = {
+                'file_hash': file_hash,
+                'latest_version': latest,
+                'version_history': version_history,
+                'files_with_hash': file_count,
+                'all_files': [dict(f) for f in files],
+                'segments': [dict(s) for s in segments] if segments else [],
+                'segment_count': len(segments) if segments else 0
+            }
+            
+            return result
+            
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get file version for hash {file_hash}: {e}")
+            raise
+    
+    def get_license_status(self) -> Dict[str, Any]:
+        """
+        Get license status from configuration
+        
+        Returns:
+            Dict with license information
+        """
+        try:
+            # Get license configuration from database
+            license_config = {}
+            
+            # Get license type
+            license_type = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'license_type'",
+                ()
+            )
+            license_config['type'] = license_type['value'] if license_type else 'community'
+            
+            # Get license status
+            license_status = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'license_status'",
+                ()
+            )
+            license_config['status'] = license_status['value'] if license_status else 'active'
+            
+            # Get license expiry
+            license_expiry = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'license_expiry'",
+                ()
+            )
+            license_config['expires_at'] = license_expiry['value'] if license_expiry else None
+            
+            # Get license key
+            license_key = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'license_key'",
+                ()
+            )
+            license_config['key'] = license_key['value'][:8] + '...' if license_key else None
+            
+            # Get licensed features
+            licensed_features = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'licensed_features'",
+                ()
+            )
+            if licensed_features:
+                import json
+                try:
+                    license_config['features'] = json.loads(licensed_features['value'])
+                except:
+                    license_config['features'] = ['basic']
+            else:
+                license_config['features'] = ['basic'] if license_config['type'] == 'community' else ['all']
+            
+            # Get license limits
+            max_folders = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'license_max_folders'",
+                ()
+            )
+            max_users = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'license_max_users'",
+                ()
+            )
+            max_shares = self.db.fetch_one(
+                "SELECT value FROM configuration WHERE key = 'license_max_shares'",
+                ()
+            )
+            
+            limits = {}
+            if max_folders:
+                limits['max_folders'] = int(max_folders['value'])
+            if max_users:
+                limits['max_users'] = int(max_users['value'])
+            if max_shares:
+                limits['max_shares'] = int(max_shares['value'])
+            
+            if limits:
+                license_config['limits'] = limits
+            
+            # Calculate days until expiry if applicable
+            if license_config.get('expires_at'):
+                from datetime import datetime
+                try:
+                    expiry = datetime.fromisoformat(license_config['expires_at'].replace('Z', '+00:00'))
+                    days_left = (expiry - datetime.now(expiry.tzinfo)).days
+                    license_config['days_until_expiry'] = max(0, days_left)
+                    
+                    # Update status if expired
+                    if days_left < 0:
+                        license_config['status'] = 'expired'
+                except:
+                    pass
+            
+            # Get current usage stats for comparison with limits
+            if limits:
+                usage = {}
+                
+                folder_count = self.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM folders",
+                    ()
+                )
+                usage['folders'] = folder_count['count'] if folder_count else 0
+                
+                user_count = self.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM users",
+                    ()
+                )
+                usage['users'] = user_count['count'] if user_count else 0
+                
+                share_count = self.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM shares",
+                    ()
+                )
+                usage['shares'] = share_count['count'] if share_count else 0
+                
+                license_config['usage'] = usage
+            
+            return license_config
+            
+        except Exception as e:
+            logger.error(f"Failed to get license status: {e}")
+            # Return default community license on error
+            return {
+                'type': 'community',
+                'status': 'active',
+                'features': ['basic'],
+                'error': str(e)
+            }
+    
     def delete_user(self, user_id: str) -> Dict[str, Any]:
         """
         Delete a user and all associated data

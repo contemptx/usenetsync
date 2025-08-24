@@ -126,13 +126,16 @@ class UnifiedAPIServer:
         
         @self.app.get("/api/v1/license/status")
         async def get_license_status():
-            """Get license status"""
-            return {
-                "status": "active",
-                "type": "trial",
-                "expires_at": "2025-12-31T23:59:59Z",
-                "features": ["all"]
-            }
+            """Get license status from configuration"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.get_license_status()
+                return result
+            except Exception as e:
+                logger.error(f"Failed to get license status: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/api/v1/events/transfers")
         async def get_transfer_events(limit: int = 20, type: str = None, state: str = None):
@@ -965,6 +968,22 @@ class UnifiedAPIServer:
             except Exception as e:
                 logger.error(f"Failed to get download progress: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/indexing/version/{file_hash}")
+        async def get_file_version(file_hash: str):
+            """Get file version information by file hash"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.get_file_version_by_hash(file_hash)
+                return result
+            except ValueError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except Exception as e:
+                logger.error(f"Failed to get file version: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
             """Create webhook"""
