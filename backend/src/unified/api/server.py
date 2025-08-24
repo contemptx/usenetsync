@@ -60,8 +60,8 @@ class UnifiedAPIServer:
         # Setup routes
         self._setup_routes()
         
-        # Setup WebSocket
-        self._setup_websocket()
+        # Setup WebSocket (if needed later)
+        # self._setup_websocket()
     
     def _setup_routes(self):
         """Setup API routes"""
@@ -226,7 +226,6 @@ class UnifiedAPIServer:
         @self.app.post("/api/v1/is_user_initialized")
         async def is_user_initialized():
             """Check if user is initialized"""
-            return {"initialized": True}
         
         @self.app.post("/api/v1/test_server_connection")
         async def test_server_connection(request: dict = {}):
@@ -273,7 +272,6 @@ class UnifiedAPIServer:
         @self.app.post("/api/v1/save_server_config")
         async def save_server_config(request: dict):
             """Save server configuration"""
-            return {"success": True, "message": "Configuration saved"}
         
         @self.app.get("/api/v1/progress/{progress_id}")
         async def get_progress(progress_id: str):
@@ -611,36 +609,14 @@ class UnifiedAPIServer:
         
         @self.app.delete("/api/v1/batch/files")
         async def batch_delete_files(request: dict = {}):
-            """Delete multiple files"""
-            try:
-                file_ids = request.get('file_ids', [])
-                
-                if not file_ids:
-                    raise HTTPException(status_code=400, detail="File IDs required")
-                
-                deleted = []
-                failed = []
-                
-                for file_id in file_ids:
-                    # Simulate deletion
-                    if hash(file_id) % 10 != 0:  # 90% success rate
-                        deleted.append(file_id)
-                    else:
-                        failed.append(file_id)
-                
-                return {
-                    "success": True,
-                    "deleted": deleted,
-                    "failed": failed,
-                    "total_deleted": len(deleted),
-                    "total_failed": len(failed)
-                }
-                
-            except Exception as e:
-                logger.error(f"Batch delete files failed: {e}")
-                # raise HTTPException(status_code=500, detail=str(e))
-        
-        # ==================== WEBHOOK ENDPOINTS ====================
+            """Batch delete files"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            file_ids = request.get("file_ids")
+            if not file_ids:
+                raise HTTPException(status_code=400, detail="file_ids required")
+            # Implement actual batch delete logic
+            return self.system.batch_delete_files(file_ids)
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
             """Create webhook"""
