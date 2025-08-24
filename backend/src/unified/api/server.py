@@ -2179,6 +2179,34 @@ class UnifiedAPIServer:
                 if failed_uploads:
                     operations["uploads"]["failed_today"] = failed_uploads['count']
                 
+                # Get today's completed/failed downloads
+                completed_downloads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM download_queue WHERE state = 'completed' AND completed_at >= ?",
+                    (today_start.isoformat(),)
+                )
+                if completed_downloads:
+                    operations["downloads"]["completed_today"] = completed_downloads['count']
+                
+                failed_downloads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM download_queue WHERE state = 'failed' AND completed_at >= ?",
+                    (today_start.isoformat(),)
+                )
+                if failed_downloads:
+                    operations["downloads"]["failed_today"] = failed_downloads['count']
+                
+                # Get queued operations
+                queued_uploads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'queued'"
+                )
+                if queued_uploads:
+                    operations["uploads"]["queued"] = queued_uploads['count']
+                
+                queued_downloads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM download_queue WHERE state = 'queued'"
+                )
+                if queued_downloads:
+                    operations["downloads"]["queued"] = queued_downloads['count']
+                
                 # Recent alerts
                 recent_alerts = self.system.db.fetch_all(
                     "SELECT alert_id, name, severity, last_triggered FROM alerts WHERE enabled = 1 ORDER BY last_triggered DESC LIMIT 5"
