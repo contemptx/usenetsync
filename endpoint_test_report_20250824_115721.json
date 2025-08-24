@@ -1,0 +1,895 @@
+{
+  "passed": [
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/auth/permissions",
+      "description": "Get auth permissions",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/auth/login",
+      "description": "Login",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/auth/logout",
+      "description": "Logout",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/backup/list",
+      "description": "List backups",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/backup/create",
+      "description": "Create backup",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/backup/restore",
+      "description": "Restore backup",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/backup/schedule",
+      "description": "Schedule backup",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/backup/verify",
+      "description": "Verify backup",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/download/cache/stats",
+      "description": "Download cache stats",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/download/progress/{download_id}",
+      "description": "Download progress",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/batch",
+      "description": "Batch download",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/cache/clear",
+      "description": "Clear cache",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/cache/optimize",
+      "description": "Optimize cache",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/cancel",
+      "description": "Cancel download",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/pause",
+      "description": "Pause download",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/reconstruct",
+      "description": "Reconstruct file",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/resume",
+      "description": "Resume download",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download_share",
+      "description": "Download share",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/streaming/start",
+      "description": "Start streaming",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/verify",
+      "description": "Verify download",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/folders",
+      "description": "List folders",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/folders/{folder_id}",
+      "description": "Get folder",
+      "status": "\u2705 404 (Not found - OK)"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/indexing/stats",
+      "description": "Indexing stats",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/indexing/version/{file_hash}",
+      "description": "File version",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/indexing/binary",
+      "description": "Binary index",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/indexing/deduplicate",
+      "description": "Deduplicate",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/indexing/rebuild",
+      "description": "Rebuild index",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/indexing/verify",
+      "description": "Verify index",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/migration/status",
+      "description": "Migration status",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/migration/rollback",
+      "description": "Rollback migration",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/monitoring/alerts/{alert_id}",
+      "description": "Delete alert",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/metrics",
+      "description": "System metrics",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/monitoring/alerts/list",
+      "description": "List alerts",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/monitoring/dashboard",
+      "description": "Monitoring dashboard",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/monitoring/metrics/{metric_name}/stats",
+      "description": "Metric stats",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/monitoring/metrics/{metric_name}/values",
+      "description": "Metric values",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/monitoring/system_status",
+      "description": "System status",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/monitoring/export",
+      "description": "Export monitoring",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/monitoring/record_metric",
+      "description": "Record metric",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/monitoring/record_operation",
+      "description": "Record operation",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/network/servers/{server_id}",
+      "description": "Delete server",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/network/bandwidth/current",
+      "description": "Current bandwidth",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/network/connection_pool",
+      "description": "Connection pool",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/network/connection_pool/stats",
+      "description": "Connection pool stats",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/network/servers/list",
+      "description": "List servers",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/network/servers/{server_id}/health",
+      "description": "Server health",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/network/bandwidth/limit",
+      "description": "Set bandwidth limit",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/network/retry/configure",
+      "description": "Configure retry",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/network/servers/add",
+      "description": "Add server",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/network/servers/{server_id}/test",
+      "description": "Test server",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/publishing/commitment/list",
+      "description": "List commitments",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/publishing/expiry/set",
+      "description": "Set expiry",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/rate_limit/quotas",
+      "description": "Rate limit quotas",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/rate_limit/status",
+      "description": "Rate limit status",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/generate_api_key",
+      "description": "Generate API key",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/generate_folder_key",
+      "description": "Generate folder key",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/generate_user_keys",
+      "description": "Generate user keys",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/grant_access",
+      "description": "Grant access",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/hash_password",
+      "description": "Hash password",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/revoke_access",
+      "description": "Revoke access",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/sanitize_path",
+      "description": "Sanitize path",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/session/create",
+      "description": "Create session",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/session/verify",
+      "description": "Verify session",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/verify_api_key",
+      "description": "Verify API key",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/segmentation/info/{file_hash}",
+      "description": "Segmentation info",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/segmentation/hash/calculate",
+      "description": "Calculate hash",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/segmentation/headers/generate",
+      "description": "Generate headers",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/segmentation/pack",
+      "description": "Pack segments",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/segmentation/redundancy/add",
+      "description": "Add redundancy",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/segmentation/redundancy/verify",
+      "description": "Verify redundancy",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/segmentation/unpack",
+      "description": "Unpack segments",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/shares",
+      "description": "List shares",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/shares/{share_id}",
+      "description": "Get share",
+      "status": "\u2705 404 (Not found - OK)"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/batch/shares",
+      "description": "Batch create shares",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/",
+      "description": "Root endpoint",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/database/status",
+      "description": "Database status",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/events/transfers",
+      "description": "Transfer events",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/license/status",
+      "description": "License status",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/logs",
+      "description": "Get logs",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/progress",
+      "description": "All progress",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/progress/{progress_id}",
+      "description": "Specific progress",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/search",
+      "description": "Search",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/stats",
+      "description": "Statistics",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/health",
+      "description": "Health check",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/get_logs",
+      "description": "Get logs",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/get_user_info",
+      "description": "Get user info",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/upload/queue/{queue_id}",
+      "description": "Upload queue item",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/upload/status",
+      "description": "Upload status",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/upload/strategy",
+      "description": "Upload strategy",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/batch",
+      "description": "Batch upload",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload_folder",
+      "description": "Upload folder",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/queue/pause",
+      "description": "Pause queue",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/queue/resume",
+      "description": "Resume queue",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/session/create",
+      "description": "Create session",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/session/{session_id}/end",
+      "description": "End session",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/worker/add",
+      "description": "Add worker",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/worker/{worker_id}/stop",
+      "description": "Stop worker",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "PUT",
+      "endpoint": "/api/v1/upload/queue/{queue_id}/priority",
+      "description": "Update priority",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/users/{user_id}",
+      "description": "Get user",
+      "status": "\u2705 404 (Not found - OK)"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/webhooks",
+      "description": "List webhooks",
+      "status": "\u2705 200"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/webhooks",
+      "description": "Create webhook",
+      "status": "\u2705 200"
+    }
+  ],
+  "failed": [
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/auth/refresh",
+      "description": "Refresh token",
+      "status": "\u274c 401"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/backup/{backup_id}",
+      "description": "Delete backup",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/backup/{backup_id}/metadata",
+      "description": "Get backup metadata",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/backup/export",
+      "description": "Export backup",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/backup/import",
+      "description": "Import backup",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/batch/files",
+      "description": "Batch delete files",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/download/start",
+      "description": "Start download",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/folders/{folder_id}",
+      "description": "Delete folder",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/batch/folders",
+      "description": "Batch add folders",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/folder_info",
+      "description": "Folder info",
+      "status": "\u274c 404"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/folders/index",
+      "description": "Index folder",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/index_folder",
+      "description": "Index folder",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/indexing/sync",
+      "description": "Sync index",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/migration/backup_old",
+      "description": "Backup old",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/migration/start",
+      "description": "Start migration",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/migration/verify",
+      "description": "Verify migration",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/monitoring/alerts/add",
+      "description": "Add alert",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/monitoring/record_error",
+      "description": "Record error",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/monitoring/record_throughput",
+      "description": "Record throughput",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/publishing/authorized_users/list",
+      "description": "List authorized users",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/publishing/expiry/check",
+      "description": "Check expiry",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/publishing/authorized_users/add",
+      "description": "Add authorized user",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/publishing/authorized_users/remove",
+      "description": "Remove authorized user",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/publishing/commitment/add",
+      "description": "Add commitment",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/publishing/commitment/remove",
+      "description": "Remove commitment",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/publishing/publish",
+      "description": "Publish",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/publishing/unpublish",
+      "description": "Unpublish",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "PUT",
+      "endpoint": "/api/v1/publishing/update",
+      "description": "Update publishing",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "GET",
+      "endpoint": "/api/v1/security/check_access",
+      "description": "Check access",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/decrypt_file",
+      "description": "Decrypt file",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/encrypt_file",
+      "description": "Encrypt file",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/security/verify_password",
+      "description": "Verify password",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/shares",
+      "description": "Create share",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/shares/{share_id}/verify",
+      "description": "Verify share",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/add_folder",
+      "description": "Add folder",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/create_share",
+      "description": "Create share",
+      "status": "\u274c 500 Server Error"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/initialize_user",
+      "description": "Initialize user",
+      "status": "\u274c Timeout"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/is_user_initialized",
+      "description": "Check user initialized",
+      "status": "\u274c Timeout"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/process_folder",
+      "description": "Process folder",
+      "status": "\u274c Timeout"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/save_server_config",
+      "description": "Save server config",
+      "status": "\u274c Timeout"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/test_server_connection",
+      "description": "Test server connection",
+      "status": "\u274c Timeout"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/upload/queue/{queue_id}",
+      "description": "Delete upload queue item",
+      "status": "\u274c Timeout"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/upload/queue",
+      "description": "Queue upload",
+      "status": "\u274c 422"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/users/{user_id}",
+      "description": "Delete user",
+      "status": "\u274c 404"
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/v1/users",
+      "description": "Create user",
+      "status": "\u274c 409"
+    },
+    {
+      "method": "PUT",
+      "endpoint": "/api/v1/users/{user_id}",
+      "description": "Update user",
+      "status": "\u274c 404"
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/v1/webhooks/{webhook_id}",
+      "description": "Delete webhook",
+      "status": "\u274c 404"
+    }
+  ],
+  "total": 148
+}
