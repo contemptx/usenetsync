@@ -263,6 +263,50 @@ class UnifiedSystem:
         logger.info(f"Indexed folder {folder_id}: {results['file_count']} files")
         return results
     
+    def batch_delete_files(self, file_ids: List[str]) -> Dict[str, Any]:
+        """
+        Delete multiple files from the system
+        
+        Args:
+            file_ids: List of file IDs to delete
+            
+        Returns:
+            Dictionary with deletion results
+        """
+        if not file_ids:
+            return {"success": False, "error": "No file IDs provided", "deleted": 0}
+        
+        deleted_count = 0
+        failed = []
+        
+        for file_id in file_ids:
+            try:
+                # Check if file exists
+                files = self.db.query('files', {'file_id': file_id})
+                if not files:
+                    failed.append({"file_id": file_id, "error": "File not found"})
+                    continue
+                
+                # Delete associated segments first
+                self.db.execute("DELETE FROM segments WHERE file_id = ?", (file_id,))
+                
+                # Delete the file record
+                self.db.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+                
+                deleted_count += 1
+                logger.info(f"Deleted file: {file_id}")
+                
+            except Exception as e:
+                logger.error(f"Failed to delete file {file_id}: {e}")
+                failed.append({"file_id": file_id, "error": str(e)})
+        
+        return {
+            "success": True,
+            "deleted": deleted_count,
+            "failed": failed,
+            "total": len(file_ids)
+        }
+    
     def start_download(self, share_id: str, output_path: str, password: Optional[str] = None) -> str:
         """
         Start downloading a shared folder
