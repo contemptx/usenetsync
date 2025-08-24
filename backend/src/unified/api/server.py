@@ -1436,6 +1436,113 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get folder {folder_id}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/indexing/stats")
+        async def get_indexing_stats():
+            """Get comprehensive indexing statistics"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Get overall folder statistics
+                total_folders = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM folders"
+                )
+                indexed_folders = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM folders WHERE status = 'indexed'"
+                )
+                pending_folders = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM folders WHERE status = 'pending'"
+                )
+                failed_folders = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM folders WHERE status = 'failed'"
+                )
+                
+                # Get file statistics
+                total_files = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM files"
+                )
+                total_size = self.system.db.fetch_one(
+                    "SELECT SUM(size) as total FROM files"
+                )
+                
+                # Get unique file statistics (by hash)
+                unique_files = self.system.db.fetch_one(
+                    "SELECT COUNT(DISTINCT hash) as count FROM files"
+                )
+                
+                # Get duplicate statistics
+                duplicates = self.system.db.fetch_one("""
+                    SELECT COUNT(*) as count, SUM(duplicate_size) as wasted_space
+                    FROM (
+                        SELECT hash, (COUNT(*) - 1) * AVG(size) as duplicate_size
+                        FROM files
+                        GROUP BY hash
+                        HAVING COUNT(*) > 1
+                    )
+                """)
+                
+                # Get recent indexing activity (last 24 hours)
+                recent_indexed = self.system.db.fetch_one("""
+                    SELECT COUNT(*) as count 
+                    FROM folders 
+                    WHERE last_indexed >= datetime('now', '-1 day')
+                """)
+                
+                # Get average file size
+                avg_file_size = self.system.db.fetch_one(
+                    "SELECT AVG(size) as avg_size FROM files"
+                )
+                
+                # Get largest files
+                largest_files = self.system.db.fetch_all(
+                    "SELECT name, size, hash FROM files ORDER BY size DESC LIMIT 5"
+                )
+                
+                # Get indexing performance metrics
+                avg_index_time = self.system.db.fetch_one("""
+                    SELECT AVG(
+                        CAST((julianday(last_indexed) - julianday(created_at)) * 86400 AS REAL)
+                    ) as avg_seconds
+                    FROM folders 
+                    WHERE status = 'indexed' AND last_indexed IS NOT NULL
+                """)
+                
+                stats = {
+                    "folders": {
+                        "total": total_folders['count'] if total_folders else 0,
+                        "indexed": indexed_folders['count'] if indexed_folders else 0,
+                        "pending": pending_folders['count'] if pending_folders else 0,
+                        "failed": failed_folders['count'] if failed_folders else 0,
+                        "recent_indexed": recent_indexed['count'] if recent_indexed else 0
+                    },
+                    "files": {
+                        "total": total_files['count'] if total_files else 0,
+                        "unique": unique_files['count'] if unique_files else 0,
+                        "total_size": total_size['total'] if total_size and total_size['total'] else 0,
+                        "average_size": int(avg_file_size['avg_size']) if avg_file_size and avg_file_size['avg_size'] else 0
+                    },
+                    "duplicates": {
+                        "count": duplicates['count'] if duplicates and duplicates['count'] else 0,
+                        "wasted_space": int(duplicates['wasted_space']) if duplicates and duplicates['wasted_space'] else 0
+                    },
+                    "performance": {
+                        "average_index_time_seconds": round(avg_index_time['avg_seconds'], 2) if avg_index_time and avg_index_time['avg_seconds'] else 0
+                    },
+                    "largest_files": [
+                        {
+                            "name": f['name'],
+                            "size": f['size'],
+                            "hash": f['hash']
+                        } for f in (largest_files or [])
+                    ]
+                }
+                
+                return stats
+                
+            except Exception as e:
+                logger.error(f"Failed to get indexing stats: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
