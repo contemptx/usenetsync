@@ -223,44 +223,73 @@ class UnifiedSystem:
             Indexing results
         """
         # Get folder from database
-        folders = self.db.query('folders', {'folder_id': folder_id})
-        if not folders:
+        folder = self.db.fetch_one("SELECT * FROM folders WHERE folder_id = ?", (folder_id,))
+        if not folder:
             raise ValueError(f"Folder not found: {folder_id}")
         
-        folder = folders[0]
         folder_path = Path(folder['path'])
         
         if not folder_path.exists():
             raise ValueError(f"Folder path no longer exists: {folder['path']}")
         
-        # Track progress if ID provided
-        if progress_id and hasattr(self.app.state, 'progress'):
-            self.app.state.progress[progress_id] = {
-                "status": "indexing",
-                "current": 0,
-                "total": 0,
-                "message": "Starting indexing..."
-            }
+        # Initialize scanner if needed
+        if not hasattr(self, 'scanner') or not self.scanner:
+            from unified.core.scanner import UnifiedScanner
+            self.scanner = UnifiedScanner(self.db)
         
-        # Perform indexing
-        results = self.scanner.scan_folder(str(folder_path), folder_id)
+        # Perform indexing - scan folder and insert files into database
+        logger.info(f"Indexing folder: {folder_path}")
+        file_count = 0
+        total_size = 0
+        
+        for file_path in folder_path.rglob('*'):
+            if file_path.is_file():
+                try:
+                    # Generate file ID
+                    import uuid
+                    file_id = str(uuid.uuid4())
+                    file_size = file_path.stat().st_size
+                    
+                    # Calculate file hash
+                    import hashlib
+                    hasher = hashlib.sha256()
+                    with open(file_path, 'rb') as f:
+                        for chunk in iter(lambda: f.read(65536), b''):
+                            hasher.update(chunk)
+                    file_hash = hasher.hexdigest()
+                    
+                    # Insert file into database
+                    self.db.execute("""
+                        INSERT INTO files (file_id, folder_id, path, name, size, hash, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                    """, (file_id, folder_id, str(file_path), file_path.name, file_size, file_hash))
+                    
+                    file_count += 1
+                    total_size += file_size
+                    logger.debug(f"Indexed file: {file_path.name} ({file_size} bytes)")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to index file {file_path}: {e}")
         
         # Update folder status
-        self.db.update('folders', {'folder_id': folder_id}, {
-            'status': 'indexed',
-            'file_count': results['file_count'],
-            'total_size': results['total_size']
-        })
+        self.db.execute("""
+            UPDATE folders 
+            SET status = 'indexed', 
+                file_count = ?, 
+                total_size = ?,
+                last_indexed = datetime('now')
+            WHERE folder_id = ?
+        """, (file_count, total_size, folder_id))
         
-        if progress_id and hasattr(self.app.state, 'progress'):
-            self.app.state.progress[progress_id] = {
-                "status": "complete",
-                "current": results['file_count'],
-                "total": results['file_count'],
-                "message": "Indexing complete"
-            }
+        logger.info(f"Indexed {file_count} files, total size: {total_size} bytes")
         
-        logger.info(f"Indexed folder {folder_id}: {results['file_count']} files")
+        results = {
+            'folder_id': folder_id,
+            'file_count': file_count,
+            'total_size': total_size,
+            'status': 'indexed'
+        }
+        
         return results
     
     def batch_delete_files(self, file_ids: List[str]) -> Dict[str, Any]:
