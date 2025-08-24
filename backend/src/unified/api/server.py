@@ -1944,7 +1944,7 @@ class UnifiedAPIServer:
                 try:
                     # Get all migrations
                     all_migrations = self.system.db.fetch_all(
-                        "SELECT version, description, applied_at FROM schema_migrations ORDER BY version DESC"
+                        "SELECT version, name as description, applied_at FROM schema_migrations ORDER BY version DESC"
                     )
                     
                     if all_migrations:
@@ -1954,7 +1954,7 @@ class UnifiedAPIServer:
                                 "description": migration.get('description', ''),
                                 "applied_at": migration.get('applied_at', '')
                             })
-                        current_version = all_migrations[0]['version']
+                        current_version = str(all_migrations[0]['version'])
                 except:
                     # Schema migrations table doesn't exist - database is at initial state
                     current_version = "0"
