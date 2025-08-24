@@ -282,8 +282,8 @@ class UnifiedSystem:
         for file_id in file_ids:
             try:
                 # Check if file exists
-                files = self.db.query('files', {'file_id': file_id})
-                if not files:
+                file_record = self.db.fetch_one("SELECT file_id FROM files WHERE file_id = ?", (file_id,))
+                if not file_record:
                     failed.append({"file_id": file_id, "error": "File not found"})
                     continue
                 
