@@ -2680,7 +2680,6 @@ class UnifiedAPIServer:
             
             try:
                 import psutil
-                import random
                 from datetime import datetime, timedelta
                 
                 # Core system status
