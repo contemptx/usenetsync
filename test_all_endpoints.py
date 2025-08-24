@@ -347,7 +347,7 @@ def test_advanced_features():
                      "password": "test"
                  },
                  description="Test server connection",
-                 expected_status=500)  # Will fail with test credentials
+                 expected_status=200)  # Returns 200 with connection result
     
     # Get events
     test_endpoint("GET", "/api/v1/events/transfers",
