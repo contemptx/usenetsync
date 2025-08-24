@@ -1055,14 +1055,14 @@ class UnifiedAPIServer:
                     del self._webhooks[webhook_id]
                     return {"success": True, "message": "Webhook deleted"}
                 
-                return {"success": True, "message": "Webhook deleted (test mode)"}
-                # raise HTTPException(status_code=404, detail="Webhook not found")
+                # Webhook not found
+                raise HTTPException(status_code=404, detail="Webhook not found")
                 
             except HTTPException:
                 raise
             except Exception as e:
                 logger.error(f"Delete webhook failed: {e}")
-                # raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail=str(e))
         
         # ==================== RATE LIMITING ====================
         @self.app.get("/api/v1/rate_limit/status")
