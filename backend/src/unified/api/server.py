@@ -3530,6 +3530,177 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get connection pool stats: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/network/servers/list")
+        async def list_network_servers(
+            enabled_only: bool = False,
+            include_health: bool = True,
+            sort_by: str = "priority"
+        ):
+            """List all configured network servers"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                
+                servers = []
+                
+                if self.system.db:
+                    # Build query with filters
+                    query = "SELECT * FROM network_servers"
+                    if enabled_only:
+                        query += " WHERE enabled = 1"
+                    
+                    # Add sorting
+                    if sort_by == "priority":
+                        query += " ORDER BY priority ASC, created_at DESC"
+                    elif sort_by == "name":
+                        query += " ORDER BY name ASC"
+                    elif sort_by == "created":
+                        query += " ORDER BY created_at DESC"
+                    else:
+                        query += " ORDER BY priority ASC"
+                    
+                    db_servers = self.system.db.fetch_all(query)
+                    
+                    if db_servers:
+                        for srv in db_servers:
+                            server_info = {
+                                "server_id": srv['server_id'],
+                                "name": srv['name'],
+                                "host": srv['host'],
+                                "port": srv['port'],
+                                "ssl_enabled": bool(srv.get('ssl_enabled', True)),
+                                "username": srv.get('username', ''),
+                                "max_connections": srv.get('max_connections', 10),
+                                "priority": srv.get('priority', 1),
+                                "enabled": bool(srv.get('enabled', 1)),
+                                "created_at": srv.get('created_at'),
+                                "updated_at": srv.get('updated_at'),
+                                "configuration": {
+                                    "timeout": 30,  # Default timeout
+                                    "retry_attempts": 3,  # Default retries
+                                    "compression": True,  # Default compression
+                                    "pipeline_commands": False  # Default pipelining
+                                }
+                            }
+                            
+                            # Add health status if requested
+                            if include_health:
+                                server_info["health"] = {
+                                    "status": "unknown",
+                                    "last_check": None,
+                                    "response_time_ms": None,
+                                    "available": False
+                                }
+                                
+                                # Try to check server health
+                                if srv.get('enabled'):
+                                    try:
+                                        import time
+                                        from unified.networking.nntp_client import UnifiedNNTPClient
+                                        
+                                        start_time = time.perf_counter()
+                                        client = UnifiedNNTPClient(config={
+                                            'host': srv['host'],
+                                            'port': srv['port'],
+                                            'ssl': srv.get('ssl_enabled', True),
+                                            'username': srv.get('username'),
+                                            'password': srv.get('password')
+                                        })
+                                        
+                                        if client.connect(
+                                            host=srv['host'],
+                                            port=srv['port'],
+                                            use_ssl=srv.get('ssl_enabled', True)
+                                        ):
+                                            response_time = (time.perf_counter() - start_time) * 1000
+                                            server_info["health"] = {
+                                                "status": "healthy",
+                                                "last_check": datetime.now().isoformat(),
+                                                "response_time_ms": round(response_time, 2),
+                                                "available": True
+                                            }
+                                            client.disconnect()
+                                        else:
+                                            server_info["health"]["status"] = "unreachable"
+                                            server_info["health"]["last_check"] = datetime.now().isoformat()
+                                    except Exception as e:
+                                        server_info["health"]["status"] = "error"
+                                        server_info["health"]["last_check"] = datetime.now().isoformat()
+                                        server_info["health"]["error"] = str(e)
+                            
+                            # Get usage statistics from connection pool if available
+                            if hasattr(self.system, 'connection_pool'):
+                                server_key = f"{srv['host']}:{srv['port']}"
+                                pool_stats = self.system.connection_pool.get_statistics()
+                                if server_key in pool_stats:
+                                    server_info["usage_stats"] = {
+                                        "connections_created": pool_stats[server_key].get('connections_created', 0),
+                                        "connections_reused": pool_stats[server_key].get('connections_reused', 0),
+                                        "connection_errors": pool_stats[server_key].get('connection_errors', 0),
+                                        "posts_successful": pool_stats[server_key].get('posts_successful', 0),
+                                        "posts_failed": pool_stats[server_key].get('posts_failed', 0),
+                                        "retrieves_successful": pool_stats[server_key].get('retrieves_successful', 0),
+                                        "retrieves_failed": pool_stats[server_key].get('retrieves_failed', 0)
+                                    }
+                                else:
+                                    server_info["usage_stats"] = {
+                                        "connections_created": 0,
+                                        "connections_reused": 0,
+                                        "connection_errors": 0,
+                                        "posts_successful": 0,
+                                        "posts_failed": 0,
+                                        "retrieves_successful": 0,
+                                        "retrieves_failed": 0
+                                    }
+                            
+                            servers.append(server_info)
+                
+                # Calculate summary statistics
+                total_servers = len(servers)
+                enabled_servers = sum(1 for s in servers if s['enabled'])
+                healthy_servers = sum(1 for s in servers if s.get('health', {}).get('status') == 'healthy')
+                
+                # Group servers by status
+                servers_by_status = {
+                    "healthy": [],
+                    "unreachable": [],
+                    "error": [],
+                    "unknown": [],
+                    "disabled": []
+                }
+                
+                for server in servers:
+                    if not server['enabled']:
+                        servers_by_status["disabled"].append(server['name'])
+                    elif include_health:
+                        status = server.get('health', {}).get('status', 'unknown')
+                        servers_by_status[status].append(server['name'])
+                    else:
+                        servers_by_status["unknown"].append(server['name'])
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "summary": {
+                        "total_servers": total_servers,
+                        "enabled_servers": enabled_servers,
+                        "healthy_servers": healthy_servers if include_health else None,
+                        "servers_by_status": servers_by_status
+                    },
+                    "filters": {
+                        "enabled_only": enabled_only,
+                        "include_health": include_health,
+                        "sort_by": sort_by
+                    },
+                    "servers": servers
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to list network servers: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
