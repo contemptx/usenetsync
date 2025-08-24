@@ -135,40 +135,111 @@ class UnifiedAPIServer:
             }
         
         @self.app.get("/api/v1/events/transfers")
-        async def get_transfer_events():
-            """Get real transfer events from the system"""
+        async def get_transfer_events(limit: int = 20, type: str = None, state: str = None):
+            """Get real transfer events from the system with filtering"""
             if not self.system or not self.system.db:
-                return {"events": []}
-            
-            # Get recent transfer events from upload and download queues
-            uploads = self.system.db.fetch_all(
-                "SELECT * FROM upload_queue WHERE state IN ('uploading', 'completed') ORDER BY started_at DESC LIMIT 10"
-            )
-            downloads = self.system.db.fetch_all(
-                "SELECT * FROM download_queue WHERE state IN ('downloading', 'completed') ORDER BY started_at DESC LIMIT 10"
-            )
+                return {"events": [], "total": 0}
             
             events = []
-            if uploads:
-                for u in uploads:
-                    events.append({
-                        "type": "upload",
-                        "id": u.get("queue_id"),
-                        "state": u.get("state"),
-                        "progress": u.get("progress", 0),
-                        "timestamp": u.get("started_at")
-                    })
-            if downloads:
-                for d in downloads:
-                    events.append({
-                        "type": "download",
-                        "id": d.get("queue_id"),
-                        "state": d.get("state"),
-                        "progress": d.get("progress", 0),
-                        "timestamp": d.get("started_at")
-                    })
             
-            return {"events": events}
+            # Build queries based on filters
+            upload_query = "SELECT * FROM upload_queue"
+            download_query = "SELECT * FROM download_queue"
+            
+            conditions = []
+            if state:
+                conditions.append(f"state = '{state}'")
+            
+            if conditions:
+                upload_query += " WHERE " + " AND ".join(conditions)
+                download_query += " WHERE " + " AND ".join(conditions)
+            
+            upload_query += " ORDER BY COALESCE(started_at, queued_at) DESC LIMIT ?"
+            download_query += " ORDER BY COALESCE(started_at, queued_at) DESC LIMIT ?"
+            
+            # Get upload events if not filtered to downloads only
+            if type != "download":
+                uploads = self.system.db.fetch_all(upload_query, (limit,))
+                if uploads:
+                    for u in uploads:
+                        event = {
+                            "type": "upload",
+                            "id": u.get("queue_id"),
+                            "entity_id": u.get("entity_id"),
+                            "entity_type": u.get("entity_type"),
+                            "state": u.get("state"),
+                            "progress": u.get("progress", 0),
+                            "total_size": u.get("total_size"),
+                            "uploaded_size": u.get("uploaded_size"),
+                            "queued_at": u.get("queued_at"),
+                            "started_at": u.get("started_at"),
+                            "completed_at": u.get("completed_at"),
+                            "error_message": u.get("error_message")
+                        }
+                        
+                        # Calculate speed for active uploads
+                        if u.get("state") == "uploading" and u.get("started_at") and u.get("uploaded_size"):
+                            try:
+                                from datetime import datetime
+                                started = datetime.fromisoformat(u["started_at"])
+                                elapsed = (datetime.now() - started).total_seconds()
+                                if elapsed > 0:
+                                    event["speed_bps"] = int(u["uploaded_size"] / elapsed)
+                                    event["speed_mbps"] = round(event["speed_bps"] / (1024 * 1024), 2)
+                            except:
+                                pass
+                        
+                        events.append(event)
+            
+            # Get download events if not filtered to uploads only
+            if type != "upload":
+                downloads = self.system.db.fetch_all(download_query, (limit,))
+                if downloads:
+                    for d in downloads:
+                        event = {
+                            "type": "download",
+                            "id": d.get("queue_id"),
+                            "entity_id": d.get("entity_id"),
+                            "entity_type": d.get("entity_type"),
+                            "state": d.get("state"),
+                            "progress": d.get("progress", 0),
+                            "total_size": d.get("total_size"),
+                            "downloaded_size": d.get("downloaded_size"),
+                            "queued_at": d.get("queued_at"),
+                            "started_at": d.get("started_at"),
+                            "completed_at": d.get("completed_at"),
+                            "error_message": d.get("error_message")
+                        }
+                        
+                        # Calculate speed for active downloads
+                        if d.get("state") == "downloading" and d.get("started_at") and d.get("downloaded_size"):
+                            try:
+                                from datetime import datetime
+                                started = datetime.fromisoformat(d["started_at"])
+                                elapsed = (datetime.now() - started).total_seconds()
+                                if elapsed > 0:
+                                    event["speed_bps"] = int(d["downloaded_size"] / elapsed)
+                                    event["speed_mbps"] = round(event["speed_bps"] / (1024 * 1024), 2)
+                            except:
+                                pass
+                        
+                        events.append(event)
+            
+            # Sort all events by timestamp (most recent first)
+            events.sort(key=lambda x: x.get("started_at") or x.get("queued_at") or "", reverse=True)
+            
+            # Limit total events
+            events = events[:limit]
+            
+            return {
+                "events": events,
+                "total": len(events),
+                "limit": limit,
+                "filters": {
+                    "type": type,
+                    "state": state
+                }
+            }
         
         @self.app.get("/api/v1/database/status")
         async def get_database_status():

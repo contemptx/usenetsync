@@ -1,6 +1,6 @@
 # Complete Endpoint Tracking (148 Total)
 
-## Progress: 15/148 Completed ✅
+## Progress: 16/148 Completed ✅
 
 ### Status Legend:
 - ✅ Completed and verified with real functionality
@@ -28,7 +28,7 @@
 13. ✅ GET /api/v1/database/status - Database status
 14. ❌ GET /api/v1/download/cache/stats - Download cache stats
 15. ✅ GET /api/v1/download/progress/{download_id} - Download progress
-16. ⚠️ GET /api/v1/events/transfers - Transfer events
+16. ✅ GET /api/v1/events/transfers - Transfer events (with filtering)
 17. ✅ GET /api/v1/folders - List folders (with pagination and filtering)
 18. ✅ GET /api/v1/folders/{folder_id} - Get folder (with full details)
 19. ❌ GET /api/v1/indexing/stats - Indexing stats
