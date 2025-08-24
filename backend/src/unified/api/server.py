@@ -2309,7 +2309,6 @@ class UnifiedAPIServer:
             try:
                 import psutil
                 from datetime import datetime, timedelta
-                import random  # For simulating historical data
                 
                 # Valid metric names
                 valid_metrics = [
