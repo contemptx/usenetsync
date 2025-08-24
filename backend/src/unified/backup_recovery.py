@@ -23,7 +23,7 @@ import subprocess
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from unified.unified_system import UnifiedSystem
-from unified.database_schema import UnifiedDatabaseSchema
+from unified.core.schema import UnifiedSchema
 
 logger = logging.getLogger(__name__)
 
