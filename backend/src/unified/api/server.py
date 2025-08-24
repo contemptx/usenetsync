@@ -3157,6 +3157,159 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get bandwidth info: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/network/connection_pool")
+        async def get_connection_pool_info():
+            """Get connection pool information"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                
+                # Initialize connection pool if not exists
+                if not hasattr(self.system, 'connection_pool'):
+                    # Get servers from database
+                    servers = []
+                    if self.system.db:
+                        try:
+                            db_servers = self.system.db.fetch_all(
+                                "SELECT * FROM network_servers WHERE enabled = 1"
+                            )
+                            if db_servers:
+                                for srv in db_servers:
+                                    servers.append({
+                                        'host': srv['host'],
+                                        'port': srv['port'],
+                                        'ssl': srv.get('ssl_enabled', True),
+                                        'username': srv.get('username'),
+                                        'password': srv.get('password')
+                                    })
+                        except:
+                            pass
+                    
+                    # Use default server if none in database
+                    if not servers:
+                        servers = [{
+                            'host': 'news.newshosting.com',
+                            'port': 563,
+                            'ssl': True,
+                            'username': 'contemptx',
+                            'password': 'Kia211101#'
+                        }]
+                    
+                    from unified.networking.connection_pool import UnifiedConnectionPool
+                    self.system.connection_pool = UnifiedConnectionPool(
+                        servers=servers,
+                        max_connections_per_server=10
+                    )
+                
+                # Get pool statistics
+                pool_stats = self.system.connection_pool.get_statistics()
+                
+                # Get health status
+                health_status = {}
+                try:
+                    health_status = self.system.connection_pool.health_check()
+                except:
+                    # Health check might fail if servers are unreachable
+                    for server_id in pool_stats:
+                        health_status[server_id] = False
+                
+                # Build pool information
+                pools = []
+                total_connections = 0
+                total_active = 0
+                total_idle = 0
+                
+                for server_id, stats in pool_stats.items():
+                    pool_size = stats.get('pool_size', 0)
+                    total_connections += pool_size
+                    total_idle += pool_size
+                    
+                    # Parse server info from ID
+                    host, port = server_id.rsplit(':', 1)
+                    
+                    pool_info = {
+                        "server_id": server_id,
+                        "host": host,
+                        "port": int(port),
+                        "healthy": health_status.get(server_id, False),
+                        "pool_size": pool_size,
+                        "max_connections": self.system.connection_pool.max_connections,
+                        "connections": {
+                            "total": stats.get('connections_created', 0),
+                            "reused": stats.get('connections_reused', 0),
+                            "errors": stats.get('connection_errors', 0),
+                            "active": 0,  # Would need tracking in pool
+                            "idle": pool_size
+                        },
+                        "operations": {
+                            "posts_successful": stats.get('posts_successful', 0),
+                            "posts_failed": stats.get('posts_failed', 0),
+                            "retrieves_successful": stats.get('retrieves_successful', 0),
+                            "retrieves_failed": stats.get('retrieves_failed', 0)
+                        },
+                        "performance": {
+                            "reuse_rate": round(
+                                (stats.get('connections_reused', 0) / 
+                                 max(stats.get('connections_created', 1), 1)) * 100, 2
+                            ),
+                            "error_rate": round(
+                                (stats.get('connection_errors', 0) / 
+                                 max(stats.get('connections_created', 1), 1)) * 100, 2
+                            ),
+                            "post_success_rate": round(
+                                (stats.get('posts_successful', 0) / 
+                                 max(stats.get('posts_successful', 0) + stats.get('posts_failed', 0), 1)) * 100, 2
+                            ),
+                            "retrieve_success_rate": round(
+                                (stats.get('retrieves_successful', 0) / 
+                                 max(stats.get('retrieves_successful', 0) + stats.get('retrieves_failed', 0), 1)) * 100, 2
+                            )
+                        }
+                    }
+                    
+                    pools.append(pool_info)
+                
+                # Calculate active connections from database
+                if self.system.db:
+                    try:
+                        active_uploads = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'uploading'"
+                        )
+                        active_downloads = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM download_queue WHERE state = 'downloading'"
+                        )
+                        total_active = (active_uploads['count'] if active_uploads else 0) + \
+                                      (active_downloads['count'] if active_downloads else 0)
+                    except:
+                        pass
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "summary": {
+                        "total_servers": len(pools),
+                        "healthy_servers": sum(1 for p in pools if p['healthy']),
+                        "total_connections": total_connections,
+                        "active_connections": total_active,
+                        "idle_connections": total_idle,
+                        "max_connections_per_server": self.system.connection_pool.max_connections
+                    },
+                    "pools": pools,
+                    "configuration": {
+                        "connection_timeout": 30,  # Default timeout
+                        "idle_timeout": 300,  # Default idle timeout
+                        "health_check_interval": 60,  # Default health check interval
+                        "retry_attempts": 3,  # Default retry attempts
+                        "load_balancing": "round_robin"  # Default strategy
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get connection pool info: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
