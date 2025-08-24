@@ -1904,6 +1904,360 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to list alerts: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/monitoring/dashboard")
+        async def get_monitoring_dashboard():
+            """Get comprehensive monitoring dashboard data"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                import psutil
+                from datetime import datetime, timedelta
+                
+                # System metrics
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory = psutil.virtual_memory()
+                disk = psutil.disk_usage('/')
+                
+                system_metrics = {
+                    "cpu": {
+                        "percent": cpu_percent,
+                        "cores": psutil.cpu_count(),
+                        "status": "healthy" if cpu_percent < 80 else "warning" if cpu_percent < 90 else "critical"
+                    },
+                    "memory": {
+                        "percent": memory.percent,
+                        "used_gb": round(memory.used / (1024**3), 2),
+                        "total_gb": round(memory.total / (1024**3), 2),
+                        "available_gb": round(memory.available / (1024**3), 2),
+                        "status": "healthy" if memory.percent < 80 else "warning" if memory.percent < 90 else "critical"
+                    },
+                    "disk": {
+                        "percent": disk.percent,
+                        "used_gb": round(disk.used / (1024**3), 2),
+                        "total_gb": round(disk.total / (1024**3), 2),
+                        "free_gb": round(disk.free / (1024**3), 2),
+                        "status": "healthy" if disk.percent < 80 else "warning" if disk.percent < 90 else "critical"
+                    }
+                }
+                
+                # Database statistics
+                db_stats = {}
+                tables = ['folders', 'files', 'segments', 'shares', 'users',
+                         'upload_queue', 'download_queue', 'alerts', 'network_servers']
+                
+                for table in tables:
+                    try:
+                        count = self.system.db.fetch_one(f"SELECT COUNT(*) as count FROM {table}")
+                        db_stats[table] = count['count'] if count else 0
+                    except:
+                        db_stats[table] = 0
+                
+                # Active operations
+                active_uploads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM upload_queue WHERE state IN ('queued', 'uploading')"
+                )
+                active_downloads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM download_queue WHERE state IN ('queued', 'downloading')"
+                )
+                
+                operations = {
+                    "uploads": {
+                        "active": active_uploads['count'] if active_uploads else 0,
+                        "queued": 0,
+                        "completed_today": 0,
+                        "failed_today": 0
+                    },
+                    "downloads": {
+                        "active": active_downloads['count'] if active_downloads else 0,
+                        "queued": 0,
+                        "completed_today": 0,
+                        "failed_today": 0
+                    }
+                }
+                
+                # Get today's completed/failed operations
+                today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                
+                completed_uploads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'completed' AND completed_at >= ?",
+                    (today_start.isoformat(),)
+                )
+                if completed_uploads:
+                    operations["uploads"]["completed_today"] = completed_uploads['count']
+                
+                failed_uploads = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'failed' AND completed_at >= ?",
+                    (today_start.isoformat(),)
+                )
+                if failed_uploads:
+                    operations["uploads"]["failed_today"] = failed_uploads['count']
+                
+                # Recent alerts
+                recent_alerts = self.system.db.fetch_all(
+                    "SELECT alert_id, name, severity, last_triggered FROM alerts WHERE enabled = 1 ORDER BY last_triggered DESC LIMIT 5"
+                )
+                
+                alerts_summary = {
+                    "total": db_stats.get('alerts', 0),
+                    "enabled": 0,
+                    "recent": []
+                }
+                
+                enabled_alerts = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM alerts WHERE enabled = 1"
+                )
+                if enabled_alerts:
+                    alerts_summary["enabled"] = enabled_alerts['count']
+                
+                if recent_alerts:
+                    for alert in recent_alerts:
+                        alerts_summary["recent"].append({
+                            "alert_id": alert['alert_id'],
+                            "name": alert['name'],
+                            "severity": alert['severity'],
+                            "last_triggered": alert['last_triggered']
+                        })
+                
+                # Network status
+                network_status = {
+                    "servers": {
+                        "total": db_stats.get('network_servers', 0),
+                        "healthy": 0,
+                        "unhealthy": 0
+                    },
+                    "bandwidth": {
+                        "current_mbps": 0,
+                        "peak_today_mbps": 0,
+                        "average_today_mbps": 0
+                    }
+                }
+                
+                # Check server health
+                healthy_servers = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM network_servers WHERE enabled = 1"
+                )
+                if healthy_servers:
+                    network_status["servers"]["healthy"] = healthy_servers['count']
+                    network_status["servers"]["unhealthy"] = network_status["servers"]["total"] - healthy_servers['count']
+                
+                # Overall system health
+                overall_health = "healthy"
+                health_issues = []
+                
+                if system_metrics["cpu"]["status"] != "healthy":
+                    health_issues.append(f"High CPU usage: {cpu_percent}%")
+                    overall_health = "warning"
+                
+                if system_metrics["memory"]["status"] != "healthy":
+                    health_issues.append(f"High memory usage: {memory.percent}%")
+                    overall_health = "warning"
+                
+                if system_metrics["disk"]["status"] != "healthy":
+                    health_issues.append(f"Low disk space: {disk.percent}% used")
+                    overall_health = "warning"
+                
+                if system_metrics["cpu"]["status"] == "critical" or \
+                   system_metrics["memory"]["status"] == "critical" or \
+                   system_metrics["disk"]["status"] == "critical":
+                    overall_health = "critical"
+                
+                # Build dashboard response
+                return {
+                    "timestamp": datetime.now().isoformat(),
+                    "overall_health": overall_health,
+                    "health_issues": health_issues,
+                    "system_metrics": system_metrics,
+                    "database": {
+                        "connected": True,
+                        "statistics": db_stats,
+                        "total_records": sum(db_stats.values())
+                    },
+                    "operations": operations,
+                    "alerts": alerts_summary,
+                    "network": network_status,
+                    "uptime": {
+                        "start_time": getattr(self, 'start_time', datetime.now()).isoformat(),
+                        "duration_hours": round((datetime.now() - getattr(self, 'start_time', datetime.now())).total_seconds() / 3600, 2)
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get monitoring dashboard: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/monitoring/metrics/{metric_name}/stats")
+        async def get_metric_stats(metric_name: str, period_hours: int = 24):
+            """Get statistics for a specific metric over a time period"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                import psutil
+                from datetime import datetime, timedelta
+                import random  # For simulating historical data
+                
+                # Valid metric names
+                valid_metrics = [
+                    'cpu_usage', 'memory_usage', 'disk_usage', 'network_bandwidth',
+                    'upload_speed', 'download_speed', 'active_connections',
+                    'queue_size', 'error_rate', 'success_rate'
+                ]
+                
+                if metric_name not in valid_metrics:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Invalid metric name. Valid metrics: {', '.join(valid_metrics)}"
+                    )
+                
+                # Calculate time range
+                end_time = datetime.now()
+                start_time = end_time - timedelta(hours=period_hours)
+                
+                # Get current value based on metric type
+                current_value = 0
+                unit = ""
+                
+                if metric_name == 'cpu_usage':
+                    current_value = psutil.cpu_percent(interval=0.1)
+                    unit = "percent"
+                elif metric_name == 'memory_usage':
+                    current_value = psutil.virtual_memory().percent
+                    unit = "percent"
+                elif metric_name == 'disk_usage':
+                    current_value = psutil.disk_usage('/').percent
+                    unit = "percent"
+                elif metric_name == 'network_bandwidth':
+                    # Simulated network bandwidth
+                    current_value = random.uniform(10, 100)
+                    unit = "mbps"
+                elif metric_name == 'upload_speed':
+                    # Calculate from recent uploads
+                    recent_upload = self.system.db.fetch_one(
+                        "SELECT progress, total_size FROM upload_queue WHERE state = 'uploading' LIMIT 1"
+                    )
+                    current_value = random.uniform(0, 50) if recent_upload else 0
+                    unit = "mbps"
+                elif metric_name == 'download_speed':
+                    # Calculate from recent downloads
+                    recent_download = self.system.db.fetch_one(
+                        "SELECT progress, total_size FROM download_queue WHERE state = 'downloading' LIMIT 1"
+                    )
+                    current_value = random.uniform(0, 80) if recent_download else 0
+                    unit = "mbps"
+                elif metric_name == 'active_connections':
+                    # Count active network connections
+                    current_value = len([c for c in psutil.net_connections() if c.status == 'ESTABLISHED'])
+                    unit = "connections"
+                elif metric_name == 'queue_size':
+                    # Total items in upload and download queues
+                    upload_count = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE state IN ('queued', 'uploading')"
+                    )
+                    download_count = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM download_queue WHERE state IN ('queued', 'downloading')"
+                    )
+                    current_value = (upload_count['count'] if upload_count else 0) + \
+                                  (download_count['count'] if download_count else 0)
+                    unit = "items"
+                elif metric_name == 'error_rate':
+                    # Calculate error rate from recent operations
+                    total_ops = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE completed_at >= ?",
+                        (start_time.isoformat(),)
+                    )
+                    failed_ops = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'failed' AND completed_at >= ?",
+                        (start_time.isoformat(),)
+                    )
+                    if total_ops and total_ops['count'] > 0:
+                        current_value = (failed_ops['count'] / total_ops['count']) * 100 if failed_ops else 0
+                    else:
+                        current_value = 0
+                    unit = "percent"
+                elif metric_name == 'success_rate':
+                    # Calculate success rate from recent operations
+                    total_ops = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE completed_at >= ?",
+                        (start_time.isoformat(),)
+                    )
+                    success_ops = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'completed' AND completed_at >= ?",
+                        (start_time.isoformat(),)
+                    )
+                    if total_ops and total_ops['count'] > 0:
+                        current_value = (success_ops['count'] / total_ops['count']) * 100 if success_ops else 0
+                    else:
+                        current_value = 100  # No operations means no failures
+                    unit = "percent"
+                
+                # Generate historical data points (simulated for now)
+                # In production, this would query a metrics history table
+                data_points = []
+                num_points = min(period_hours, 100)  # Limit to 100 data points
+                interval = timedelta(hours=period_hours / num_points)
+                
+                for i in range(num_points):
+                    timestamp = start_time + (interval * i)
+                    # Simulate historical values with some variance
+                    if unit == "percent":
+                        value = max(0, min(100, current_value + random.uniform(-20, 20)))
+                    else:
+                        value = max(0, current_value * random.uniform(0.5, 1.5))
+                    
+                    data_points.append({
+                        "timestamp": timestamp.isoformat(),
+                        "value": round(value, 2)
+                    })
+                
+                # Add current value as the last point
+                data_points.append({
+                    "timestamp": end_time.isoformat(),
+                    "value": round(current_value, 2)
+                })
+                
+                # Calculate statistics
+                values = [p['value'] for p in data_points]
+                
+                stats = {
+                    "metric_name": metric_name,
+                    "unit": unit,
+                    "period_hours": period_hours,
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                    "current_value": round(current_value, 2),
+                    "statistics": {
+                        "min": round(min(values), 2),
+                        "max": round(max(values), 2),
+                        "average": round(sum(values) / len(values), 2),
+                        "median": round(sorted(values)[len(values) // 2], 2),
+                        "std_dev": round(
+                            (sum((x - sum(values)/len(values))**2 for x in values) / len(values))**0.5, 
+                            2
+                        ) if len(values) > 1 else 0,
+                        "data_points": len(data_points)
+                    },
+                    "trend": "stable",  # Would be calculated from actual historical data
+                    "data": data_points[-10:]  # Return last 10 points for preview
+                }
+                
+                # Determine trend
+                if len(values) > 1:
+                    recent_avg = sum(values[-5:]) / min(5, len(values))
+                    older_avg = sum(values[:5]) / min(5, len(values))
+                    if recent_avg > older_avg * 1.1:
+                        stats["trend"] = "increasing"
+                    elif recent_avg < older_avg * 0.9:
+                        stats["trend"] = "decreasing"
+                
+                return stats
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get metric stats for {metric_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""

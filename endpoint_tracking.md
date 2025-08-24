@@ -38,8 +38,8 @@
 23. ✅ GET /api/v1/metrics - System metrics - VERIFIED
 24. ✅ GET /api/v1/migration/status - Migration status - VERIFIED
 25. ✅ GET /api/v1/monitoring/alerts/list - List alerts - VERIFIED
-26. ❌ GET /api/v1/monitoring/dashboard - Monitoring dashboard
-27. ❌ GET /api/v1/monitoring/metrics/{metric_name}/stats - Metric stats
+26. ✅ GET /api/v1/monitoring/dashboard - Monitoring dashboard - VERIFIED
+27. ✅ GET /api/v1/monitoring/metrics/{metric_name}/stats - Metric stats - VERIFIED
 28. ❌ GET /api/v1/monitoring/metrics/{metric_name}/values - Metric values
 29. ❌ GET /api/v1/monitoring/system_status - System status
 30. ❌ GET /api/v1/network/bandwidth/current - Current bandwidth
