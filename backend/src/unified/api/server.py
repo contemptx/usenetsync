@@ -3002,6 +3002,161 @@ class UnifiedAPIServer:
                     }
                 }
         
+        @self.app.get("/api/v1/network/bandwidth/current")
+        async def get_current_bandwidth():
+            """Get current network bandwidth usage"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                import psutil
+                from datetime import datetime
+                
+                # Initialize bandwidth controller if not exists
+                if not hasattr(self.system, 'bandwidth_controller'):
+                    from unified.networking.bandwidth import UnifiedBandwidth
+                    self.system.bandwidth_controller = UnifiedBandwidth()
+                
+                # Get network I/O statistics
+                net_io = psutil.net_io_counters()
+                
+                # Store initial values if not set
+                if not hasattr(self, '_net_io_initial'):
+                    self._net_io_initial = net_io
+                    self._net_io_time = datetime.now()
+                    # Return initial state
+                    return {
+                        "success": True,
+                        "timestamp": datetime.now().isoformat(),
+                        "current": {
+                            "upload_mbps": 0.0,
+                            "download_mbps": 0.0,
+                            "total_mbps": 0.0
+                        },
+                        "cumulative": {
+                            "bytes_sent": net_io.bytes_sent,
+                            "bytes_recv": net_io.bytes_recv,
+                            "packets_sent": net_io.packets_sent,
+                            "packets_recv": net_io.packets_recv,
+                            "errors_in": net_io.errin,
+                            "errors_out": net_io.errout,
+                            "drops_in": net_io.dropin,
+                            "drops_out": net_io.dropout
+                        },
+                        "limits": {
+                            "upload_limit_mbps": self.system.bandwidth_controller.max_rate_mbps if hasattr(self.system.bandwidth_controller, 'max_rate_mbps') else None,
+                            "download_limit_mbps": None  # Download limiting not implemented
+                        },
+                        "active_transfers": {
+                            "uploads": 0,
+                            "downloads": 0
+                        },
+                        "network_interfaces": []
+                    }
+                
+                # Calculate bandwidth since last check
+                time_delta = (datetime.now() - self._net_io_time).total_seconds()
+                if time_delta > 0:
+                    bytes_sent_delta = net_io.bytes_sent - self._net_io_initial.bytes_sent
+                    bytes_recv_delta = net_io.bytes_recv - self._net_io_initial.bytes_recv
+                    
+                    # Convert to Mbps
+                    upload_mbps = (bytes_sent_delta * 8) / (time_delta * 1024 * 1024)
+                    download_mbps = (bytes_recv_delta * 8) / (time_delta * 1024 * 1024)
+                    
+                    # Update stored values
+                    self._net_io_initial = net_io
+                    self._net_io_time = datetime.now()
+                else:
+                    upload_mbps = 0.0
+                    download_mbps = 0.0
+                
+                # Get active transfers from database
+                active_uploads = 0
+                active_downloads = 0
+                if self.system.db:
+                    try:
+                        upload_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'uploading'"
+                        )
+                        if upload_count:
+                            active_uploads = upload_count['count']
+                        
+                        download_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM download_queue WHERE state = 'downloading'"
+                        )
+                        if download_count:
+                            active_downloads = download_count['count']
+                    except:
+                        pass
+                
+                # Get per-interface statistics
+                interfaces = []
+                try:
+                    net_if_stats = psutil.net_if_stats()
+                    net_if_addrs = psutil.net_if_addrs()
+                    
+                    for interface_name, stats in net_if_stats.items():
+                        if stats.isup:  # Only include active interfaces
+                            interface_info = {
+                                "name": interface_name,
+                                "is_up": stats.isup,
+                                "speed_mbps": stats.speed,
+                                "mtu": stats.mtu
+                            }
+                            
+                            # Get IP addresses for this interface
+                            if interface_name in net_if_addrs:
+                                addrs = net_if_addrs[interface_name]
+                                ipv4_addrs = [addr.address for addr in addrs if addr.family.name == 'AF_INET']
+                                ipv6_addrs = [addr.address for addr in addrs if addr.family.name == 'AF_INET6']
+                                interface_info["ipv4_addresses"] = ipv4_addrs
+                                interface_info["ipv6_addresses"] = ipv6_addrs
+                            
+                            interfaces.append(interface_info)
+                except:
+                    pass
+                
+                # Get bandwidth controller's current rate if available
+                controller_rate = 0.0
+                if hasattr(self.system.bandwidth_controller, 'get_current_rate'):
+                    controller_rate = self.system.bandwidth_controller.get_current_rate()
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "current": {
+                        "upload_mbps": round(upload_mbps, 2),
+                        "download_mbps": round(download_mbps, 2),
+                        "total_mbps": round(upload_mbps + download_mbps, 2),
+                        "controller_rate_mbps": round(controller_rate, 2)
+                    },
+                    "cumulative": {
+                        "bytes_sent": net_io.bytes_sent,
+                        "bytes_recv": net_io.bytes_recv,
+                        "packets_sent": net_io.packets_sent,
+                        "packets_recv": net_io.packets_recv,
+                        "errors_in": net_io.errin,
+                        "errors_out": net_io.errout,
+                        "drops_in": net_io.dropin,
+                        "drops_out": net_io.dropout
+                    },
+                    "limits": {
+                        "upload_limit_mbps": self.system.bandwidth_controller.max_rate_mbps if hasattr(self.system.bandwidth_controller, 'max_rate_mbps') else None,
+                        "download_limit_mbps": None  # Download limiting not implemented
+                    },
+                    "active_transfers": {
+                        "uploads": active_uploads,
+                        "downloads": active_downloads
+                    },
+                    "network_interfaces": interfaces,
+                    "measurement_period_seconds": round(time_delta, 2) if time_delta > 0 else 0
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get bandwidth info: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
