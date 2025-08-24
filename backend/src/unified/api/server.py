@@ -1814,10 +1814,34 @@ class UnifiedAPIServer:
                 all_tables_exist = all(status == "exists" for status in schema_status.values())
                 needs_migration = not all_tables_exist or current_version == "0"
                 
-                # Get pending migrations (simulated - in real system would check migration files)
+                # Get pending migrations - check actual migration system
                 pending_migrations = []
-                if needs_migration:
-                    if current_version == "0":
+                latest_version = "0"
+                
+                # Check if we have the migrations module
+                if hasattr(self.system, 'migrations'):
+                    try:
+                        # Get actual pending migrations
+                        from unified.core.migrations import UnifiedMigrations
+                        migrations_obj = UnifiedMigrations(self.system.db)
+                        applied = migrations_obj.get_applied_migrations()
+                        all_migrations = migrations_obj._get_migrations()
+                        
+                        if all_migrations:
+                            latest_version = str(max(all_migrations.keys()))
+                            for version, migration in all_migrations.items():
+                                if version not in applied:
+                                    pending_migrations.append({
+                                        "version": str(version),
+                                        "description": migration.get('description', '')
+                                    })
+                    except:
+                        pass
+                
+                if not latest_version or latest_version == "0":
+                    # If no migrations system, check if tables exist
+                    latest_version = "1" if all_tables_exist else "0"
+                    if needs_migration and current_version == "0":
                         pending_migrations.append({
                             "version": "1",
                             "description": "Initial schema creation"
@@ -1825,7 +1849,7 @@ class UnifiedAPIServer:
                 
                 return {
                     "current_version": current_version,
-                    "latest_version": "1",  # Would be determined from migration files
+                    "latest_version": latest_version,
                     "needs_migration": needs_migration,
                     "applied_migrations": migrations,
                     "pending_migrations": pending_migrations,
@@ -2228,8 +2252,8 @@ class UnifiedAPIServer:
                         ) if len(values) > 1 else 0,
                         "data_points": len(data_points)
                     },
-                    "trend": "stable",  # Would be calculated from actual historical data
-                    "data": data_points[-10:]  # Return last 10 points for preview
+                    "trend": "unknown",  # No historical data to calculate trend
+                    "data": data_points  # Return available data points
                 }
                 
                 # Determine trend
@@ -2773,8 +2797,8 @@ class UnifiedAPIServer:
                     "health_checks": health_checks,
                     "performance": performance,
                     "maintenance_mode": False,
-                    "last_backup": None,  # Would be fetched from backup system
-                    "next_scheduled_task": None  # Would be fetched from scheduler
+                    "last_backup": None,  # Backup system not implemented
+                    "next_scheduled_task": None  # Scheduler not implemented
                 }
                 
             except Exception as e:
