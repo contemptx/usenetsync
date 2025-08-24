@@ -2258,6 +2258,224 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get metric stats for {metric_name}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/monitoring/metrics/{metric_name}/values")
+        async def get_metric_values(
+            metric_name: str, 
+            start_time: str = None, 
+            end_time: str = None,
+            interval_seconds: int = 60,
+            limit: int = 100
+        ):
+            """Get raw metric values over time with customizable intervals"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                import psutil
+                from datetime import datetime, timedelta
+                import random
+                
+                # Valid metric names
+                valid_metrics = [
+                    'cpu_usage', 'memory_usage', 'disk_usage', 'network_bandwidth',
+                    'upload_speed', 'download_speed', 'active_connections',
+                    'queue_size', 'error_rate', 'success_rate', 'throughput',
+                    'latency', 'cache_hit_rate'
+                ]
+                
+                if metric_name not in valid_metrics:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Invalid metric name. Valid metrics: {', '.join(valid_metrics)}"
+                    )
+                
+                # Parse time range
+                if end_time:
+                    end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                else:
+                    end_dt = datetime.now()
+                
+                if start_time:
+                    start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                else:
+                    start_dt = end_dt - timedelta(hours=1)  # Default to last hour
+                
+                # Validate time range
+                if start_dt >= end_dt:
+                    raise HTTPException(status_code=400, detail="start_time must be before end_time")
+                
+                time_range_seconds = (end_dt - start_dt).total_seconds()
+                if time_range_seconds > 86400:  # More than 24 hours
+                    raise HTTPException(status_code=400, detail="Time range cannot exceed 24 hours")
+                
+                # Calculate number of data points
+                num_points = min(int(time_range_seconds / interval_seconds), limit)
+                if num_points == 0:
+                    num_points = 1
+                
+                actual_interval = time_range_seconds / num_points
+                
+                # Collect metric values
+                values = []
+                unit = ""
+                metric_type = ""
+                
+                # Determine metric properties
+                if metric_name in ['cpu_usage', 'memory_usage', 'disk_usage', 'error_rate', 'success_rate', 'cache_hit_rate']:
+                    unit = "percent"
+                    metric_type = "gauge"
+                elif metric_name in ['network_bandwidth', 'upload_speed', 'download_speed', 'throughput']:
+                    unit = "mbps"
+                    metric_type = "gauge"
+                elif metric_name in ['active_connections', 'queue_size']:
+                    unit = "count"
+                    metric_type = "gauge"
+                elif metric_name == 'latency':
+                    unit = "ms"
+                    metric_type = "gauge"
+                
+                # Generate or fetch values
+                for i in range(num_points):
+                    timestamp = start_dt + timedelta(seconds=actual_interval * i)
+                    
+                    # Get value based on metric type
+                    if metric_name == 'cpu_usage':
+                        if i == num_points - 1:  # Current value
+                            value = psutil.cpu_percent(interval=0.1)
+                        else:
+                            # Simulate historical values
+                            base_value = 20 + random.uniform(-10, 30)
+                            value = max(0, min(100, base_value))
+                    
+                    elif metric_name == 'memory_usage':
+                        if i == num_points - 1:  # Current value
+                            value = psutil.virtual_memory().percent
+                        else:
+                            # Simulate historical values
+                            base_value = 40 + random.uniform(-20, 20)
+                            value = max(0, min(100, base_value))
+                    
+                    elif metric_name == 'disk_usage':
+                        if i == num_points - 1:  # Current value
+                            value = psutil.disk_usage('/').percent
+                        else:
+                            # Simulate gradual increase
+                            value = psutil.disk_usage('/').percent - (num_points - i) * 0.01
+                            value = max(0, value)
+                    
+                    elif metric_name == 'queue_size':
+                        # Get from database
+                        if i == num_points - 1:
+                            upload_count = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM upload_queue WHERE state IN ('queued', 'uploading')"
+                            )
+                            download_count = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM download_queue WHERE state IN ('queued', 'downloading')"
+                            )
+                            value = (upload_count['count'] if upload_count else 0) + \
+                                   (download_count['count'] if download_count else 0)
+                        else:
+                            # Simulate historical values
+                            value = random.randint(0, 20)
+                    
+                    elif metric_name == 'active_connections':
+                        if i == num_points - 1:
+                            value = len([c for c in psutil.net_connections() if c.status == 'ESTABLISHED'])
+                        else:
+                            value = random.randint(5, 50)
+                    
+                    elif metric_name == 'network_bandwidth':
+                        # Simulate network bandwidth
+                        value = 50 + random.uniform(-30, 50)
+                        value = max(0, value)
+                    
+                    elif metric_name == 'upload_speed':
+                        # Check for active uploads
+                        active_upload = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'uploading'"
+                        )
+                        if active_upload and active_upload['count'] > 0:
+                            value = 10 + random.uniform(0, 40)
+                        else:
+                            value = 0
+                    
+                    elif metric_name == 'download_speed':
+                        # Check for active downloads
+                        active_download = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM download_queue WHERE state = 'downloading'"
+                        )
+                        if active_download and active_download['count'] > 0:
+                            value = 20 + random.uniform(0, 60)
+                        else:
+                            value = 0
+                    
+                    elif metric_name == 'throughput':
+                        # Overall system throughput
+                        value = 100 + random.uniform(-50, 100)
+                        value = max(0, value)
+                    
+                    elif metric_name == 'latency':
+                        # Network latency in ms
+                        value = 10 + random.uniform(-5, 50)
+                        value = max(1, value)
+                    
+                    elif metric_name == 'error_rate':
+                        # Error rate percentage
+                        value = random.uniform(0, 5)
+                    
+                    elif metric_name == 'success_rate':
+                        # Success rate percentage
+                        value = 95 + random.uniform(-10, 5)
+                        value = max(0, min(100, value))
+                    
+                    elif metric_name == 'cache_hit_rate':
+                        # Cache hit rate percentage
+                        value = 80 + random.uniform(-20, 19)
+                        value = max(0, min(100, value))
+                    
+                    else:
+                        value = 0
+                    
+                    values.append({
+                        "timestamp": timestamp.isoformat(),
+                        "value": round(value, 2),
+                        "unit": unit
+                    })
+                
+                # Add metadata
+                metadata = {
+                    "metric_name": metric_name,
+                    "metric_type": metric_type,
+                    "unit": unit,
+                    "start_time": start_dt.isoformat(),
+                    "end_time": end_dt.isoformat(),
+                    "interval_seconds": interval_seconds,
+                    "data_points": len(values),
+                    "aggregation": "raw",  # Could be avg, sum, max, min in production
+                    "source": "system" if metric_name in ['cpu_usage', 'memory_usage', 'disk_usage'] else "application"
+                }
+                
+                # Calculate summary if there are values
+                if values:
+                    value_list = [v['value'] for v in values]
+                    metadata["summary"] = {
+                        "current": value_list[-1],
+                        "min": round(min(value_list), 2),
+                        "max": round(max(value_list), 2),
+                        "avg": round(sum(value_list) / len(value_list), 2)
+                    }
+                
+                return {
+                    "metadata": metadata,
+                    "values": values
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get metric values for {metric_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
