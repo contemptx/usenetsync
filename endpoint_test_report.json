@@ -1,9 +1,9 @@
 {
-  "timestamp": "2025-08-24T08:37:02.723797",
+  "timestamp": "2025-08-24T10:19:17.591209",
   "results": {
     "total": 130,
-    "passed": 92,
-    "failed": 38,
+    "passed": 97,
+    "failed": 33,
     "by_category": {
       "System": {
         "passed": 12,
@@ -46,8 +46,8 @@
         "failed": 0
       },
       "Segmentation": {
-        "passed": 2,
-        "failed": 5
+        "passed": 7,
+        "failed": 0
       },
       "Folders": {
         "passed": 3,
