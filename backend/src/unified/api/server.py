@@ -2128,22 +2128,24 @@ class UnifiedAPIServer:
                     current_value = psutil.disk_usage('/').percent
                     unit = "percent"
                 elif metric_name == 'network_bandwidth':
-                    # Simulated network bandwidth
-                    current_value = random.uniform(10, 100)
+                    # Real network bandwidth - not currently measured
+                    current_value = 0  # Bandwidth measurement not implemented
                     unit = "mbps"
                 elif metric_name == 'upload_speed':
-                    # Calculate from recent uploads
+                    # Real upload speed from active uploads
                     recent_upload = self.system.db.fetch_one(
                         "SELECT progress, total_size FROM upload_queue WHERE state = 'uploading' LIMIT 1"
                     )
-                    current_value = random.uniform(0, 50) if recent_upload else 0
+                    # Speed calculation would require tracking bytes/time
+                    current_value = 0  # Speed tracking not implemented
                     unit = "mbps"
                 elif metric_name == 'download_speed':
-                    # Calculate from recent downloads
+                    # Real download speed from active downloads
                     recent_download = self.system.db.fetch_one(
                         "SELECT progress, total_size FROM download_queue WHERE state = 'downloading' LIMIT 1"
                     )
-                    current_value = random.uniform(0, 80) if recent_download else 0
+                    # Speed calculation would require tracking bytes/time
+                    current_value = 0  # Speed tracking not implemented
                     unit = "mbps"
                 elif metric_name == 'active_connections':
                     # Count active network connections
@@ -2191,30 +2193,19 @@ class UnifiedAPIServer:
                         current_value = 100  # No operations means no failures
                     unit = "percent"
                 
-                # Generate historical data points (simulated for now)
-                # In production, this would query a metrics history table
+                # Generate historical data points from REAL data
+                # We don't have a metrics history table yet, so we can only provide current value
                 data_points = []
-                num_points = min(period_hours, 100)  # Limit to 100 data points
-                interval = timedelta(hours=period_hours / num_points)
                 
-                for i in range(num_points):
-                    timestamp = start_time + (interval * i)
-                    # Simulate historical values with some variance
-                    if unit == "percent":
-                        value = max(0, min(100, current_value + random.uniform(-20, 20)))
-                    else:
-                        value = max(0, current_value * random.uniform(0.5, 1.5))
-                    
-                    data_points.append({
-                        "timestamp": timestamp.isoformat(),
-                        "value": round(value, 2)
-                    })
-                
-                # Add current value as the last point
+                # For now, we only have the current real value
+                # Historical data would require a metrics collection system
                 data_points.append({
                     "timestamp": end_time.isoformat(),
                     "value": round(current_value, 2)
                 })
+                
+                # Note: Historical metrics require implementing a metrics collection system
+                # that periodically stores metric values to a database table
                 
                 # Calculate statistics
                 values = [p['value'] for p in data_points]
@@ -2334,104 +2325,97 @@ class UnifiedAPIServer:
                     unit = "ms"
                     metric_type = "gauge"
                 
-                # Generate or fetch values
+                # Generate or fetch values - ONLY REAL DATA
                 for i in range(num_points):
                     timestamp = start_dt + timedelta(seconds=actual_interval * i)
                     
-                    # Get value based on metric type
+                    # Only provide current real values - we don't have historical data
+                    if i != num_points - 1:
+                        continue  # Skip historical points we don't have
+                    
+                    # Get REAL current value
                     if metric_name == 'cpu_usage':
-                        if i == num_points - 1:  # Current value
-                            value = psutil.cpu_percent(interval=0.1)
-                        else:
-                            # Simulate historical values
-                            base_value = 20 + random.uniform(-10, 30)
-                            value = max(0, min(100, base_value))
-                    
+                        value = psutil.cpu_percent(interval=0.1)
                     elif metric_name == 'memory_usage':
-                        if i == num_points - 1:  # Current value
-                            value = psutil.virtual_memory().percent
-                        else:
-                            # Simulate historical values
-                            base_value = 40 + random.uniform(-20, 20)
-                            value = max(0, min(100, base_value))
-                    
+                        value = psutil.virtual_memory().percent
                     elif metric_name == 'disk_usage':
-                        if i == num_points - 1:  # Current value
-                            value = psutil.disk_usage('/').percent
-                        else:
-                            # Simulate gradual increase
-                            value = psutil.disk_usage('/').percent - (num_points - i) * 0.01
-                            value = max(0, value)
-                    
+                        value = psutil.disk_usage('/').percent
                     elif metric_name == 'queue_size':
-                        # Get from database
-                        if i == num_points - 1:
-                            upload_count = self.system.db.fetch_one(
-                                "SELECT COUNT(*) as count FROM upload_queue WHERE state IN ('queued', 'uploading')"
-                            )
-                            download_count = self.system.db.fetch_one(
-                                "SELECT COUNT(*) as count FROM download_queue WHERE state IN ('queued', 'downloading')"
-                            )
-                            value = (upload_count['count'] if upload_count else 0) + \
-                                   (download_count['count'] if download_count else 0)
-                        else:
-                            # Simulate historical values
-                            value = random.randint(0, 20)
+                        # Get REAL queue size from database
+                        upload_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE state IN ('queued', 'uploading')"
+                        )
+                        download_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM download_queue WHERE state IN ('queued', 'downloading')"
+                        )
+                        value = (upload_count['count'] if upload_count else 0) + \
+                               (download_count['count'] if download_count else 0)
                     
                     elif metric_name == 'active_connections':
-                        if i == num_points - 1:
-                            value = len([c for c in psutil.net_connections() if c.status == 'ESTABLISHED'])
-                        else:
-                            value = random.randint(5, 50)
+                        # Get REAL connection count
+                        value = len([c for c in psutil.net_connections() if c.status == 'ESTABLISHED'])
                     
                     elif metric_name == 'network_bandwidth':
-                        # Simulate network bandwidth
-                        value = 50 + random.uniform(-30, 50)
-                        value = max(0, value)
+                        # Real bandwidth measurement not implemented
+                        value = 0
                     
                     elif metric_name == 'upload_speed':
-                        # Check for active uploads
-                        active_upload = self.system.db.fetch_one(
-                            "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'uploading'"
-                        )
-                        if active_upload and active_upload['count'] > 0:
-                            value = 10 + random.uniform(0, 40)
-                        else:
-                            value = 0
+                        # Real speed tracking not implemented
+                        value = 0
                     
                     elif metric_name == 'download_speed':
-                        # Check for active downloads
-                        active_download = self.system.db.fetch_one(
-                            "SELECT COUNT(*) as count FROM download_queue WHERE state = 'downloading'"
-                        )
-                        if active_download and active_download['count'] > 0:
-                            value = 20 + random.uniform(0, 60)
-                        else:
-                            value = 0
+                        # Real speed tracking not implemented
+                        value = 0
                     
                     elif metric_name == 'throughput':
-                        # Overall system throughput
-                        value = 100 + random.uniform(-50, 100)
-                        value = max(0, value)
+                        # Real throughput measurement not implemented
+                        value = 0
                     
                     elif metric_name == 'latency':
-                        # Network latency in ms
-                        value = 10 + random.uniform(-5, 50)
-                        value = max(1, value)
+                        # Real latency measurement not implemented
+                        value = 0
                     
                     elif metric_name == 'error_rate':
-                        # Error rate percentage
-                        value = random.uniform(0, 5)
+                        # Calculate REAL error rate from database
+                        try:
+                            one_hour_ago = (datetime.now() - timedelta(hours=1)).isoformat()
+                            total_ops = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM upload_queue WHERE completed_at >= ?",
+                                (one_hour_ago,)
+                            )
+                            failed_ops = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'failed' AND completed_at >= ?",
+                                (one_hour_ago,)
+                            )
+                            if total_ops and total_ops['count'] > 0:
+                                value = (failed_ops['count'] / total_ops['count']) * 100 if failed_ops else 0
+                            else:
+                                value = 0
+                        except:
+                            value = 0
                     
                     elif metric_name == 'success_rate':
-                        # Success rate percentage
-                        value = 95 + random.uniform(-10, 5)
-                        value = max(0, min(100, value))
+                        # Calculate REAL success rate from database
+                        try:
+                            one_hour_ago = (datetime.now() - timedelta(hours=1)).isoformat()
+                            total_ops = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM upload_queue WHERE completed_at >= ?",
+                                (one_hour_ago,)
+                            )
+                            success_ops = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'completed' AND completed_at >= ?",
+                                (one_hour_ago,)
+                            )
+                            if total_ops and total_ops['count'] > 0:
+                                value = (success_ops['count'] / total_ops['count']) * 100 if success_ops else 0
+                            else:
+                                value = 100  # No operations means no failures
+                        except:
+                            value = 100
                     
                     elif metric_name == 'cache_hit_rate':
-                        # Cache hit rate percentage
-                        value = 80 + random.uniform(-20, 19)
-                        value = max(0, min(100, value))
+                        # Cache metrics not implemented
+                        value = 0
                     
                     else:
                         value = 0
@@ -2716,13 +2700,63 @@ class UnifiedAPIServer:
                 elif any(check["status"] == "warn" for check in health_checks):
                     overall_health = "warning"
                 
-                # Performance metrics
-                performance = {
-                    "response_time_ms": round(random.uniform(10, 50), 2),  # Would be actual measurement in production
-                    "requests_per_second": round(random.uniform(100, 500), 2),  # Would be actual measurement
-                    "error_rate": round(random.uniform(0, 2), 2),  # Would be calculated from logs
-                    "throughput_mbps": round(random.uniform(10, 100), 2)  # Would be calculated from transfers
-                }
+                # Performance metrics - REAL calculations
+                performance = {}
+                
+                # Calculate real response time (measure actual processing time)
+                import time
+                start_perf = time.perf_counter()
+                # Do a simple database query to measure response
+                if self.system.db:
+                    self.system.db.fetch_one("SELECT 1")
+                end_perf = time.perf_counter()
+                performance["response_time_ms"] = round((end_perf - start_perf) * 1000, 2)
+                
+                # Calculate real error rate from actual failed operations
+                if self.system.db:
+                    try:
+                        # Get operations from last hour
+                        one_hour_ago = (datetime.now() - timedelta(hours=1)).isoformat()
+                        total_ops = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE completed_at >= ?",
+                            (one_hour_ago,)
+                        )
+                        failed_ops = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'failed' AND completed_at >= ?",
+                            (one_hour_ago,)
+                        )
+                        
+                        total_count = total_ops['count'] if total_ops else 0
+                        failed_count = failed_ops['count'] if failed_ops else 0
+                        
+                        if total_count > 0:
+                            performance["error_rate"] = round((failed_count / total_count) * 100, 2)
+                        else:
+                            performance["error_rate"] = 0.0
+                    except:
+                        performance["error_rate"] = 0.0
+                else:
+                    performance["error_rate"] = 0.0
+                
+                # Real request tracking (would need request counter in production)
+                # For now, we'll report actual capabilities
+                performance["requests_per_second"] = 0  # No active request tracking yet
+                
+                # Calculate real throughput from actual transfers
+                performance["throughput_mbps"] = 0.0
+                if self.system.db:
+                    try:
+                        # Check for active uploads/downloads and their sizes
+                        active_upload = self.system.db.fetch_one(
+                            "SELECT SUM(total_size) as total, COUNT(*) as count FROM upload_queue WHERE state = 'uploading'"
+                        )
+                        if active_upload and active_upload['count'] > 0:
+                            # Real throughput would be calculated from actual transfer speeds
+                            # For now report that transfers are active but speed not measured
+                            performance["active_uploads"] = active_upload['count']
+                            performance["throughput_mbps"] = 0.0  # Speed measurement not implemented
+                    except:
+                        pass
                 
                 # Build complete status response
                 return {
