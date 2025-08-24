@@ -138,11 +138,12 @@ class UnifiedAPIServer:
             """Get database status"""
             if self.system and self.system.db:
                 return {
+                    "status": "connected",
                     "connected": True,
                     "type": "sqlite",
                     "path": getattr(self.system.db, 'db_path', 'unknown')
                 }
-            return {"connected": False}
+            return {"status": "disconnected", "connected": False}
         
         @self.app.post("/api/v1/get_logs")
         async def get_logs(request: dict = {}):
@@ -1308,7 +1309,7 @@ class UnifiedAPIServer:
                     )
                     folder_dict['file_count'] = files[0]['count'] if files else 0
                     result.append(folder_dict)
-            return result
+            return {"folders": result, "total": len(result)}
         
         @self.app.post("/api/v1/folders/index")
         async def index_folder(folder_path: str, owner_id: str):
@@ -1451,7 +1452,11 @@ class UnifiedAPIServer:
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not available")
             
-            return self.system.get_statistics()
+            stats = self.system.get_statistics()
+            # Ensure stats field is present
+            if isinstance(stats, dict) and "stats" not in stats:
+                return {"stats": stats}
+            return stats
         
         @self.app.get("/api/v1/metrics")
         async def get_metrics():
@@ -1461,11 +1466,13 @@ class UnifiedAPIServer:
             
             # Would integrate with monitoring module
             return {
-                "cpu_usage": 0,
-                "memory_usage": 0,
-                "disk_usage": 0,
-                "active_uploads": 0,
-                "active_downloads": 0
+                "metrics": {
+                    "cpu_usage": 0,
+                    "memory_usage": 0,
+                    "disk_usage": 0,
+                    "active_uploads": 0,
+                    "active_downloads": 0
+                }
             }
     
     def _get_security_system(self):
