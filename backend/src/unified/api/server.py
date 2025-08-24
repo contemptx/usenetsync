@@ -60,8 +60,7 @@ class UnifiedAPIServer:
         # Setup routes
         self._setup_routes()
         
-        # Setup WebSocket (if needed later)
-        # self._setup_websocket()
+        # WebSocket setup removed - not needed
     
     def _setup_routes(self):
         """Setup API routes"""
@@ -767,95 +766,176 @@ class UnifiedAPIServer:
         # Folder management endpoints
         @self.app.post("/api/v1/add_folder")
         async def add_folder(request: dict):
-            """Add folder to system"""
-            path = request.get("path", "/tmp/test")
-            raise HTTPException(status_code=500, detail="Folder operation failed")
+            """Add folder to system with real implementation"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            path = request.get("path")
+            if not path:
+                raise HTTPException(status_code=400, detail="path is required")
+            
+            owner_id = request.get("owner_id")
+            if not owner_id:
+                raise HTTPException(status_code=400, detail="owner_id is required")
+            
+            try:
+                # Use REAL system method
+                result = self.system.add_folder(path, owner_id)
+                return result
+            except Exception as e:
+                logger.error(f"Failed to add folder: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/index_folder")
-        async def index_folder_main(request: dict):
-            """Index folder with progress"""
-            folder_id = request.get("folderId", "test_folder")
-            raise HTTPException(status_code=500, detail="Operation failed")
-        @self.app.post("/api/v1/process_folder")
-        async def process_folder(request: dict):
-            """Process folder for segmentation"""
-            folder_id = request.get("folderId", "test_folder")
-            raise HTTPException(status_code=500, detail="Operation failed")
-        @self.app.post("/api/v1/upload_folder")
-        async def upload_folder(request: dict):
-            """Upload folder to Usenet"""
-            folder_id = request.get("folderId", "test_folder")
-            raise HTTPException(status_code=500, detail="Operation failed")
-        @self.app.post("/api/v1/create_share")
-        async def create_share(request: dict):
-            """Create a share"""
+        async def index_folder(request: dict):
+            """Index folder with real implementation"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
             folder_id = request.get("folderId") or request.get("folder_id")
             if not folder_id:
-                raise HTTPException(status_code=400, detail="folderId is required")
-            raise HTTPException(status_code=500, detail="Share creation failed")
+                raise HTTPException(status_code=400, detail="folder_id is required")
+            
+            try:
+                # Use REAL indexing
+                progress_id = f"idx_{folder_id}_{int(time.time())}"  
+                
+                # Start indexing in background
+                import threading
+                def index_task():
+                    self.system.index_folder_by_id(folder_id, progress_id)
+                
+                thread = threading.Thread(target=index_task)
+                thread.start()
+                
+                return {"success": True, "folder_id": folder_id, "progress_id": progress_id}
+            except Exception as e:
+                logger.error(f"Failed to index folder: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        @self.app.post("/api/v1/process_folder")
+        async def process_folder(request: dict):
+            """Process folder for segmentation with real implementation"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            folder_id = request.get("folderId") or request.get("folder_id")
+            if not folder_id:
+                raise HTTPException(status_code=400, detail="folder_id is required")
+            
+            try:
+                # Use REAL segmentation processor
+                segments = self.system.segment_processor.process_folder(folder_id)
+                return {
+                    "success": True,
+                    "folder_id": folder_id,
+                    "segments_created": len(segments),
+                    "segments": segments
+                }
+            except Exception as e:
+                logger.error(f"Failed to process folder: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        @self.app.post("/api/v1/upload_folder")
+        async def upload_folder(request: dict):
+            """Upload folder to Usenet with real implementation"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            folder_id = request.get("folderId") or request.get("folder_id")
+            if not folder_id:
+                raise HTTPException(status_code=400, detail="folder_id is required")
+            
+            try:
+                # Queue for REAL upload
+                queue_id = self.system.upload_queue.add_folder(folder_id)
+                
+                # Start upload worker if not running
+                if not hasattr(self.system, "upload_worker_running"):
+                    import threading
+                    def upload_worker():
+                        self.system.upload_worker_running = True
+                        self.system.upload_queue.process_queue()
+                    thread = threading.Thread(target=upload_worker)
+                    thread.start()
+                
+                return {
+                    "success": True,
+                    "folder_id": folder_id,
+                    "queue_id": queue_id,
+                    "status": "queued"
+                }
+            except Exception as e:
+                logger.error(f"Failed to upload folder: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        @self.app.post("/api/v1/create_share")
+        async def create_share(request: dict):
+            """Create a share with real implementation"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            folder_id = request.get("folderId") or request.get("folder_id")
+            if not folder_id:
+                raise HTTPException(status_code=400, detail="folder_id is required")
+            
+            share_type = request.get("shareType", "public")
+            password = request.get("password")
+            expiry_days = request.get("expiryDays", 30)
+            
+            try:
+                # Use REAL share creation
+                from unified.security.access_control import AccessLevel
+                
+                # Map share_type to AccessLevel
+                access_level = AccessLevel.PUBLIC
+                if share_type.lower() == 'private':
+                    access_level = AccessLevel.PRIVATE
+                elif share_type.lower() == 'protected':
+                    access_level = AccessLevel.PROTECTED
+                
+                # Get owner_id from request or use a default
+                owner_id = request.get("owner_id")
+                if not owner_id:
+                    # Try to get from session or use system default
+                    owner_id = request.get("userId", "system")
+                
+                share = self.system.create_share(
+                    folder_id=folder_id,
+                    owner_id=owner_id,
+                    access_level=access_level,
+                    password=password,
+                    expiry_days=expiry_days
+                )
+                return share
+            except Exception as e:
+                logger.error(f"Failed to create share: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/download_share")
         async def download_share(request: dict):
-            """Download a shared folder with progress tracking"""
+            """Download a shared folder with real implementation"""
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
             share_id = request.get("shareId") or request.get("share_id")
             if not share_id:
-                pass  # Default value provided
+                raise HTTPException(status_code=400, detail="share_id is required")
             
-            # Generate progress ID
-            progress_id = f"download_{share_id[:8]}_{datetime.now().timestamp()}"
+            output_path = request.get("outputPath", "./downloads")
+            password = request.get("password")
             
-            # Initialize progress tracking
-            if not hasattr(self.app.state, 'progress'):
-                self.app.state.progress = {}
-            
-            # Simulate getting segments (in real app, would query database)
-            total_segments = 20  # Simulated number of segments
-            
-            self.app.state.progress[progress_id] = {
-                'operation': 'downloading',
-                'total': total_segments,
-                'current': 0,
-                'percentage': 0,
-                'status': 'starting',
-                'message': f'Connecting to news.newshosting.com...'
-            }
-            
-            # Simulate download progress
-            import time
-            downloaded = 0
-            
-            for i in range(1, total_segments + 1):
-                percentage = int((i - 1) / total_segments * 100) if total_segments > 0 else 0
-                self.app.state.progress[progress_id] = {
-                    'operation': 'downloading',
-                    'total': total_segments,
-                    'current': i,
-                    'percentage': percentage,
-                    'status': 'processing',
-                    'message': f'Downloading segment {i}/{total_segments} from Usenet...'
+            try:
+                # Use REAL download
+                download_id = self.system.start_download(
+                    share_id=share_id,
+                    output_path=output_path,
+                    password=password
+                )
+                return {
+                    "success": True,
+                    "download_id": download_id,
+                    "share_id": share_id,
+                    "status": "started"
                 }
-                time.sleep(0.15)  # Simulate download time
-                downloaded = i
-            
-            # Final progress
-            self.app.state.progress[progress_id] = {
-                'operation': 'downloading',
-                'total': total_segments,
-                'current': total_segments,
-                'percentage': 100,
-                'status': 'completed',
-                'message': f'Download complete! Reconstructed {total_segments} segments into files.'
-            }
-            
-            return {
-                "success": True, 
-                "message": "Download completed successfully",
-                "segments_downloaded": downloaded,
-                "progress_id": progress_id,
-                "share_id": share_id
-            }
-        
+            except Exception as e:
+                logger.error(f"Failed to download share: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.delete("/api/v1/folders/{folder_id}")
         async def delete_folder(folder_id: str):
             """Delete folder"""

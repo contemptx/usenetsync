@@ -170,6 +170,177 @@ class UnifiedSystem:
         logger.info(f"Created user: {username} (ID: {user_data['user_id'][:8]}...)")
         return user_data
     
+    def add_folder(self, path: str, owner_id: str) -> Dict[str, Any]:
+        """
+        Add a folder to the system for indexing
+        
+        Args:
+            path: Path to the folder
+            owner_id: User ID of the owner
+        
+        Returns:
+            Folder information including folder_id
+        """
+        from pathlib import Path
+        folder_path = Path(path).resolve()
+        
+        if not folder_path.exists():
+            raise ValueError(f"Folder does not exist: {path}")
+        
+        if not folder_path.is_dir():
+            raise ValueError(f"Path is not a directory: {path}")
+        
+        # Create folder record
+        folder = Folder(
+            path=str(folder_path),
+            name=folder_path.name,
+            owner_id=owner_id
+        )
+        folder.generate_keys()
+        
+        # Insert into database
+        self.db.insert('folders', folder.to_dict())
+        
+        logger.info(f"Added folder: {path} (ID: {folder.folder_id[:8]}...)")
+        
+        return {
+            "folder_id": folder.folder_id,
+            "path": str(folder_path),
+            "name": folder.name,
+            "owner_id": owner_id,
+            "status": "added"
+        }
+    
+    def index_folder_by_id(self, folder_id: str, progress_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Index a folder by its ID
+        
+        Args:
+            folder_id: Folder ID to index
+            progress_id: Optional progress tracking ID
+        
+        Returns:
+            Indexing results
+        """
+        # Get folder from database
+        folders = self.db.query('folders', {'folder_id': folder_id})
+        if not folders:
+            raise ValueError(f"Folder not found: {folder_id}")
+        
+        folder = folders[0]
+        folder_path = Path(folder['path'])
+        
+        if not folder_path.exists():
+            raise ValueError(f"Folder path no longer exists: {folder['path']}")
+        
+        # Track progress if ID provided
+        if progress_id and hasattr(self.app.state, 'progress'):
+            self.app.state.progress[progress_id] = {
+                "status": "indexing",
+                "current": 0,
+                "total": 0,
+                "message": "Starting indexing..."
+            }
+        
+        # Perform indexing
+        results = self.scanner.scan_folder(str(folder_path), folder_id)
+        
+        # Update folder status
+        self.db.update('folders', {'folder_id': folder_id}, {
+            'status': 'indexed',
+            'file_count': results['file_count'],
+            'total_size': results['total_size']
+        })
+        
+        if progress_id and hasattr(self.app.state, 'progress'):
+            self.app.state.progress[progress_id] = {
+                "status": "complete",
+                "current": results['file_count'],
+                "total": results['file_count'],
+                "message": "Indexing complete"
+            }
+        
+        logger.info(f"Indexed folder {folder_id}: {results['file_count']} files")
+        return results
+    
+    def start_download(self, share_id: str, output_path: str, password: Optional[str] = None) -> str:
+        """
+        Start downloading a shared folder
+        
+        Args:
+            share_id: Share ID to download
+            output_path: Where to save the downloaded files
+            password: Optional password for protected shares
+        
+        Returns:
+            Download ID for tracking progress
+        """
+        import uuid
+        from pathlib import Path
+        
+        # Verify share exists
+        shares = self.db.query('shares', {'share_id': share_id})
+        if not shares:
+            raise ValueError(f"Share not found: {share_id}")
+        
+        share = shares[0]
+        
+        # Check password if required
+        if share.get('share_type') == 'protected' and share.get('password_hash'):
+            if not password:
+                raise ValueError("Password required for protected share")
+            # Verify password
+            if not self.auth.verify_password(password, share['password_hash']):
+                raise ValueError("Invalid password")
+        
+        # Create download ID
+        download_id = f"dl_{uuid.uuid4().hex[:8]}_{int(time.time())}"
+        
+        # Create output directory
+        output_dir = Path(output_path).resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Add to download queue
+        self.db.insert('download_queue', {
+            'download_id': download_id,
+            'share_id': share_id,
+            'output_path': str(output_dir),
+            'status': 'queued',
+            'created_at': datetime.now().isoformat()
+        })
+        
+        # Start download in background
+        import threading
+        def download_task():
+            try:
+                # Get segments for this share
+                segments = self.db.query('segments', {'folder_id': share['folder_id']})
+                
+                for segment in segments:
+                    # Download from Usenet
+                    if self.nntp_client and segment.get('message_id'):
+                        article = self.nntp_client.get_article(segment['message_id'])
+                        # Save segment
+                        segment_path = output_dir / f"segment_{segment['segment_index']}.dat"
+                        segment_path.write_bytes(article)
+                
+                # Update status
+                self.db.update('download_queue', {'download_id': download_id}, {
+                    'status': 'complete'
+                })
+            except Exception as e:
+                logger.error(f"Download failed: {e}")
+                self.db.update('download_queue', {'download_id': download_id}, {
+                    'status': 'failed',
+                    'error': str(e)
+                })
+        
+        thread = threading.Thread(target=download_task)
+        thread.start()
+        
+        logger.info(f"Started download {download_id} for share {share_id}")
+        return download_id
+    
     def index_folder(self, folder_path: str, owner_id: str,
                     calculate_hash: bool = True,
                     create_segments: bool = True) -> Dict[str, Any]:
