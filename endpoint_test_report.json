@@ -1,17 +1,17 @@
 {
-  "timestamp": "2025-08-24T05:45:12.152772",
+  "timestamp": "2025-08-24T08:25:04.989459",
   "results": {
     "total": 130,
-    "passed": 78,
-    "failed": 52,
+    "passed": 92,
+    "failed": 38,
     "by_category": {
       "System": {
         "passed": 12,
         "failed": 0
       },
       "Network": {
-        "passed": 8,
-        "failed": 1
+        "passed": 9,
+        "failed": 0
       },
       "Security": {
         "passed": 4,
@@ -30,12 +30,12 @@
         "failed": 0
       },
       "Publishing": {
-        "passed": 3,
-        "failed": 8
+        "passed": 4,
+        "failed": 7
       },
       "Indexing": {
-        "passed": 2,
-        "failed": 5
+        "passed": 6,
+        "failed": 1
       },
       "Upload": {
         "passed": 1,
