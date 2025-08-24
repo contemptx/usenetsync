@@ -223,6 +223,7 @@ class UnifiedDatabase:
     def __init__(self, config: Optional[DatabaseConfig] = None):
         """Initialize unified database with configuration"""
         self.config = config or DatabaseConfig()
+        self.db_path = getattr(self.config, 'path', getattr(self.config, 'sqlite_path', 'data/usenetsync.db'))  # Store path for status endpoint
         self.pool = ConnectionPool(self.config)
         self._lock = threading.Lock()
         self._transaction_stack = threading.local()

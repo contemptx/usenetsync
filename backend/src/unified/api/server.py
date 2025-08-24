@@ -68,12 +68,49 @@ class UnifiedAPIServer:
         
         @self.app.get("/")
         async def root():
-            """Root endpoint"""
-            return {
+            """Root endpoint with system information"""
+            response = {
                 "name": "Unified UsenetSync API",
                 "version": "1.0.0",
-                "status": "operational"
+                "status": "operational" if self.system else "initializing",
+                "timestamp": datetime.now().isoformat()
             }
+            
+            if self.system and self.system.db:
+                try:
+                    # Add real system statistics
+                    stats = {}
+                    
+                    # Get folder count
+                    folder_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM folders")
+                    stats["folders"] = folder_count['count'] if folder_count else 0
+                    
+                    # Get file count
+                    file_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM files")
+                    stats["files"] = file_count['count'] if file_count else 0
+                    
+                    # Get share count
+                    share_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM shares")
+                    stats["shares"] = share_count['count'] if share_count else 0
+                    
+                    # Get user count
+                    user_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM users")
+                    stats["users"] = user_count['count'] if user_count else 0
+                    
+                    response["statistics"] = stats
+                    response["database"] = "connected"
+                    
+                    # Check NNTP connection
+                    if hasattr(self.system, 'nntp_client') and self.system.nntp_client:
+                        response["nntp"] = "connected"
+                    else:
+                        response["nntp"] = "disconnected"
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to get statistics: {e}")
+                    response["database"] = "error"
+            
+            return response
         
         @self.app.get("/health")
         async def health_check():
@@ -135,14 +172,60 @@ class UnifiedAPIServer:
         
         @self.app.get("/api/v1/database/status")
         async def get_database_status():
-            """Get database status"""
+            """Get database status with statistics"""
             if self.system and self.system.db:
-                return {
-                    "status": "connected",
-                    "connected": True,
-                    "type": "sqlite",
-                    "path": getattr(self.system.db, 'db_path', 'unknown')
-                }
+                try:
+                    import os
+                    db_path = getattr(self.system.db, 'db_path', 'unknown')
+                    
+                    response = {
+                        "status": "connected",
+                        "connected": True,
+                        "type": "sqlite",
+                        "path": db_path
+                    }
+                    
+                    # Get database file size
+                    if db_path != 'unknown' and os.path.exists(db_path):
+                        db_size = os.path.getsize(db_path)
+                        response["size_bytes"] = db_size
+                        response["size_mb"] = round(db_size / (1024 * 1024), 2)
+                    
+                    # Get table counts
+                    tables = {}
+                    table_names = ['folders', 'files', 'segments', 'shares', 'users', 
+                                  'upload_queue', 'download_queue', 'alerts', 'network_servers']
+                    
+                    for table in table_names:
+                        try:
+                            result = self.system.db.fetch_one(f"SELECT COUNT(*) as count FROM {table}")
+                            if result:
+                                tables[table] = result['count']
+                        except:
+                            pass  # Table might not exist
+                    
+                    response["tables"] = tables
+                    
+                    # Get schema version
+                    try:
+                        version = self.system.db.fetch_one(
+                            "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
+                        )
+                        if version:
+                            response["schema_version"] = version['version']
+                    except:
+                        pass
+                    
+                    return response
+                    
+                except Exception as e:
+                    logger.error(f"Failed to get database status: {e}")
+                    return {
+                        "status": "error",
+                        "connected": True,
+                        "error": str(e)
+                    }
+            
             return {"status": "disconnected", "connected": False}
         
         @self.app.post("/api/v1/get_logs")
@@ -442,29 +525,75 @@ class UnifiedAPIServer:
         async def get_permissions(token: str = None):
             """Get user permissions"""
             try:
+                username = "guest"
+                is_admin = False
+                permissions = []
+                
+                # Check session
                 if not hasattr(self, '_sessions'):
                     self._sessions = {}
                 
                 if token and token in self._sessions:
                     username = self._sessions[token]['username']
-                else:
-                    username = "guest"
+                    
+                    # Try to get user from database
+                    if self.system and self.system.db:
+                        user = self.system.db.fetch_one(
+                            "SELECT username, is_admin, permissions FROM users WHERE username = ?",
+                            (username,)
+                        )
+                        if user:
+                            is_admin = user.get('is_admin', False)
+                            # Parse permissions JSON if stored
+                            stored_perms = user.get('permissions')
+                            if stored_perms:
+                                try:
+                                    import json
+                                    permissions = json.loads(stored_perms)
+                                except:
+                                    pass
                 
-                # Return default permissions
+                # Set default permissions based on user type
+                if not permissions:
+                    if is_admin:
+                        permissions = [
+                            "admin:system",
+                            "read:all",
+                            "write:all",
+                            "delete:all",
+                            "manage:users",
+                            "manage:system"
+                        ]
+                    elif username != "guest":
+                        permissions = [
+                            "user:basic",
+                            "read:folders",
+                            "write:folders",
+                            "read:shares",
+                            "write:shares",
+                            "create:shares"
+                        ]
+                    else:
+                        permissions = [
+                            "guest:limited",
+                            "read:public"
+                        ]
+                
                 return {
                     "username": username,
-                    "permissions": [
-                        "read:folders",
-                        "write:folders",
-                        "read:shares",
-                        "write:shares",
-                        "admin:system" if username == "admin" else "user:basic"
-                    ]
+                    "is_admin": is_admin,
+                    "permissions": permissions,
+                    "authenticated": token is not None and token in self._sessions
                 }
                 
             except Exception as e:
                 logger.error(f"Get permissions failed: {e}")
-                # raise HTTPException(status_code=500, detail=str(e))
+                return {
+                    "username": "guest",
+                    "is_admin": False,
+                    "permissions": ["guest:limited", "read:public"],
+                    "authenticated": False
+                }
         
         # ==================== USER MANAGEMENT ENDPOINTS ====================
         @self.app.post("/api/v1/users")
@@ -1088,24 +1217,74 @@ class UnifiedAPIServer:
         
         # Folder endpoints
         @self.app.get("/api/v1/folders")
-        async def get_folders():
-            """Get all folders"""
-            if not self.system:
-                return {"folders": [{"folder_id": "test", "path": "/tmp/test", "status": "ready"}], "total": 1}
+        async def get_folders(limit: int = 100, offset: int = 0, status: str = None):
+            """Get all folders with pagination and filtering"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
             
-            folders = self.system.db.fetch_all("SELECT * FROM folders ORDER BY created_at DESC")
-            result = []
-            if folders:
-                for f in folders:
-                    folder_dict = dict(f)
-                    # Add file count
-                    files = self.system.db.fetch_all(
-                        "SELECT COUNT(*) as count FROM files WHERE folder_id = ?",
-                        (folder_dict['folder_id'],)
-                    )
-                    folder_dict['file_count'] = files[0]['count'] if files else 0
-                    result.append(folder_dict)
-            return {"folders": result, "total": len(result)}
+            try:
+                # Build query with optional status filter
+                query = "SELECT * FROM folders"
+                params = []
+                
+                if status:
+                    query += " WHERE status = ?"
+                    params.append(status)
+                
+                query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                params.extend([limit, offset])
+                
+                folders = self.system.db.fetch_all(query, tuple(params))
+                result = []
+                
+                if folders:
+                    for f in folders:
+                        folder_dict = dict(f)
+                        
+                        # Add file count
+                        file_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM files WHERE folder_id = ?",
+                            (folder_dict['folder_id'],)
+                        )
+                        folder_dict['file_count'] = file_count['count'] if file_count else 0
+                        
+                        # Add segment count
+                        segment_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM segments s JOIN files f ON s.file_id = f.file_id WHERE f.folder_id = ?",
+                            (folder_dict['folder_id'],)
+                        )
+                        folder_dict['segment_count'] = segment_count['count'] if segment_count else 0
+                        
+                        # Add share count
+                        share_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM shares WHERE folder_id = ?",
+                            (folder_dict['folder_id'],)
+                        )
+                        folder_dict['share_count'] = share_count['count'] if share_count else 0
+                        
+                        result.append(folder_dict)
+                
+                # Get total count
+                total_query = "SELECT COUNT(*) as count FROM folders"
+                if status:
+                    total_query += " WHERE status = ?"
+                    total_result = self.system.db.fetch_one(total_query, (status,))
+                else:
+                    total_result = self.system.db.fetch_one(total_query)
+                
+                total = total_result['count'] if total_result else 0
+                
+                return {
+                    "folders": result,
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": (offset + len(result)) < total
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get folders: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/api/v1/folders/index")
         async def index_folder(request: dict = {}):
@@ -1117,8 +1296,59 @@ class UnifiedAPIServer:
             raise HTTPException(status_code=500, detail="Operation failed")
         @self.app.get("/api/v1/folders/{folder_id}")
         async def get_folder(folder_id: str):
-            """Get folder details"""
-            return {"folder_id": folder_id, "path": "/tmp/test", "status": "ready", "file_count": 0}
+            """Get detailed folder information"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Get folder details
+                folder = self.system.db.fetch_one(
+                    "SELECT * FROM folders WHERE folder_id = ?", (folder_id,)
+                )
+                
+                if not folder:
+                    raise HTTPException(status_code=404, detail=f"Folder {folder_id} not found")
+                
+                folder_dict = dict(folder)
+                
+                # Get file details
+                files = self.system.db.fetch_all(
+                    "SELECT file_id, name, size, hash FROM files WHERE folder_id = ? ORDER BY name",
+                    (folder_id,)
+                )
+                folder_dict['files'] = [dict(f) for f in files] if files else []
+                folder_dict['file_count'] = len(folder_dict['files'])
+                
+                # Get segment count
+                segment_count = self.system.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM segments s JOIN files f ON s.file_id = f.file_id WHERE f.folder_id = ?",
+                    (folder_id,)
+                )
+                folder_dict['segment_count'] = segment_count['count'] if segment_count else 0
+                
+                # Get shares
+                shares = self.system.db.fetch_all(
+                    "SELECT share_id, share_type, access_type, access_level, created_at FROM shares WHERE folder_id = ?",
+                    (folder_id,)
+                )
+                folder_dict['shares'] = [dict(s) for s in shares] if shares else []
+                folder_dict['share_count'] = len(folder_dict['shares'])
+                
+                # Get upload queue status
+                upload_status = self.system.db.fetch_one(
+                    "SELECT state, progress FROM upload_queue WHERE entity_id = ? AND entity_type = 'folder' ORDER BY queued_at DESC LIMIT 1",
+                    (folder_id,)
+                )
+                if upload_status:
+                    folder_dict['upload_status'] = dict(upload_status)
+                
+                return folder_dict
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get folder {folder_id}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
