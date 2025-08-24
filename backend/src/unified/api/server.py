@@ -1038,6 +1038,84 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to delete upload queue item: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/download/cache/stats")
+        async def get_download_cache_stats():
+            """Get download cache statistics"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Initialize download cache if needed
+                if not hasattr(self.system, 'download_cache'):
+                    from unified.download.cache import UnifiedCache
+                    # Use data/download_cache directory
+                    self.system.download_cache = UnifiedCache(
+                        cache_dir='data/download_cache',
+                        max_size_mb=1000,  # 1GB cache
+                        max_items=10000
+                    )
+                    # The cache automatically scans existing files on initialization
+                
+                # Get cache statistics
+                stats = self.system.download_cache.get_statistics()
+                
+                # Add cache directory info
+                import os
+                from pathlib import Path
+                cache_dir = Path('data/download_cache')
+                if cache_dir.exists():
+                    # Count actual files in cache directory
+                    cache_files = list(cache_dir.glob('*'))
+                    stats['cache_directory'] = str(cache_dir.absolute())
+                    stats['actual_files'] = len(cache_files)
+                    
+                    # Calculate actual disk usage
+                    actual_size = sum(f.stat().st_size for f in cache_files if f.is_file())
+                    stats['actual_disk_usage_mb'] = actual_size / (1024 * 1024)
+                else:
+                    stats['cache_directory'] = str(cache_dir.absolute())
+                    stats['actual_files'] = 0
+                    stats['actual_disk_usage_mb'] = 0
+                
+                # Add cache health status
+                if stats['usage_percent'] > 90:
+                    stats['health'] = 'critical'
+                elif stats['usage_percent'] > 75:
+                    stats['health'] = 'warning'
+                else:
+                    stats['health'] = 'healthy'
+                
+                # Add efficiency metrics
+                total_requests = stats.get('hits', 0) + stats.get('misses', 0)
+                if total_requests > 0:
+                    stats['efficiency'] = {
+                        'total_requests': total_requests,
+                        'cache_effectiveness': round(stats.get('hit_rate', 0) * 100, 2),
+                        'bytes_saved': stats.get('bytes_served', 0),
+                        'average_item_size_kb': round(
+                            (stats['cache_size_mb'] * 1024 / stats['items_cached']) 
+                            if stats['items_cached'] > 0 else 0, 
+                            2
+                        )
+                    }
+                else:
+                    stats['efficiency'] = {
+                        'total_requests': 0,
+                        'cache_effectiveness': 0,
+                        'bytes_saved': 0,
+                        'average_item_size_kb': 0
+                    }
+                
+                return {
+                    'success': True,
+                    'statistics': stats,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get cache stats: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.get("/api/v1/download/progress/{download_id}")
         async def get_download_progress(download_id: str):
             """Get download progress for a specific download"""
