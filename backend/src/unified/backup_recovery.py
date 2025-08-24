@@ -45,7 +45,7 @@ class BackupMetadata:
 class BackupRecoverySystem:
     """Comprehensive backup and recovery system"""
     
-    def __init__(self, backup_dir: str = "/backup"):
+    def __init__(self, backup_dir: str = "data/backups"):
         """
         Initialize backup system
         
@@ -336,6 +336,70 @@ class BackupRecoverySystem:
         backups.sort(key=lambda x: x['timestamp'], reverse=True)
         
         return backups
+    
+    def delete_backup(self, backup_id: str) -> Dict[str, Any]:
+        """
+        Delete a backup and its metadata
+        
+        Args:
+            backup_id: ID of backup to delete
+            
+        Returns:
+            Deletion result
+        """
+        try:
+            logger.info(f"Deleting backup: {backup_id}")
+            
+            # Check if backup exists
+            backup_file = self.backup_dir / f"{backup_id}.tar.gz"
+            metadata_file = self.backup_dir / f"{backup_id}.json"
+            
+            if not backup_file.exists() and not metadata_file.exists():
+                return {
+                    'success': False,
+                    'error': f"Backup {backup_id} not found"
+                }
+            
+            # Delete backup file
+            if backup_file.exists():
+                backup_file.unlink()
+                logger.info(f"Deleted backup file: {backup_file}")
+            
+            # Delete metadata file
+            if metadata_file.exists():
+                metadata_file.unlink()
+                logger.info(f"Deleted metadata file: {metadata_file}")
+            
+            # Check for any incremental backups that depend on this one
+            dependent_backups = []
+            for meta_file in self.backup_dir.glob("*.json"):
+                try:
+                    with open(meta_file, 'r') as f:
+                        meta = json.load(f)
+                        if meta.get('parent_backup') == backup_id:
+                            dependent_backups.append(meta.get('backup_id'))
+                except:
+                    pass
+            
+            result = {
+                'success': True,
+                'backup_id': backup_id,
+                'deleted_at': datetime.now().isoformat(),
+                'message': f"Backup {backup_id} deleted successfully"
+            }
+            
+            if dependent_backups:
+                result['warning'] = f"This backup had {len(dependent_backups)} dependent incremental backups"
+                result['dependent_backups'] = dependent_backups
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to delete backup {backup_id}: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
     def schedule_backup(self, cron_expression: str = "0 2 * * *"):
         """

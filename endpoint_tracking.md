@@ -11,7 +11,7 @@
 ---
 
 ## DELETE Endpoints (8 total)
-1. ❌ DELETE /api/v1/backup/{backup_id} - Delete backup
+1. ✅ DELETE /api/v1/backup/{backup_id} - Delete backup - IMPLEMENTED
 2. ✅ DELETE /api/v1/batch/files - Batch delete files
 3. ✅ DELETE /api/v1/folders/{folder_id} - Delete folder
 4. ✅ DELETE /api/v1/monitoring/alerts/{alert_id} - Delete alert

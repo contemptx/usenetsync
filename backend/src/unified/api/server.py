@@ -818,6 +818,32 @@ class UnifiedAPIServer:
                 logger.error(f"Batch create shares failed: {e}")
                 # raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.delete("/api/v1/backup/{backup_id}")
+        async def delete_backup(backup_id: str):
+            """Delete a backup and its metadata"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Initialize backup system if needed
+                if not hasattr(self.system, 'backup_system'):
+                    from unified.backup_recovery import BackupRecoverySystem
+                    self.system.backup_system = BackupRecoverySystem()
+                
+                # Delete the backup
+                result = self.system.backup_system.delete_backup(backup_id)
+                
+                if not result.get('success'):
+                    raise HTTPException(status_code=404, detail=result.get('error', 'Backup not found'))
+                
+                return result
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to delete backup {backup_id}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.delete("/api/v1/batch/files")
         async def batch_delete_files(request: dict = {}):
             """Batch delete files"""
