@@ -36,8 +36,8 @@
 21. ✅ GET /api/v1/license/status - License status - VERIFIED
 22. ✅ GET /api/v1/logs - Get logs - VERIFIED
 23. ✅ GET /api/v1/metrics - System metrics - VERIFIED
-24. ❌ GET /api/v1/migration/status - Migration status
-25. ❌ GET /api/v1/monitoring/alerts/list - List alerts
+24. ✅ GET /api/v1/migration/status - Migration status - VERIFIED
+25. ✅ GET /api/v1/monitoring/alerts/list - List alerts - VERIFIED
 26. ❌ GET /api/v1/monitoring/dashboard - Monitoring dashboard
 27. ❌ GET /api/v1/monitoring/metrics/{metric_name}/stats - Metric stats
 28. ❌ GET /api/v1/monitoring/metrics/{metric_name}/values - Metric values
