@@ -337,6 +337,73 @@ class BackupRecoverySystem:
         
         return backups
     
+    def get_backup_metadata(self, backup_id: str) -> Dict[str, Any]:
+        """
+        Get metadata for a specific backup
+        
+        Args:
+            backup_id: ID of backup to get metadata for
+            
+        Returns:
+            Backup metadata dictionary
+        """
+        try:
+            logger.info(f"Getting metadata for backup: {backup_id}")
+            
+            # Check both possible metadata file names
+            metadata_file = self.backup_dir / f"{backup_id}.metadata.json"
+            if not metadata_file.exists():
+                metadata_file = self.backup_dir / f"{backup_id}.json"
+            
+            if not metadata_file.exists():
+                # Check if backup file exists
+                backup_file = self.backup_dir / f"{backup_id}.tar.gz"
+                if not backup_file.exists():
+                    return {
+                        'success': False,
+                        'error': f"Backup {backup_id} not found"
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': f"Metadata file for backup {backup_id} not found"
+                    }
+            
+            # Load metadata
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            
+            # Add file size if backup file exists
+            backup_file = self.backup_dir / f"{backup_id}.tar.gz"
+            if backup_file.exists():
+                metadata['actual_file_size'] = backup_file.stat().st_size
+                metadata['file_exists'] = True
+            else:
+                metadata['file_exists'] = False
+            
+            # Add metadata file path
+            metadata['metadata_path'] = str(metadata_file)
+            metadata['backup_path'] = str(backup_file) if backup_file.exists() else None
+            
+            return {
+                'success': True,
+                'backup_id': backup_id,
+                'metadata': metadata
+            }
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse metadata for backup {backup_id}: {e}")
+            return {
+                'success': False,
+                'error': f"Invalid metadata format for backup {backup_id}"
+            }
+        except Exception as e:
+            logger.error(f"Failed to get metadata for backup {backup_id}: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
     def delete_backup(self, backup_id: str) -> Dict[str, Any]:
         """
         Delete a backup and its metadata

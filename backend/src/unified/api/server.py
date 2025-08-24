@@ -844,6 +844,64 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to delete backup {backup_id}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/backup/{backup_id}/metadata")
+        async def get_backup_metadata(backup_id: str):
+            """Get metadata for a specific backup"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Initialize backup system if needed
+                if not hasattr(self.system, 'backup_system'):
+                    from unified.backup_recovery import BackupRecoverySystem
+                    self.system.backup_system = BackupRecoverySystem()
+                
+                # Get the backup metadata
+                result = self.system.backup_system.get_backup_metadata(backup_id)
+                
+                if not result.get('success'):
+                    raise HTTPException(status_code=404, detail=result.get('error', 'Backup not found'))
+                
+                return result
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get backup metadata for {backup_id}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/backup/list")
+        async def list_backups(limit: int = 100, offset: int = 0):
+            """List all available backups"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Initialize backup system if needed
+                if not hasattr(self.system, 'backup_system'):
+                    from unified.backup_recovery import BackupRecoverySystem
+                    self.system.backup_system = BackupRecoverySystem()
+                
+                # Get list of backups
+                all_backups = self.system.backup_system.list_backups()
+                
+                # Apply pagination
+                total = len(all_backups)
+                paginated_backups = all_backups[offset:offset + limit]
+                
+                return {
+                    'success': True,
+                    'backups': paginated_backups,
+                    'total': total,
+                    'limit': limit,
+                    'offset': offset,
+                    'has_more': (offset + len(paginated_backups)) < total
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to list backups: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.delete("/api/v1/batch/files")
         async def batch_delete_files(request: dict = {}):
             """Batch delete files"""
