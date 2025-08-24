@@ -1562,6 +1562,348 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get indexing stats: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/logs")
+        async def get_logs(lines: int = 100, level: str = None, component: str = None):
+            """Get system logs with filtering"""
+            try:
+                import os
+                from pathlib import Path
+                
+                # Find log files
+                log_files = []
+                log_dir = Path("logs")
+                if log_dir.exists():
+                    log_files.extend(log_dir.glob("*.log"))
+                
+                # Also check for backend.log in root
+                backend_log = Path("backend.log")
+                if backend_log.exists():
+                    log_files.append(backend_log)
+                
+                # Parse logs from files
+                logs = []
+                for log_file in log_files:
+                    try:
+                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                            # Read last N lines
+                            file_lines = f.readlines()
+                            recent_lines = file_lines[-lines:] if len(file_lines) > lines else file_lines
+                            
+                            for line in recent_lines:
+                                # Parse log line (assuming standard format)
+                                if line.strip():
+                                    # Try to parse structured log
+                                    log_entry = {
+                                        "timestamp": None,
+                                        "level": "INFO",
+                                        "component": str(log_file.name),
+                                        "message": line.strip()
+                                    }
+                                    
+                                    # Try to extract timestamp and level
+                                    parts = line.strip().split(' ', 3)
+                                    if len(parts) >= 3:
+                                        # Common format: YYYY-MM-DD HH:MM:SS LEVEL message
+                                        if parts[0].count('-') == 2 and parts[1].count(':') == 2:
+                                            log_entry["timestamp"] = f"{parts[0]} {parts[1]}"
+                                            if parts[2] in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+                                                log_entry["level"] = parts[2]
+                                                if len(parts) > 3:
+                                                    log_entry["message"] = parts[3]
+                                    
+                                    # Filter by level if specified
+                                    if level and log_entry["level"] != level.upper():
+                                        continue
+                                    
+                                    # Filter by component if specified
+                                    if component and component.lower() not in log_entry["component"].lower():
+                                        continue
+                                    
+                                    logs.append(log_entry)
+                    except Exception as e:
+                        logger.warning(f"Failed to read log file {log_file}: {e}")
+                
+                # Sort by timestamp if available
+                logs.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
+                
+                # Limit to requested number of lines
+                logs = logs[:lines]
+                
+                return {
+                    "logs": logs,
+                    "total": len(logs),
+                    "filters": {
+                        "lines": lines,
+                        "level": level,
+                        "component": component
+                    },
+                    "log_files": [str(f) for f in log_files]
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get logs: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/metrics")
+        async def get_metrics():
+            """Get comprehensive system metrics"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                import psutil
+                import os
+                from datetime import datetime
+                
+                # CPU metrics
+                cpu_percent = psutil.cpu_percent(interval=1)
+                cpu_count = psutil.cpu_count()
+                cpu_freq = psutil.cpu_freq()
+                
+                # Memory metrics
+                memory = psutil.virtual_memory()
+                swap = psutil.swap_memory()
+                
+                # Disk metrics
+                disk_usage = psutil.disk_usage('/')
+                
+                # Process metrics
+                process = psutil.Process(os.getpid())
+                process_info = {
+                    "pid": process.pid,
+                    "cpu_percent": process.cpu_percent(),
+                    "memory_mb": process.memory_info().rss / 1024 / 1024,
+                    "threads": process.num_threads(),
+                    "open_files": len(process.open_files()) if hasattr(process, 'open_files') else 0,
+                    "connections": len(process.connections()) if hasattr(process, 'connections') else 0
+                }
+                
+                # Database metrics
+                db_metrics = {}
+                if self.system.db:
+                    try:
+                        # Get database size
+                        db_path = getattr(self.system.db, 'db_path', 'data/usenetsync.db')
+                        if os.path.exists(db_path):
+                            db_metrics["size_mb"] = os.path.getsize(db_path) / 1024 / 1024
+                        
+                        # Get table counts
+                        tables = ['folders', 'files', 'segments', 'shares', 'users']
+                        for table in tables:
+                            result = self.system.db.fetch_one(f"SELECT COUNT(*) as count FROM {table}")
+                            if result:
+                                db_metrics[f"{table}_count"] = result['count']
+                    except Exception as e:
+                        logger.warning(f"Failed to get database metrics: {e}")
+                
+                # Network metrics (if available)
+                network_metrics = {}
+                if hasattr(self.system, 'nntp_client') and self.system.nntp_client:
+                    network_metrics["nntp_connected"] = True
+                    # Get connection pool stats if available
+                    if hasattr(self.system, 'connection_pool'):
+                        pool = self.system.connection_pool
+                        network_metrics["pool_size"] = getattr(pool, 'size', 0)
+                        network_metrics["pool_active"] = getattr(pool, 'active_connections', 0)
+                else:
+                    network_metrics["nntp_connected"] = False
+                
+                # Queue metrics
+                queue_metrics = {}
+                if self.system.db:
+                    try:
+                        # Upload queue
+                        upload_queue = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as total, SUM(CASE WHEN state = 'uploading' THEN 1 ELSE 0 END) as active FROM upload_queue"
+                        )
+                        if upload_queue:
+                            queue_metrics["upload_total"] = upload_queue['total'] or 0
+                            queue_metrics["upload_active"] = upload_queue['active'] or 0
+                        
+                        # Download queue
+                        download_queue = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as total, SUM(CASE WHEN state = 'downloading' THEN 1 ELSE 0 END) as active FROM download_queue"
+                        )
+                        if download_queue:
+                            queue_metrics["download_total"] = download_queue['total'] or 0
+                            queue_metrics["download_active"] = download_queue['active'] or 0
+                    except Exception as e:
+                        logger.warning(f"Failed to get queue metrics: {e}")
+                
+                metrics = {
+                    "timestamp": datetime.now().isoformat(),
+                    "system": {
+                        "cpu": {
+                            "percent": cpu_percent,
+                            "count": cpu_count,
+                            "frequency_mhz": cpu_freq.current if cpu_freq else None
+                        },
+                        "memory": {
+                            "total_mb": memory.total / 1024 / 1024,
+                            "available_mb": memory.available / 1024 / 1024,
+                            "used_mb": memory.used / 1024 / 1024,
+                            "percent": memory.percent
+                        },
+                        "swap": {
+                            "total_mb": swap.total / 1024 / 1024,
+                            "used_mb": swap.used / 1024 / 1024,
+                            "percent": swap.percent
+                        },
+                        "disk": {
+                            "total_gb": disk_usage.total / 1024 / 1024 / 1024,
+                            "used_gb": disk_usage.used / 1024 / 1024 / 1024,
+                            "free_gb": disk_usage.free / 1024 / 1024 / 1024,
+                            "percent": disk_usage.percent
+                        }
+                    },
+                    "process": process_info,
+                    "database": db_metrics,
+                    "network": network_metrics,
+                    "queues": queue_metrics
+                }
+                
+                return metrics
+                
+            except Exception as e:
+                logger.error(f"Failed to get metrics: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/migration/status")
+        async def get_migration_status():
+            """Get database migration status"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Check if schema_migrations table exists
+                migrations = []
+                current_version = None
+                
+                try:
+                    # Get all migrations
+                    all_migrations = self.system.db.fetch_all(
+                        "SELECT version, description, applied_at FROM schema_migrations ORDER BY version DESC"
+                    )
+                    
+                    if all_migrations:
+                        for migration in all_migrations:
+                            migrations.append({
+                                "version": migration['version'],
+                                "description": migration.get('description', ''),
+                                "applied_at": migration.get('applied_at', '')
+                            })
+                        current_version = all_migrations[0]['version']
+                except:
+                    # Schema migrations table doesn't exist - database is at initial state
+                    current_version = "0"
+                
+                # Check database schema status
+                tables = ['folders', 'files', 'segments', 'shares', 'users', 
+                         'upload_queue', 'download_queue', 'alerts', 'network_servers']
+                
+                schema_status = {}
+                for table in tables:
+                    try:
+                        # Check if table exists by querying it
+                        self.system.db.fetch_one(f"SELECT COUNT(*) FROM {table}")
+                        schema_status[table] = "exists"
+                    except:
+                        schema_status[table] = "missing"
+                
+                # Determine if migration is needed
+                all_tables_exist = all(status == "exists" for status in schema_status.values())
+                needs_migration = not all_tables_exist or current_version == "0"
+                
+                # Get pending migrations (simulated - in real system would check migration files)
+                pending_migrations = []
+                if needs_migration:
+                    if current_version == "0":
+                        pending_migrations.append({
+                            "version": "1",
+                            "description": "Initial schema creation"
+                        })
+                
+                return {
+                    "current_version": current_version,
+                    "latest_version": "1",  # Would be determined from migration files
+                    "needs_migration": needs_migration,
+                    "applied_migrations": migrations,
+                    "pending_migrations": pending_migrations,
+                    "schema_status": schema_status,
+                    "database_type": "sqlite",
+                    "database_path": getattr(self.system.db, 'db_path', 'unknown')
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get migration status: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/monitoring/alerts/list")
+        async def list_alerts(enabled_only: bool = False, severity: str = None):
+            """List all monitoring alerts with filtering"""
+            if not self.system or not self.system.db:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Build query with filters
+                query = "SELECT * FROM alerts WHERE 1=1"
+                params = []
+                
+                if enabled_only:
+                    query += " AND enabled = 1"
+                
+                if severity:
+                    query += " AND severity = ?"
+                    params.append(severity)
+                
+                query += " ORDER BY created_at DESC"
+                
+                # Get alerts from database
+                alerts = self.system.db.fetch_all(query, tuple(params) if params else None)
+                
+                result = []
+                if alerts:
+                    for alert in alerts:
+                        alert_dict = dict(alert)
+                        # Check if alert was recently triggered
+                        if alert_dict.get('last_triggered'):
+                            from datetime import datetime, timedelta
+                            try:
+                                last_triggered = datetime.fromisoformat(alert_dict['last_triggered'].replace(' ', 'T'))
+                                cooldown = timedelta(seconds=alert_dict.get('cooldown_seconds', 300))
+                                alert_dict['can_trigger'] = datetime.now() > last_triggered + cooldown
+                            except:
+                                alert_dict['can_trigger'] = True
+                        else:
+                            alert_dict['can_trigger'] = True
+                        
+                        result.append(alert_dict)
+                
+                # Get alert statistics
+                stats = {
+                    "total": len(result),
+                    "enabled": sum(1 for a in result if a.get('enabled')),
+                    "by_severity": {}
+                }
+                
+                for severity_level in ['info', 'warning', 'critical']:
+                    stats["by_severity"][severity_level] = sum(
+                        1 for a in result if a.get('severity') == severity_level
+                    )
+                
+                return {
+                    "alerts": result,
+                    "statistics": stats,
+                    "filters": {
+                        "enabled_only": enabled_only,
+                        "severity": severity
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to list alerts: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
