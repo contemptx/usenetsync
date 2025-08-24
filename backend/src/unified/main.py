@@ -385,6 +385,90 @@ class UnifiedSystem:
             logger.error(f"Failed to create alert: {e}")
             raise
     
+    def add_network_server(self, name: str, host: str, port: int = 119,
+                           ssl_enabled: bool = False, username: str = None,
+                           password: str = None, max_connections: int = 10,
+                           priority: int = 1) -> Dict[str, Any]:
+        """
+        Add a network server configuration
+        
+        Args:
+            name: Server name
+            host: Server hostname
+            port: Server port
+            ssl_enabled: Whether SSL is enabled
+            username: Username for authentication
+            password: Password for authentication
+            max_connections: Maximum connections allowed
+            priority: Server priority (lower is higher priority)
+            
+        Returns:
+            Dict with server details
+        """
+        try:
+            import uuid
+            server_id = str(uuid.uuid4())
+            
+            # Insert server into database
+            self.db.execute("""
+                INSERT INTO network_servers (server_id, name, host, port, ssl_enabled,
+                                           username, password, max_connections, priority,
+                                           enabled, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))
+            """, (server_id, name, host, port, ssl_enabled, username, password,
+                  max_connections, priority))
+            
+            logger.info(f"Added network server: {name} ({host}:{port})")
+            
+            return {
+                "success": True,
+                "server_id": server_id,
+                "name": name,
+                "host": host,
+                "port": port,
+                "ssl_enabled": ssl_enabled,
+                "max_connections": max_connections,
+                "priority": priority
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to add network server: {e}")
+            raise
+    
+    def delete_network_server(self, server_id: str) -> Dict[str, Any]:
+        """
+        Delete a network server configuration
+        
+        Args:
+            server_id: ID of the server to delete
+            
+        Returns:
+            Dict with success status
+        """
+        try:
+            # Check if server exists
+            server = self.db.fetch_one("SELECT server_id, name, host FROM network_servers WHERE server_id = ?", (server_id,))
+            if not server:
+                raise ValueError(f"Server {server_id} not found")
+            
+            # Delete associated health records
+            self.db.execute("DELETE FROM server_health WHERE server = ?", (server['host'],))
+            
+            # Delete the server configuration
+            self.db.execute("DELETE FROM network_servers WHERE server_id = ?", (server_id,))
+            
+            logger.info(f"Deleted network server: {server['name']} ({server['host']})")
+            
+            return {
+                "success": True,
+                "server_id": server_id,
+                "message": f"Successfully deleted server: {server['name']}"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete network server {server_id}: {e}")
+            raise
+    
     def delete_alert(self, alert_id: str) -> Dict[str, Any]:
         """
         Delete a monitoring alert

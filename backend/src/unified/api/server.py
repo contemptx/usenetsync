@@ -679,6 +679,56 @@ class UnifiedAPIServer:
             except Exception as e:
                 logger.error(f"Failed to delete alert: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/network/servers/add")
+        async def add_network_server(request: dict = {}):
+            """Add a network server"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            name = request.get("name")
+            if not name:
+                raise HTTPException(status_code=400, detail="name is required")
+            
+            host = request.get("host")
+            if not host:
+                raise HTTPException(status_code=400, detail="host is required")
+            
+            port = request.get("port", 119)
+            ssl_enabled = request.get("ssl_enabled", False)
+            username = request.get("username")
+            password = request.get("password")
+            max_connections = request.get("max_connections", 10)
+            priority = request.get("priority", 1)
+            
+            try:
+                result = self.system.add_network_server(
+                    name=name,
+                    host=host,
+                    port=port,
+                    ssl_enabled=ssl_enabled,
+                    username=username,
+                    password=password,
+                    max_connections=max_connections,
+                    priority=priority
+                )
+                return result
+            except Exception as e:
+                logger.error(f"Failed to add network server: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.delete("/api/v1/network/servers/{server_id}")
+        async def delete_network_server(server_id: str):
+            """Delete a network server"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.delete_network_server(server_id)
+                return result
+            except Exception as e:
+                logger.error(f"Failed to delete network server: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
             """Create webhook"""

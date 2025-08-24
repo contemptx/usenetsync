@@ -368,6 +368,25 @@ class UnifiedSchema:
                 )
             """,
             
+            # Network servers configuration
+            'network_servers': f"""
+                CREATE TABLE IF NOT EXISTS network_servers (
+                    id {id_type},
+                    server_id TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    host VARCHAR(255) NOT NULL,
+                    port INTEGER DEFAULT 119,
+                    ssl_enabled BOOLEAN DEFAULT FALSE,
+                    username TEXT,
+                    password TEXT,
+                    max_connections INTEGER DEFAULT 10,
+                    priority INTEGER DEFAULT 1,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """,
+            
             # Server health (NNTP server monitoring)
             'server_health': f"""
                 CREATE TABLE IF NOT EXISTS server_health (
