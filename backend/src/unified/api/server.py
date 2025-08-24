@@ -3310,6 +3310,226 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get connection pool info: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/network/connection_pool/stats")
+        async def get_connection_pool_stats():
+            """Get detailed connection pool statistics"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime, timedelta
+                import psutil
+                
+                # Initialize connection pool if not exists
+                if not hasattr(self.system, 'connection_pool'):
+                    # Get servers from database
+                    servers = []
+                    if self.system.db:
+                        try:
+                            db_servers = self.system.db.fetch_all(
+                                "SELECT * FROM network_servers WHERE enabled = 1"
+                            )
+                            if db_servers:
+                                for srv in db_servers:
+                                    servers.append({
+                                        'host': srv['host'],
+                                        'port': srv['port'],
+                                        'ssl': srv.get('ssl_enabled', True),
+                                        'username': srv.get('username'),
+                                        'password': srv.get('password')
+                                    })
+                        except:
+                            pass
+                    
+                    if not servers:
+                        servers = [{
+                            'host': 'news.newshosting.com',
+                            'port': 563,
+                            'ssl': True,
+                            'username': 'contemptx',
+                            'password': 'Kia211101#'
+                        }]
+                    
+                    from unified.networking.connection_pool import UnifiedConnectionPool
+                    self.system.connection_pool = UnifiedConnectionPool(
+                        servers=servers,
+                        max_connections_per_server=10
+                    )
+                
+                # Get pool statistics
+                pool_stats = self.system.connection_pool.get_statistics()
+                
+                # Calculate aggregate statistics
+                total_connections_created = 0
+                total_connections_reused = 0
+                total_connection_errors = 0
+                total_posts_successful = 0
+                total_posts_failed = 0
+                total_retrieves_successful = 0
+                total_retrieves_failed = 0
+                total_pool_size = 0
+                
+                for server_id, stats in pool_stats.items():
+                    total_connections_created += stats.get('connections_created', 0)
+                    total_connections_reused += stats.get('connections_reused', 0)
+                    total_connection_errors += stats.get('connection_errors', 0)
+                    total_posts_successful += stats.get('posts_successful', 0)
+                    total_posts_failed += stats.get('posts_failed', 0)
+                    total_retrieves_successful += stats.get('retrieves_successful', 0)
+                    total_retrieves_failed += stats.get('retrieves_failed', 0)
+                    total_pool_size += stats.get('pool_size', 0)
+                
+                # Calculate rates and percentages
+                total_connections = total_connections_created + total_connections_reused
+                reuse_rate = (total_connections_reused / max(total_connections, 1)) * 100
+                error_rate = (total_connection_errors / max(total_connections_created, 1)) * 100
+                
+                total_posts = total_posts_successful + total_posts_failed
+                post_success_rate = (total_posts_successful / max(total_posts, 1)) * 100
+                
+                total_retrieves = total_retrieves_successful + total_retrieves_failed
+                retrieve_success_rate = (total_retrieves_successful / max(total_retrieves, 1)) * 100
+                
+                # Get current transfer activity from database
+                active_uploads = 0
+                active_downloads = 0
+                queued_uploads = 0
+                queued_downloads = 0
+                
+                if self.system.db:
+                    try:
+                        # Active transfers
+                        upload_active = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'uploading'"
+                        )
+                        if upload_active:
+                            active_uploads = upload_active['count']
+                        
+                        download_active = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM download_queue WHERE state = 'downloading'"
+                        )
+                        if download_active:
+                            active_downloads = download_active['count']
+                        
+                        # Queued transfers
+                        upload_queued = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM upload_queue WHERE state = 'queued'"
+                        )
+                        if upload_queued:
+                            queued_uploads = upload_queued['count']
+                        
+                        download_queued = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM download_queue WHERE state = 'queued'"
+                        )
+                        if download_queued:
+                            queued_downloads = download_queued['count']
+                        
+                        # Get transfer statistics for the last hour
+                        one_hour_ago = (datetime.now() - timedelta(hours=1)).isoformat()
+                        
+                        upload_stats = self.system.db.fetch_one(
+                            """SELECT 
+                               COUNT(*) as total,
+                               SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END) as completed,
+                               SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) as failed
+                               FROM upload_queue 
+                               WHERE completed_at >= ?""",
+                            (one_hour_ago,)
+                        )
+                        
+                        download_stats = self.system.db.fetch_one(
+                            """SELECT 
+                               COUNT(*) as total,
+                               SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END) as completed,
+                               SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) as failed
+                               FROM download_queue 
+                               WHERE completed_at >= ?""",
+                            (one_hour_ago,)
+                        )
+                    except:
+                        pass
+                
+                # Get network statistics
+                net_io = psutil.net_io_counters()
+                
+                # Build detailed statistics response
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "aggregate_stats": {
+                        "total_servers": len(pool_stats),
+                        "total_connections_created": total_connections_created,
+                        "total_connections_reused": total_connections_reused,
+                        "total_connection_errors": total_connection_errors,
+                        "total_pool_size": total_pool_size,
+                        "reuse_rate_percent": round(reuse_rate, 2),
+                        "error_rate_percent": round(error_rate, 2)
+                    },
+                    "operation_stats": {
+                        "posts": {
+                            "successful": total_posts_successful,
+                            "failed": total_posts_failed,
+                            "total": total_posts,
+                            "success_rate_percent": round(post_success_rate, 2)
+                        },
+                        "retrieves": {
+                            "successful": total_retrieves_successful,
+                            "failed": total_retrieves_failed,
+                            "total": total_retrieves,
+                            "success_rate_percent": round(retrieve_success_rate, 2)
+                        }
+                    },
+                    "transfer_activity": {
+                        "active": {
+                            "uploads": active_uploads,
+                            "downloads": active_downloads,
+                            "total": active_uploads + active_downloads
+                        },
+                        "queued": {
+                            "uploads": queued_uploads,
+                            "downloads": queued_downloads,
+                            "total": queued_uploads + queued_downloads
+                        },
+                        "last_hour": {
+                            "uploads": {
+                                "total": upload_stats['total'] if upload_stats else 0,
+                                "completed": upload_stats['completed'] if upload_stats else 0,
+                                "failed": upload_stats['failed'] if upload_stats else 0
+                            },
+                            "downloads": {
+                                "total": download_stats['total'] if download_stats else 0,
+                                "completed": download_stats['completed'] if download_stats else 0,
+                                "failed": download_stats['failed'] if download_stats else 0
+                            }
+                        }
+                    },
+                    "network_io": {
+                        "bytes_sent": net_io.bytes_sent,
+                        "bytes_recv": net_io.bytes_recv,
+                        "packets_sent": net_io.packets_sent,
+                        "packets_recv": net_io.packets_recv,
+                        "errors_in": net_io.errin,
+                        "errors_out": net_io.errout,
+                        "drops_in": net_io.dropin,
+                        "drops_out": net_io.dropout
+                    },
+                    "per_server_stats": pool_stats,
+                    "health_summary": {
+                        "all_healthy": all(
+                            self.system.connection_pool.health_check().values()
+                        ) if hasattr(self.system.connection_pool, 'health_check') else False,
+                        "connection_efficiency": round(reuse_rate, 2),
+                        "operation_reliability": round(
+                            ((total_posts_successful + total_retrieves_successful) / 
+                             max(total_posts + total_retrieves, 1)) * 100, 2
+                        )
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get connection pool stats: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
