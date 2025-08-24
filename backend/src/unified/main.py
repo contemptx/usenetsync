@@ -435,6 +435,65 @@ class UnifiedSystem:
             logger.error(f"Failed to add network server: {e}")
             raise
     
+    def get_download_progress(self, download_id: str) -> Dict[str, Any]:
+        """
+        Get download progress for a specific download
+        
+        Args:
+            download_id: ID of the download to check
+            
+        Returns:
+            Dict with download progress information
+        """
+        try:
+            # Get download from queue
+            download = self.db.fetch_one(
+                """SELECT queue_id, entity_id, entity_type, state, progress, 
+                          total_size, downloaded_size, retry_count, error_message,
+                          queued_at, started_at, completed_at
+                   FROM download_queue 
+                   WHERE queue_id = ?""", 
+                (download_id,)
+            )
+            
+            if not download:
+                raise ValueError(f"Download {download_id} not found")
+            
+            result = dict(download)
+            
+            # Calculate percentage if sizes are available
+            if result.get('total_size') and result['total_size'] > 0:
+                result['percentage'] = round((result.get('downloaded_size', 0) / result['total_size']) * 100, 2)
+            else:
+                result['percentage'] = 0
+            
+            # Calculate speed if in progress
+            if result['state'] == 'downloading' and result.get('started_at'):
+                import datetime
+                try:
+                    started = datetime.datetime.fromisoformat(result['started_at'])
+                    elapsed = (datetime.datetime.now() - started).total_seconds()
+                    if elapsed > 0 and result.get('downloaded_size'):
+                        result['speed_bps'] = int(result['downloaded_size'] / elapsed)
+                        result['speed_mbps'] = round(result['speed_bps'] / (1024 * 1024), 2)
+                except:
+                    pass
+            
+            # Get related share info if downloading a share
+            if result['entity_type'] == 'share':
+                share = self.db.fetch_one(
+                    "SELECT share_id, folder_id FROM shares WHERE share_id = ?",
+                    (result['entity_id'],)
+                )
+                if share:
+                    result['share_info'] = dict(share)
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get download progress for {download_id}: {e}")
+            raise
+    
     def delete_user(self, user_id: str) -> Dict[str, Any]:
         """
         Delete a user and all associated data

@@ -879,6 +879,21 @@ class UnifiedAPIServer:
             except Exception as e:
                 logger.error(f"Failed to delete upload queue item: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/download/progress/{download_id}")
+        async def get_download_progress(download_id: str):
+            """Get download progress for a specific download"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.get_download_progress(download_id)
+                return result
+            except ValueError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except Exception as e:
+                logger.error(f"Failed to get download progress: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
             """Create webhook"""
