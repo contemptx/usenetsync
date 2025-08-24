@@ -336,6 +336,86 @@ class UnifiedSystem:
             "total": len(file_ids)
         }
     
+    def add_alert(self, name: str, condition: str, threshold: float, 
+                  severity: str = "warning", message: str = None,
+                  cooldown_seconds: int = 300) -> Dict[str, Any]:
+        """
+        Add a monitoring alert
+        
+        Args:
+            name: Alert name
+            condition: Alert condition (e.g., "cpu_usage > 80")
+            threshold: Threshold value
+            severity: Alert severity (info, warning, critical)
+            message: Alert message
+            cooldown_seconds: Cooldown period between alerts
+            
+        Returns:
+            Dict with alert details
+        """
+        try:
+            import uuid
+            alert_id = str(uuid.uuid4())
+            
+            # Validate severity
+            if severity not in ['info', 'warning', 'critical']:
+                raise ValueError(f"Invalid severity: {severity}")
+            
+            # Insert alert into database
+            self.db.execute("""
+                INSERT INTO alerts (alert_id, name, condition, threshold, severity, 
+                                  message, cooldown_seconds, enabled, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))
+            """, (alert_id, name, condition, threshold, severity, 
+                  message or f"Alert: {name}", cooldown_seconds))
+            
+            logger.info(f"Created alert: {name} ({alert_id})")
+            
+            return {
+                "success": True,
+                "alert_id": alert_id,
+                "name": name,
+                "condition": condition,
+                "threshold": threshold,
+                "severity": severity,
+                "message": message or f"Alert: {name}"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create alert: {e}")
+            raise
+    
+    def delete_alert(self, alert_id: str) -> Dict[str, Any]:
+        """
+        Delete a monitoring alert
+        
+        Args:
+            alert_id: ID of the alert to delete
+            
+        Returns:
+            Dict with success status
+        """
+        try:
+            # Check if alert exists
+            alert = self.db.fetch_one("SELECT alert_id, name FROM alerts WHERE alert_id = ?", (alert_id,))
+            if not alert:
+                raise ValueError(f"Alert {alert_id} not found")
+            
+            # Delete the alert
+            self.db.execute("DELETE FROM alerts WHERE alert_id = ?", (alert_id,))
+            
+            logger.info(f"Deleted alert: {alert['name']} ({alert_id})")
+            
+            return {
+                "success": True,
+                "alert_id": alert_id,
+                "message": f"Successfully deleted alert: {alert['name']}"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete alert {alert_id}: {e}")
+            raise
+    
     def delete_folder(self, folder_id: str) -> Dict[str, Any]:
         """
         Delete a folder and all its contents (files, segments, shares)

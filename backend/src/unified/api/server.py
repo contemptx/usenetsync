@@ -630,6 +630,55 @@ class UnifiedAPIServer:
             except Exception as e:
                 logger.error(f"Failed to delete folder: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/monitoring/alerts/add")
+        async def add_alert(request: dict = {}):
+            """Add a monitoring alert"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            name = request.get("name")
+            if not name:
+                raise HTTPException(status_code=400, detail="name is required")
+            
+            condition = request.get("condition")
+            if not condition:
+                raise HTTPException(status_code=400, detail="condition is required")
+            
+            threshold = request.get("threshold")
+            if threshold is None:
+                raise HTTPException(status_code=400, detail="threshold is required")
+            
+            severity = request.get("severity", "warning")
+            message = request.get("message")
+            cooldown_seconds = request.get("cooldown_seconds", 300)
+            
+            try:
+                result = self.system.add_alert(
+                    name=name,
+                    condition=condition,
+                    threshold=threshold,
+                    severity=severity,
+                    message=message,
+                    cooldown_seconds=cooldown_seconds
+                )
+                return result
+            except Exception as e:
+                logger.error(f"Failed to add alert: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.delete("/api/v1/monitoring/alerts/{alert_id}")
+        async def delete_alert(alert_id: str):
+            """Delete a monitoring alert"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.delete_alert(alert_id)
+                return result
+            except Exception as e:
+                logger.error(f"Failed to delete alert: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
             """Create webhook"""

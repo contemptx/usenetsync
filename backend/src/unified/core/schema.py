@@ -417,6 +417,22 @@ class UnifiedSchema:
             """,
             
             # Metrics (performance monitoring)
+            'alerts': f"""
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id {id_type},
+                    alert_id TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    condition TEXT NOT NULL,
+                    threshold REAL NOT NULL,
+                    severity TEXT NOT NULL CHECK(severity IN ('info', 'warning', 'critical')),
+                    message TEXT,
+                    cooldown_seconds INTEGER DEFAULT 300,
+                    enabled BOOLEAN DEFAULT 1,
+                    last_triggered TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """,
             'metrics': f"""
                 CREATE TABLE IF NOT EXISTS metrics (
                     id {id_type},
