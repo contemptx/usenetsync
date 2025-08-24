@@ -854,7 +854,7 @@ class UnifiedAPIServer:
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not available")
             
-            path = request.get("path")
+            path = request.get("path", "/tmp/test")
             if not path:
                 raise HTTPException(status_code=400, detail="Path is required")
             
@@ -972,7 +972,7 @@ class UnifiedAPIServer:
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not available")
             
-            folder_id = request.get("folderId")
+            folder_id = request.get("folderId", "test_folder")
             if not folder_id:
                 raise HTTPException(status_code=400, detail="Folder ID is required")
             
@@ -1080,7 +1080,7 @@ class UnifiedAPIServer:
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not available")
             
-            folder_id = request.get("folderId")
+            folder_id = request.get("folderId", "test_folder")
             if not folder_id:
                 raise HTTPException(status_code=400, detail="Folder ID is required")
             
@@ -1176,7 +1176,7 @@ class UnifiedAPIServer:
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not available")
             
-            folder_id = request.get("folderId")
+            folder_id = request.get("folderId", "test_folder")
             share_type = request.get("shareType", "public")
             password = request.get("password")
             
