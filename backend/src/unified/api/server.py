@@ -15,6 +15,7 @@ import os
 import hashlib
 import secrets
 import uuid
+import time
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -616,6 +617,19 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=400, detail="file_ids required")
             # Implement actual batch delete logic
             return self.system.batch_delete_files(file_ids)
+        
+        @self.app.delete("/api/v1/folders/{folder_id}")
+        async def delete_folder(folder_id: str):
+            """Delete folder and all its contents"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.delete_folder(folder_id)
+                return result
+            except Exception as e:
+                logger.error(f"Failed to delete folder: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
             """Create webhook"""
@@ -936,10 +950,7 @@ class UnifiedAPIServer:
             except Exception as e:
                 logger.error(f"Failed to download share: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
-        @self.app.delete("/api/v1/folders/{folder_id}")
-        async def delete_folder(folder_id: str):
-            """Delete folder"""
-            raise HTTPException(status_code=500, detail="Operation failed")
+
         @self.app.post("/api/v1/users")
         async def create_user(username: str, email: Optional[str] = None):
             """Create new user"""

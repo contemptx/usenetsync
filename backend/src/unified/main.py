@@ -307,6 +307,74 @@ class UnifiedSystem:
             "total": len(file_ids)
         }
     
+    def delete_folder(self, folder_id: str) -> Dict[str, Any]:
+        """
+        Delete a folder and all its contents (files, segments, shares)
+        
+        Args:
+            folder_id: ID of the folder to delete
+            
+        Returns:
+            Dict with success status and deletion details
+        """
+        try:
+            # Check if folder exists
+            folder_record = self.db.fetch_one("SELECT folder_id, path FROM folders WHERE folder_id = ?", (folder_id,))
+            if not folder_record:
+                raise ValueError(f"Folder {folder_id} not found")
+            
+            # Track what we're deleting
+            stats = {
+                "folder_path": folder_record.get("path"),
+                "files_deleted": 0,
+                "segments_deleted": 0,
+                "shares_deleted": 0
+            }
+            
+            # Delete all shares for this folder
+            shares = self.db.fetch_all("SELECT share_id FROM shares WHERE folder_id = ?", (folder_id,))
+            if shares:
+                for share in shares:
+                    self.db.execute("DELETE FROM shares WHERE share_id = ?", (share['share_id'],))
+                    stats["shares_deleted"] += 1
+            
+            # Delete all segments for files in this folder
+            segments = self.db.fetch_all(
+                "SELECT s.segment_id FROM segments s JOIN files f ON s.file_id = f.file_id WHERE f.folder_id = ?",
+                (folder_id,)
+            )
+            if segments:
+                for segment in segments:
+                    self.db.execute("DELETE FROM segments WHERE segment_id = ?", (segment['segment_id'],))
+                    stats["segments_deleted"] += 1
+            
+            # Delete all files in this folder
+            files = self.db.fetch_all("SELECT file_id FROM files WHERE folder_id = ?", (folder_id,))
+            if files:
+                for file in files:
+                    self.db.execute("DELETE FROM files WHERE file_id = ?", (file['file_id'],))
+                    stats["files_deleted"] += 1
+            
+            # Delete the folder itself
+            self.db.execute("DELETE FROM folders WHERE folder_id = ?", (folder_id,))
+            
+            # Remove from any upload/download queues (using entity_id)
+            self.db.execute("DELETE FROM upload_queue WHERE entity_id = ? AND entity_type = 'folder'", (folder_id,))
+            self.db.execute("DELETE FROM download_queue WHERE entity_id = ? AND entity_type = 'folder'", (folder_id,))
+            
+            logger.info(f"Deleted folder {folder_id}: {stats}")
+            
+            return {
+                "success": True,
+                "folder_id": folder_id,
+                "deleted": stats,
+                "message": f"Successfully deleted folder and all contents"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete folder {folder_id}: {e}")
+            raise
+    
     def start_download(self, share_id: str, output_path: str, password: Optional[str] = None) -> str:
         """
         Start downloading a shared folder

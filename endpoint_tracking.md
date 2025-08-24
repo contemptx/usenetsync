@@ -1,6 +1,6 @@
 # Complete Endpoint Tracking (148 Total)
 
-## Progress: 2/148 Completed ✅
+## Progress: 3/148 Completed ✅
 
 ### Status Legend:
 - ✅ Completed and verified with real functionality
@@ -13,7 +13,7 @@
 ## DELETE Endpoints (8 total)
 1. ❌ DELETE /api/v1/backup/{backup_id} - Delete backup
 2. ✅ DELETE /api/v1/batch/files - Batch delete files
-3. ❌ DELETE /api/v1/folders/{folder_id} - Delete folder
+3. ✅ DELETE /api/v1/folders/{folder_id} - Delete folder
 4. ❌ DELETE /api/v1/monitoring/alerts/{alert_id} - Delete alert
 5. ❌ DELETE /api/v1/network/servers/{server_id} - Delete server
 6. ❌ DELETE /api/v1/upload/queue/{queue_id} - Delete upload queue item
