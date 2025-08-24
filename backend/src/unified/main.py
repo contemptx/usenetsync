@@ -435,6 +435,111 @@ class UnifiedSystem:
             logger.error(f"Failed to add network server: {e}")
             raise
     
+    def delete_user(self, user_id: str) -> Dict[str, Any]:
+        """
+        Delete a user and all associated data
+        
+        Args:
+            user_id: ID of the user to delete
+            
+        Returns:
+            Dict with success status
+        """
+        try:
+            # Check if user exists
+            user = self.db.fetch_one("SELECT user_id, username FROM users WHERE user_id = ?", (user_id,))
+            if not user:
+                raise ValueError(f"User {user_id} not found")
+            
+            # Delete user's shares
+            self.db.execute("DELETE FROM shares WHERE owner_id = ?", (user_id,))
+            
+            # Delete user's folders
+            folders = self.db.fetch_all("SELECT folder_id FROM folders WHERE owner_id = ?", (user_id,))
+            if folders:
+                for folder in folders:
+                    # Use our existing delete_folder method for cascade deletion
+                    try:
+                        self.delete_folder(folder['folder_id'])
+                    except Exception as e:
+                        logger.warning(f"Failed to delete user folder {folder['folder_id']}: {e}")
+            
+            # Delete user commitments
+            self.db.execute("DELETE FROM user_commitments WHERE user_id = ?", (user_id,))
+            
+            # Delete user preferences
+            self.db.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
+            
+            # Finally delete the user
+            self.db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+            
+            logger.info(f"Deleted user: {user['username']} ({user_id})")
+            
+            return {
+                "success": True,
+                "user_id": user_id,
+                "username": user['username'],
+                "message": f"Successfully deleted user and all associated data"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete user {user_id}: {e}")
+            raise
+    
+    def delete_upload_queue_item(self, queue_id: str) -> Dict[str, Any]:
+        """
+        Delete/cancel an upload queue item
+        
+        Args:
+            queue_id: ID of the queue item to delete
+            
+        Returns:
+            Dict with success status
+        """
+        try:
+            # Check if queue item exists
+            queue_item = self.db.fetch_one(
+                "SELECT queue_id, entity_id, entity_type, state FROM upload_queue WHERE queue_id = ?", 
+                (queue_id,)
+            )
+            if not queue_item:
+                raise ValueError(f"Upload queue item {queue_id} not found")
+            
+            # Check if already completed or cancelled
+            if queue_item['state'] in ['completed', 'cancelled']:
+                return {
+                    "success": True,
+                    "queue_id": queue_id,
+                    "message": f"Queue item already {queue_item['state']}"
+                }
+            
+            # Cancel via upload queue if it has the method
+            if hasattr(self, 'upload_queue') and self.upload_queue:
+                self.upload_queue.cancel(queue_id)
+            
+            # Update database directly as well
+            self.db.execute("""
+                UPDATE upload_queue 
+                SET state = 'cancelled', 
+                    completed_at = datetime('now'),
+                    error_message = 'Cancelled by user'
+                WHERE queue_id = ?
+            """, (queue_id,))
+            
+            logger.info(f"Cancelled upload queue item: {queue_id} ({queue_item['entity_type']})")
+            
+            return {
+                "success": True,
+                "queue_id": queue_id,
+                "entity_type": queue_item['entity_type'],
+                "entity_id": queue_item['entity_id'],
+                "message": "Successfully cancelled upload queue item"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete upload queue item {queue_id}: {e}")
+            raise
+    
     def delete_network_server(self, server_id: str) -> Dict[str, Any]:
         """
         Delete a network server configuration

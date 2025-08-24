@@ -1,6 +1,6 @@
 # Complete Endpoint Tracking (148 Total)
 
-## Progress: 5/148 Completed ✅
+## Progress: 8/148 Completed ✅
 
 ### Status Legend:
 - ✅ Completed and verified with real functionality
@@ -16,9 +16,9 @@
 3. ✅ DELETE /api/v1/folders/{folder_id} - Delete folder
 4. ✅ DELETE /api/v1/monitoring/alerts/{alert_id} - Delete alert
 5. ✅ DELETE /api/v1/network/servers/{server_id} - Delete server
-6. ❌ DELETE /api/v1/upload/queue/{queue_id} - Delete upload queue item
-7. ❌ DELETE /api/v1/users/{user_id} - Delete user
-8. ❌ DELETE /api/v1/webhooks/{webhook_id} - Delete webhook
+6. ✅ DELETE /api/v1/upload/queue/{queue_id} - Delete upload queue item
+7. ✅ DELETE /api/v1/users/{user_id} - Delete user
+8. ✅ DELETE /api/v1/webhooks/{webhook_id} - Delete webhook
 
 ## GET Endpoints (45 total)
 9. ⚠️ GET / - Root endpoint

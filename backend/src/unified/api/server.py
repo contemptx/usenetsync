@@ -546,8 +546,16 @@ class UnifiedAPIServer:
             return {"user_id": user_id, "username": username, "email": email}
         @self.app.delete("/api/v1/users/{user_id}")
         async def delete_user(user_id: str):
-            """Delete user"""
-            return {"success": True, "user_id": user_id, "message": "User deleted"}
+            """Delete user and all associated data"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.delete_user(user_id)
+                return result
+            except Exception as e:
+                logger.error(f"Failed to delete user: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/batch/folders")
         async def batch_add_folders(request: dict):
             """Add multiple folders"""
@@ -728,6 +736,19 @@ class UnifiedAPIServer:
                 return result
             except Exception as e:
                 logger.error(f"Failed to delete network server: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.delete("/api/v1/upload/queue/{queue_id}")
+        async def delete_upload_queue_item(queue_id: str):
+            """Delete/cancel an upload queue item"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                result = self.system.delete_upload_queue_item(queue_id)
+                return result
+            except Exception as e:
+                logger.error(f"Failed to delete upload queue item: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
