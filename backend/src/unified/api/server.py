@@ -1545,33 +1545,165 @@ class UnifiedAPIServer:
         
         # ==================== RATE LIMITING ====================
         @self.app.get("/api/v1/rate_limit/status")
-        async def rate_limit_status(token: str = None):
-            """Get current rate limit status"""
+        async def rate_limit_status(user_id: Optional[str] = None, connection_id: Optional[str] = None):
+            """
+            Get current rate limit status for NNTP operations.
+            This tracks real-time usage against server limits.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
             try:
-                # Simple rate limit tracking
-                if not hasattr(self, '_rate_limits'):
-                    self._rate_limits = {}
+                from datetime import datetime, timedelta
+                import os
                 
-                client_id = token or "anonymous"
+                # Get server configuration
+                server_name = "newshosting" if "newshosting" in os.getenv("NNTP_SERVER", "") else "default"
                 
-                if client_id not in self._rate_limits:
-                    self._rate_limits[client_id] = {
-                        'requests': 0,
-                        'reset_at': (datetime.now() + timedelta(hours=1)).isoformat()
+                # Server-specific limits
+                server_limits = {
+                    "newshosting": {
+                        "max_connections": 50,
+                        "posts_per_minute": 20,  # More granular than per hour
+                        "posts_per_hour": 1000,
+                        "bandwidth_mbps": None,  # Unlimited
+                        "articles_per_connection": 500  # Per connection limit
+                    },
+                    "default": {
+                        "max_connections": 20,
+                        "posts_per_minute": 5,
+                        "posts_per_hour": 100,
+                        "bandwidth_mbps": 100,
+                        "articles_per_connection": 100
+                    }
+                }[server_name]
+                
+                # Initialize tracking
+                current_time = datetime.now()
+                one_minute_ago = current_time - timedelta(minutes=1)
+                one_hour_ago = current_time - timedelta(hours=1)
+                
+                # Get real-time usage stats
+                usage_stats = {
+                    "posts_last_minute": 0,
+                    "posts_last_hour": 0,
+                    "active_connections": 0,
+                    "bandwidth_usage_mbps": 0,
+                    "articles_downloaded": 0
+                }
+                
+                if self.system.db:
+                    # Posts in last minute
+                    posts_minute = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE started_at >= ?",
+                        (one_minute_ago.isoformat(),)
+                    )
+                    if posts_minute:
+                        usage_stats["posts_last_minute"] = posts_minute['count']
+                    
+                    # Posts in last hour
+                    posts_hour = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE started_at >= ?",
+                        (one_hour_ago.isoformat(),)
+                    )
+                    if posts_hour:
+                        usage_stats["posts_last_hour"] = posts_hour['count']
+                    
+                    # Active connections
+                    connections = self.system.db.fetch_one(
+                        """SELECT 
+                           (SELECT COUNT(*) FROM upload_queue WHERE state = 'uploading') +
+                           (SELECT COUNT(*) FROM download_queue WHERE state = 'downloading') as count"""
+                    )
+                    if connections:
+                        usage_stats["active_connections"] = connections['count']
+                    
+                    # Articles downloaded today
+                    articles = self.system.db.fetch_one(
+                        """SELECT COUNT(*) as count FROM download_queue 
+                           WHERE started_at >= date('now', 'start of day')"""
+                    )
+                    if articles:
+                        usage_stats["articles_downloaded"] = articles['count']
+                
+                # Get bandwidth usage if available
+                if hasattr(self.system, 'bandwidth_controller'):
+                    usage_stats["bandwidth_usage_mbps"] = self.system.bandwidth_controller.get_current_rate()
+                
+                # Calculate rate limit status for each metric
+                rate_limits = {
+                    "connections": {
+                        "limit": server_limits["max_connections"],
+                        "used": usage_stats["active_connections"],
+                        "remaining": max(0, server_limits["max_connections"] - usage_stats["active_connections"]),
+                        "percentage_used": (usage_stats["active_connections"] / server_limits["max_connections"] * 100) if server_limits["max_connections"] > 0 else 0,
+                        "status": "ok" if usage_stats["active_connections"] < server_limits["max_connections"] * 0.8 else "warning" if usage_stats["active_connections"] < server_limits["max_connections"] else "exceeded"
+                    },
+                    "posts_per_minute": {
+                        "limit": server_limits["posts_per_minute"],
+                        "used": usage_stats["posts_last_minute"],
+                        "remaining": max(0, server_limits["posts_per_minute"] - usage_stats["posts_last_minute"]),
+                        "resets_at": (current_time + timedelta(minutes=1)).isoformat(),
+                        "status": "ok" if usage_stats["posts_last_minute"] < server_limits["posts_per_minute"] * 0.8 else "warning" if usage_stats["posts_last_minute"] < server_limits["posts_per_minute"] else "exceeded"
+                    },
+                    "posts_per_hour": {
+                        "limit": server_limits["posts_per_hour"],
+                        "used": usage_stats["posts_last_hour"],
+                        "remaining": max(0, server_limits["posts_per_hour"] - usage_stats["posts_last_hour"]),
+                        "resets_at": (current_time + timedelta(hours=1)).isoformat(),
+                        "status": "ok" if usage_stats["posts_last_hour"] < server_limits["posts_per_hour"] * 0.8 else "warning" if usage_stats["posts_last_hour"] < server_limits["posts_per_hour"] else "exceeded"
+                    }
+                }
+                
+                # Add bandwidth limit if applicable
+                if server_limits["bandwidth_mbps"]:
+                    rate_limits["bandwidth"] = {
+                        "limit_mbps": server_limits["bandwidth_mbps"],
+                        "used_mbps": usage_stats["bandwidth_usage_mbps"],
+                        "remaining_mbps": max(0, server_limits["bandwidth_mbps"] - usage_stats["bandwidth_usage_mbps"]),
+                        "percentage_used": (usage_stats["bandwidth_usage_mbps"] / server_limits["bandwidth_mbps"] * 100) if server_limits["bandwidth_mbps"] > 0 else 0,
+                        "status": "ok" if usage_stats["bandwidth_usage_mbps"] < server_limits["bandwidth_mbps"] * 0.8 else "warning"
+                    }
+                else:
+                    rate_limits["bandwidth"] = {
+                        "limit_mbps": "unlimited",
+                        "used_mbps": usage_stats["bandwidth_usage_mbps"],
+                        "status": "ok"
                     }
                 
-                limit_data = self._rate_limits[client_id]
+                # Overall status
+                any_exceeded = any(limit.get("status") == "exceeded" for limit in rate_limits.values())
+                any_warning = any(limit.get("status") == "warning" for limit in rate_limits.values())
+                
+                overall_status = "exceeded" if any_exceeded else "warning" if any_warning else "ok"
+                
+                # Recommendations based on status
+                recommendations = []
+                if rate_limits["connections"]["status"] == "warning":
+                    recommendations.append("Consider reducing parallel operations")
+                if rate_limits["posts_per_minute"]["status"] == "exceeded":
+                    recommendations.append("Posting rate exceeded - operations will be throttled")
+                if rate_limits["posts_per_hour"]["status"] == "warning":
+                    recommendations.append("Approaching hourly posting limit")
                 
                 return {
-                    "limit": 1000,
-                    "remaining": max(0, 1000 - limit_data['requests']),
-                    "reset_at": limit_data['reset_at'],
-                    "used": limit_data['requests']
+                    "success": True,
+                    "timestamp": current_time.isoformat(),
+                    "server": server_name,
+                    "overall_status": overall_status,
+                    "rate_limits": rate_limits,
+                    "usage_stats": usage_stats,
+                    "recommendations": recommendations,
+                    "notes": {
+                        "tracking": "Real-time tracking of NNTP server limits",
+                        "throttling": "Operations are automatically throttled when limits are reached",
+                        "server_specific": f"Limits are specific to {server_name} server"
+                    }
                 }
                 
             except Exception as e:
                 logger.error(f"Rate limit status failed: {e}")
-                # raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/api/v1/rate_limit/quotas")
         async def rate_limit_quotas(user_id: Optional[str] = None):
