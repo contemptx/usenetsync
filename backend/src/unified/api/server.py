@@ -3701,6 +3701,234 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to list network servers: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/network/servers/{server_id}/health")
+        async def get_server_health(server_id: str):
+            """Get detailed health information for a specific network server"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                import time
+                
+                # Get server from database
+                server = None
+                if self.system.db:
+                    server = self.system.db.fetch_one(
+                        "SELECT * FROM network_servers WHERE server_id = ?",
+                        (server_id,)
+                    )
+                
+                if not server:
+                    raise HTTPException(status_code=404, detail=f"Server {server_id} not found")
+                
+                # Build server info
+                server_info = {
+                    "server_id": server['server_id'],
+                    "name": server['name'],
+                    "host": server['host'],
+                    "port": server['port'],
+                    "ssl_enabled": bool(server.get('ssl_enabled', True)),
+                    "enabled": bool(server.get('enabled', 1))
+                }
+                
+                # Initialize health metrics
+                health_metrics = {
+                    "status": "unknown",
+                    "available": False,
+                    "response_time_ms": None,
+                    "last_check": datetime.now().isoformat(),
+                    "error": None,
+                    "checks_performed": []
+                }
+                
+                # Only check health if server is enabled
+                if not server['enabled']:
+                    health_metrics["status"] = "disabled"
+                    health_metrics["error"] = "Server is disabled"
+                else:
+                    # Perform multiple health checks
+                    checks = []
+                    
+                    # 1. Basic connectivity check
+                    try:
+                        from unified.networking.nntp_client import UnifiedNNTPClient
+                        
+                        start_time = time.perf_counter()
+                        client = UnifiedNNTPClient(config={
+                            'host': server['host'],
+                            'port': server['port'],
+                            'ssl': server.get('ssl_enabled', True),
+                            'username': server.get('username'),
+                            'password': server.get('password')
+                        })
+                        
+                        if client.connect(
+                            host=server['host'],
+                            port=server['port'],
+                            use_ssl=server.get('ssl_enabled', True)
+                        ):
+                            connect_time = (time.perf_counter() - start_time) * 1000
+                            checks.append({
+                                "check": "connectivity",
+                                "status": "passed",
+                                "response_time_ms": round(connect_time, 2),
+                                "message": "Successfully connected to server"
+                            })
+                            
+                            # 2. Authentication check
+                            if server.get('username') and server.get('password'):
+                                auth_start = time.perf_counter()
+                                if client.authenticate(server['username'], server['password']):
+                                    auth_time = (time.perf_counter() - auth_start) * 1000
+                                    checks.append({
+                                        "check": "authentication",
+                                        "status": "passed",
+                                        "response_time_ms": round(auth_time, 2),
+                                        "message": "Authentication successful"
+                                    })
+                                else:
+                                    checks.append({
+                                        "check": "authentication",
+                                        "status": "failed",
+                                        "response_time_ms": None,
+                                        "message": "Authentication failed"
+                                    })
+                            
+                            # 3. Capabilities check
+                            try:
+                                cap_start = time.perf_counter()
+                                capabilities = client.get_capabilities()
+                                cap_time = (time.perf_counter() - cap_start) * 1000
+                                checks.append({
+                                    "check": "capabilities",
+                                    "status": "passed",
+                                    "response_time_ms": round(cap_time, 2),
+                                    "message": f"Server supports {len(capabilities)} capabilities",
+                                    "data": capabilities
+                                })
+                            except:
+                                checks.append({
+                                    "check": "capabilities",
+                                    "status": "failed",
+                                    "response_time_ms": None,
+                                    "message": "Failed to retrieve capabilities"
+                                })
+                            
+                            # 4. Test posting capability
+                            try:
+                                post_start = time.perf_counter()
+                                can_post = client.test_post_capability()
+                                post_time = (time.perf_counter() - post_start) * 1000
+                                checks.append({
+                                    "check": "posting",
+                                    "status": "passed" if can_post else "warning",
+                                    "response_time_ms": round(post_time, 2),
+                                    "message": "Posting allowed" if can_post else "Posting not allowed"
+                                })
+                            except:
+                                checks.append({
+                                    "check": "posting",
+                                    "status": "warning",
+                                    "response_time_ms": None,
+                                    "message": "Could not verify posting capability"
+                                })
+                            
+                            client.disconnect()
+                            
+                            # Calculate overall health
+                            failed_checks = sum(1 for c in checks if c["status"] == "failed")
+                            warning_checks = sum(1 for c in checks if c["status"] == "warning")
+                            
+                            if failed_checks > 0:
+                                health_metrics["status"] = "degraded"
+                            elif warning_checks > 0:
+                                health_metrics["status"] = "warning"
+                            else:
+                                health_metrics["status"] = "healthy"
+                            
+                            health_metrics["available"] = True
+                            health_metrics["response_time_ms"] = round(connect_time, 2)
+                            
+                        else:
+                            health_metrics["status"] = "unreachable"
+                            health_metrics["error"] = "Failed to connect to server"
+                            checks.append({
+                                "check": "connectivity",
+                                "status": "failed",
+                                "response_time_ms": None,
+                                "message": "Failed to connect to server"
+                            })
+                            
+                    except Exception as e:
+                        health_metrics["status"] = "error"
+                        health_metrics["error"] = str(e)
+                        checks.append({
+                            "check": "connectivity",
+                            "status": "failed",
+                            "response_time_ms": None,
+                            "message": f"Connection error: {str(e)}"
+                        })
+                    
+                    health_metrics["checks_performed"] = checks
+                
+                # Get usage statistics from connection pool if available
+                usage_stats = {
+                    "connections_created": 0,
+                    "connections_reused": 0,
+                    "connection_errors": 0,
+                    "posts_successful": 0,
+                    "posts_failed": 0,
+                    "retrieves_successful": 0,
+                    "retrieves_failed": 0
+                }
+                
+                if hasattr(self.system, 'connection_pool'):
+                    server_key = f"{server['host']}:{server['port']}"
+                    pool_stats = self.system.connection_pool.get_statistics()
+                    if server_key in pool_stats:
+                        usage_stats = pool_stats[server_key]
+                
+                # Calculate performance metrics
+                total_operations = (usage_stats.get('posts_successful', 0) + 
+                                  usage_stats.get('posts_failed', 0) +
+                                  usage_stats.get('retrieves_successful', 0) +
+                                  usage_stats.get('retrieves_failed', 0))
+                
+                successful_operations = (usage_stats.get('posts_successful', 0) +
+                                        usage_stats.get('retrieves_successful', 0))
+                
+                performance_metrics = {
+                    "success_rate": round(
+                        (successful_operations / max(total_operations, 1)) * 100, 2
+                    ),
+                    "connection_reuse_rate": round(
+                        (usage_stats.get('connections_reused', 0) / 
+                         max(usage_stats.get('connections_created', 0) + 
+                             usage_stats.get('connections_reused', 0), 1)) * 100, 2
+                    ),
+                    "error_rate": round(
+                        (usage_stats.get('connection_errors', 0) / 
+                         max(usage_stats.get('connections_created', 1), 1)) * 100, 2
+                    )
+                }
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "server": server_info,
+                    "health": health_metrics,
+                    "usage_statistics": usage_stats,
+                    "performance_metrics": performance_metrics,
+                    "recommendations": []
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get server health: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
