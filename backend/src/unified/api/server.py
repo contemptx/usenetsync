@@ -1752,31 +1752,213 @@ class UnifiedAPIServer:
                 # raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/api/v1/webhooks")
-        async def list_webhooks():
-            """List webhooks"""
+        async def list_webhooks(
+            active_only: bool = True,
+            event_type: Optional[str] = None,
+            limit: int = 100,
+            offset: int = 0
+        ):
+            """
+            List configured webhooks.
+            
+            Webhooks notify external systems when events occur:
+            - Upload completion -> Notify when content posted to Usenet
+            - Download completion -> Notify when content retrieved
+            - Share creation -> Notify when new share available
+            - Error events -> Notify on failures
+            
+            NOTE: Webhooks are LOCAL notifications only.
+            They cannot modify Usenet content or affect immutability.
+            
+            active_only: Filter to only active webhooks
+            event_type: Filter by specific event type
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
             try:
-                if not hasattr(self, '_webhooks'):
-                    self._webhooks = {}
+                from datetime import datetime, timedelta
+                import json
                 
-                webhooks = []
-                for webhook_id, data in self._webhooks.items():
-                    webhooks.append({
-                        'webhook_id': webhook_id,
-                        'url': data['url'],
-                        'events': data['events'],
-                        'active': data['active'],
-                        'created_at': data['created_at']
-                    })
+                # Build query with filters
+                query = "SELECT * FROM webhooks WHERE 1=1"
+                params = []
+                
+                if active_only:
+                    query += " AND active = 1"
+                
+                if event_type:
+                    # Search for event type in JSON events field
+                    query += " AND events LIKE ?"
+                    params.append(f'%"{event_type}"%')
+                
+                query += " ORDER BY created_at DESC"
+                query += f" LIMIT {limit} OFFSET {offset}"
+                
+                # Get webhooks from database
+                webhooks = self.system.db.fetch_all(query, tuple(params)) if params else self.system.db.fetch_all(query)
+                
+                if not webhooks:
+                    return {
+                        "success": True,
+                        "webhooks": [],
+                        "total": 0,
+                        "message": "No webhooks configured"
+                    }
+                
+                # Process webhook data
+                webhook_list = []
+                for webhook in webhooks:
+                    # Parse JSON fields
+                    events = []
+                    if webhook.get('events'):
+                        try:
+                            events = json.loads(webhook['events'])
+                        except:
+                            events = []
+                    
+                    headers = {}
+                    if webhook.get('headers'):
+                        try:
+                            headers = json.loads(webhook['headers'])
+                        except:
+                            headers = {}
+                    
+                    retry_policy = {}
+                    if webhook.get('retry_policy'):
+                        try:
+                            retry_policy = json.loads(webhook['retry_policy'])
+                        except:
+                            retry_policy = {}
+                    
+                    webhook_data = {
+                        "webhook_id": webhook['webhook_id'],
+                        "url": webhook['url'],
+                        "events": events,
+                        "active": webhook.get('active', True),
+                        "created_at": webhook.get('created_at'),
+                        "updated_at": webhook.get('updated_at'),
+                        "last_triggered": webhook.get('last_triggered'),
+                        "failure_count": webhook.get('failure_count', 0)
+                    }
+                    
+                    # Add custom headers if configured
+                    if headers:
+                        webhook_data["headers"] = headers
+                    
+                    # Add retry policy
+                    if retry_policy:
+                        webhook_data["retry_policy"] = retry_policy
+                    else:
+                        webhook_data["retry_policy"] = {
+                            "max_retries": 3,
+                            "retry_delay_seconds": 60,
+                            "exponential_backoff": True
+                        }
+                    
+                    # Add secret status (don't expose actual secret)
+                    webhook_data["has_secret"] = bool(webhook.get('secret'))
+                    
+                    # Add last error if any
+                    if webhook.get('last_error'):
+                        webhook_data["last_error"] = webhook['last_error']
+                    
+                    # Calculate health status
+                    if not webhook.get('active'):
+                        webhook_data["status"] = "disabled"
+                    elif webhook.get('failure_count', 0) >= 5:
+                        webhook_data["status"] = "failing"
+                    elif webhook.get('failure_count', 0) > 0:
+                        webhook_data["status"] = "degraded"
+                    else:
+                        webhook_data["status"] = "healthy"
+                    
+                    # Add trigger statistics
+                    if webhook.get('last_triggered'):
+                        try:
+                            last_triggered = datetime.fromisoformat(webhook['last_triggered'])
+                            time_since = (datetime.now() - last_triggered).total_seconds()
+                            webhook_data["time_since_last_trigger"] = {
+                                "seconds": round(time_since),
+                                "formatted": str(timedelta(seconds=int(time_since)))
+                            }
+                        except:
+                            pass
+                    
+                    # Add event descriptions
+                    webhook_data["event_descriptions"] = []
+                    for event in events:
+                        if event == "upload.completed":
+                            webhook_data["event_descriptions"].append("Notified when upload to Usenet completes")
+                        elif event == "upload.failed":
+                            webhook_data["event_descriptions"].append("Notified when upload to Usenet fails")
+                        elif event == "download.completed":
+                            webhook_data["event_descriptions"].append("Notified when download from Usenet completes")
+                        elif event == "download.failed":
+                            webhook_data["event_descriptions"].append("Notified when download from Usenet fails")
+                        elif event == "share.created":
+                            webhook_data["event_descriptions"].append("Notified when new share is created")
+                        elif event == "share.revoked":
+                            webhook_data["event_descriptions"].append("Notified when share is revoked locally")
+                        elif event == "folder.indexed":
+                            webhook_data["event_descriptions"].append("Notified when folder indexing completes")
+                        elif event == "error.critical":
+                            webhook_data["event_descriptions"].append("Notified on critical system errors")
+                    
+                    webhook_list.append(webhook_data)
+                
+                # Get total count for pagination
+                count_query = "SELECT COUNT(*) as total FROM webhooks WHERE 1=1"
+                count_params = []
+                
+                if active_only:
+                    count_query += " AND active = 1"
+                
+                if event_type:
+                    count_query += " AND events LIKE ?"
+                    count_params.append(f'%"{event_type}"%')
+                
+                total_result = self.system.db.fetch_one(count_query, tuple(count_params)) if count_params else self.system.db.fetch_one(count_query)
+                total_count = total_result['total'] if total_result else 0
+                
+                # Calculate statistics
+                stats = {
+                    "total": total_count,
+                    "active": sum(1 for w in webhook_list if w.get('active')),
+                    "healthy": sum(1 for w in webhook_list if w.get('status') == 'healthy'),
+                    "degraded": sum(1 for w in webhook_list if w.get('status') == 'degraded'),
+                    "failing": sum(1 for w in webhook_list if w.get('status') == 'failing'),
+                    "disabled": sum(1 for w in webhook_list if w.get('status') == 'disabled')
+                }
+                
+                # Get event type distribution
+                event_counts = {}
+                for webhook in webhook_list:
+                    for event in webhook.get('events', []):
+                        event_counts[event] = event_counts.get(event, 0) + 1
                 
                 return {
                     "success": True,
-                    "webhooks": webhooks,
-                    "total": len(webhooks)
+                    "timestamp": datetime.now().isoformat(),
+                    "webhooks": webhook_list,
+                    "pagination": {
+                        "total": total_count,
+                        "limit": limit,
+                        "offset": offset,
+                        "has_more": (offset + limit) < total_count
+                    },
+                    "statistics": stats,
+                    "event_distribution": event_counts,
+                    "filters": {
+                        "active_only": active_only,
+                        "event_type": event_type
+                    },
+                    "usenet_note": "Webhooks notify about Usenet operations but cannot modify immutable content"
                 }
                 
             except Exception as e:
-                logger.error(f"List webhooks failed: {e}")
-                # raise HTTPException(status_code=500, detail=str(e))
+                logger.error(f"Failed to list webhooks: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.delete("/api/v1/webhooks/{webhook_id}")
         async def delete_webhook(webhook_id: str):
