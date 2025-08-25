@@ -432,20 +432,218 @@ class UnifiedAPIServer:
         
         @self.app.get("/api/v1/progress/{progress_id}")
         async def get_progress(progress_id: str):
-            """Get progress for an operation"""
+            """Get detailed progress for a specific operation"""
+            from datetime import datetime
+            
             if not hasattr(self.app.state, 'progress'):
                 self.app.state.progress = {}
             
+            # First check in-memory progress
             progress = self.app.state.progress.get(progress_id)
-            if not progress:
-                return {
-                    'operation': 'unknown',
-                    'percentage': 0,
-                    'status': 'not_found',
-                    'message': 'Progress ID not found'
-                }
+            if progress:
+                # Add timestamp if not present
+                if 'timestamp' not in progress:
+                    progress['timestamp'] = datetime.now().isoformat()
+                progress['source'] = 'memory'
+                progress['success'] = True
+                return progress
             
-            return progress
+            # Check database for progress
+            if self.system and self.system.db:
+                try:
+                    # Parse progress_id format: type_id (e.g., upload_uuid, download_uuid, index_uuid)
+                    parts = progress_id.split('_', 1)
+                    if len(parts) == 2:
+                        operation_type, entity_id = parts
+                        
+                        if operation_type == 'upload':
+                            # Check upload queue
+                            upload = self.system.db.fetch_one(
+                                """SELECT queue_id, entity_id, entity_type, state, progress,
+                                   total_size, uploaded_size, started_at, completed_at, error_message,
+                                   retry_count, priority
+                                   FROM upload_queue
+                                   WHERE queue_id = ?""",
+                                (entity_id,)
+                            )
+                            
+                            if upload:
+                                # Calculate elapsed time
+                                elapsed_time = None
+                                if upload['started_at']:
+                                    try:
+                                        started = datetime.fromisoformat(upload['started_at'])
+                                        elapsed_time = (datetime.now() - started).total_seconds()
+                                    except:
+                                        pass
+                                
+                                # Calculate speed if in progress
+                                upload_speed = 0
+                                if upload['uploaded_size'] and elapsed_time and elapsed_time > 0:
+                                    upload_speed = upload['uploaded_size'] / elapsed_time
+                                
+                                # Estimate time remaining
+                                time_remaining = None
+                                if upload_speed > 0 and upload['total_size'] and upload['uploaded_size']:
+                                    remaining_bytes = upload['total_size'] - upload['uploaded_size']
+                                    time_remaining = remaining_bytes / upload_speed
+                                
+                                return {
+                                    'success': True,
+                                    'source': 'database',
+                                    'timestamp': datetime.now().isoformat(),
+                                    'progress_id': progress_id,
+                                    'type': 'upload',
+                                    'entity_id': upload['entity_id'],
+                                    'entity_type': upload['entity_type'],
+                                    'status': upload['state'],
+                                    'progress': upload['progress'] or 0,
+                                    'total_size': upload['total_size'],
+                                    'processed_size': upload['uploaded_size'],
+                                    'started_at': upload['started_at'],
+                                    'completed_at': upload['completed_at'],
+                                    'error_message': upload['error_message'],
+                                    'retry_count': upload['retry_count'] or 0,
+                                    'priority': upload['priority'] or 1,
+                                    'operation': f"Uploading {upload['entity_type']}",
+                                    'statistics': {
+                                        'elapsed_seconds': round(elapsed_time, 2) if elapsed_time else None,
+                                        'upload_speed_bps': round(upload_speed, 2) if upload_speed else 0,
+                                        'estimated_time_remaining': round(time_remaining, 2) if time_remaining else None
+                                    }
+                                }
+                        
+                        elif operation_type == 'download':
+                            # Check download queue
+                            download = self.system.db.fetch_one(
+                                """SELECT queue_id, entity_id, entity_type, state, progress,
+                                   total_size, downloaded_size, started_at, completed_at, error_message,
+                                   retry_count, priority
+                                   FROM download_queue
+                                   WHERE queue_id = ?""",
+                                (entity_id,)
+                            )
+                            
+                            if download:
+                                # Calculate elapsed time
+                                elapsed_time = None
+                                if download['started_at']:
+                                    try:
+                                        started = datetime.fromisoformat(download['started_at'])
+                                        elapsed_time = (datetime.now() - started).total_seconds()
+                                    except:
+                                        pass
+                                
+                                # Calculate speed if in progress
+                                download_speed = 0
+                                if download['downloaded_size'] and elapsed_time and elapsed_time > 0:
+                                    download_speed = download['downloaded_size'] / elapsed_time
+                                
+                                # Estimate time remaining
+                                time_remaining = None
+                                if download_speed > 0 and download['total_size'] and download['downloaded_size']:
+                                    remaining_bytes = download['total_size'] - download['downloaded_size']
+                                    time_remaining = remaining_bytes / download_speed
+                                
+                                return {
+                                    'success': True,
+                                    'source': 'database',
+                                    'timestamp': datetime.now().isoformat(),
+                                    'progress_id': progress_id,
+                                    'type': 'download',
+                                    'entity_id': download['entity_id'],
+                                    'entity_type': download['entity_type'],
+                                    'status': download['state'],
+                                    'progress': download['progress'] or 0,
+                                    'total_size': download['total_size'],
+                                    'processed_size': download['downloaded_size'],
+                                    'started_at': download['started_at'],
+                                    'completed_at': download['completed_at'],
+                                    'error_message': download['error_message'],
+                                    'retry_count': download['retry_count'] or 0,
+                                    'priority': download['priority'] or 1,
+                                    'operation': f"Downloading {download['entity_type']}",
+                                    'statistics': {
+                                        'elapsed_seconds': round(elapsed_time, 2) if elapsed_time else None,
+                                        'download_speed_bps': round(download_speed, 2) if download_speed else 0,
+                                        'estimated_time_remaining': round(time_remaining, 2) if time_remaining else None
+                                    }
+                                }
+                        
+                        elif operation_type == 'index':
+                            # Check folders for indexing operation
+                            folder = self.system.db.fetch_one(
+                                """SELECT folder_id, path, status, file_count, indexed_files,
+                                   total_size, indexed_size, created_at, updated_at, error_message
+                                   FROM folders
+                                   WHERE folder_id = ? AND status IN ('indexing', 'segmenting')""",
+                                (entity_id,)
+                            )
+                            
+                            if folder:
+                                # Calculate progress
+                                progress = 0
+                                if folder['file_count'] and folder['file_count'] > 0:
+                                    progress = (folder['indexed_files'] or 0) / folder['file_count'] * 100
+                                
+                                # Calculate elapsed time
+                                elapsed_time = None
+                                if folder['created_at']:
+                                    try:
+                                        created = datetime.fromisoformat(folder['created_at'])
+                                        elapsed_time = (datetime.now() - created).total_seconds()
+                                    except:
+                                        pass
+                                
+                                # Calculate indexing speed
+                                indexing_speed = 0
+                                if folder['indexed_files'] and elapsed_time and elapsed_time > 0:
+                                    indexing_speed = folder['indexed_files'] / elapsed_time
+                                
+                                # Estimate time remaining
+                                time_remaining = None
+                                if indexing_speed > 0 and folder['file_count'] and folder['indexed_files']:
+                                    remaining_files = folder['file_count'] - folder['indexed_files']
+                                    time_remaining = remaining_files / indexing_speed
+                                
+                                return {
+                                    'success': True,
+                                    'source': 'database',
+                                    'timestamp': datetime.now().isoformat(),
+                                    'progress_id': progress_id,
+                                    'type': 'indexing',
+                                    'entity_id': folder['folder_id'],
+                                    'entity_type': 'folder',
+                                    'status': folder['status'],
+                                    'progress': round(progress, 2),
+                                    'total_files': folder['file_count'],
+                                    'processed_files': folder['indexed_files'],
+                                    'total_size': folder['total_size'],
+                                    'processed_size': folder['indexed_size'],
+                                    'path': folder['path'],
+                                    'started_at': folder['created_at'],
+                                    'updated_at': folder['updated_at'],
+                                    'error_message': folder['error_message'],
+                                    'operation': f"{folder['status'].title()} folder",
+                                    'statistics': {
+                                        'elapsed_seconds': round(elapsed_time, 2) if elapsed_time else None,
+                                        'files_per_second': round(indexing_speed, 2) if indexing_speed else 0,
+                                        'estimated_time_remaining': round(time_remaining, 2) if time_remaining else None
+                                    }
+                                }
+                
+                except Exception as e:
+                    logger.error(f"Failed to get progress from database: {e}")
+            
+            # Progress not found
+            return {
+                'success': False,
+                'timestamp': datetime.now().isoformat(),
+                'progress_id': progress_id,
+                'status': 'not_found',
+                'message': f'Progress ID {progress_id} not found',
+                'hint': 'Progress IDs should be in format: type_id (e.g., upload_uuid, download_uuid, index_uuid)'
+            }
         
         @self.app.get("/api/v1/progress")
         async def get_all_progress():
