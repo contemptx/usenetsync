@@ -1126,7 +1126,7 @@ class UnifiedSystem:
                     allowed_users: Optional[List[str]] = None,
                     expiry_days: int = 30) -> Dict[str, Any]:
         """
-        Create share for folder using UnifiedPublishingSystem
+        Create share for folder - Clean unified implementation
         
         Args:
             folder_id: Folder to share
@@ -1139,74 +1139,134 @@ class UnifiedSystem:
         Returns:
             Share information
         """
-        # Import here to avoid circular dependency
-        from backend.src.unified.publishing_system import UnifiedPublishingSystem
+        import json
+        import hashlib
+        import secrets
+        import uuid
+        from datetime import datetime, timedelta
         
-        # Create a database wrapper to fix method name mismatch and SQL syntax
-        class DBWrapper:
-            def __init__(self, db):
-                self._db = db
-            
-            def _convert_query(self, query):
-                """Convert PostgreSQL-style syntax to SQLite"""
-                # Replace placeholders
-                query = query.replace('%s', '?')
-                # Replace boolean values
-                query = query.replace(' TRUE', ' 1')
-                query = query.replace(' FALSE', ' 0')
-                query = query.replace('=TRUE', '=1')
-                query = query.replace('=FALSE', '=0')
-                # Replace CURRENT_TIMESTAMP
-                query = query.replace('CURRENT_TIMESTAMP', "datetime('now')")
-                return query
-            
-            def fetchone(self, query, params=None):
-                return self._db.fetch_one(self._convert_query(query), params)
-            
-            def fetch_all(self, query, params=None):
-                return self._db.fetch_all(self._convert_query(query), params)
-            
-            def fetchall(self, query, params=None):
-                return self._db.fetch_all(self._convert_query(query), params)
-            
-            def execute(self, query, params=None):
-                return self._db.execute(self._convert_query(query), params)
-            
-            def insert(self, table, data):
-                columns = ', '.join(data.keys())
-                placeholders = ', '.join(['?' for _ in data])
-                query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
-                return self._db.execute(query, tuple(data.values()))
-        
-        # Initialize publishing system if not already done
-        if not hasattr(self, 'publisher'):
-            self.publisher = UnifiedPublishingSystem(DBWrapper(self.db), self)
-        
-        # Map AccessLevel to share_type string
-        share_type = access_level.value.upper()
-        
-        # Use UnifiedPublishingSystem which correctly uses shares table
-        share_info = self.publisher.publish_folder(
-            folder_id=folder_id,
-            share_type=share_type,
-            password=password,
-            authorized_users=allowed_users,
-            expiry_days=expiry_days
+        # Validate folder exists and belongs to owner
+        folder = self.db.fetch_one(
+            "SELECT folder_id, owner_id, status FROM folders WHERE folder_id = ?",
+            (folder_id,)
         )
         
-        # Convert ShareInfo to dict for API response
-        share_dict = {
-            'share_id': share_info.share_id,
-            'folder_id': share_info.folder_id,
-            'access_string': share_info.access_string,
-            'share_type': share_info.share_type,
-            'expires_at': share_info.expires_at.isoformat() if share_info.expires_at else None,
-            'success': True
+        if not folder:
+            raise ValueError(f"Folder not found: {folder_id}")
+        
+        if folder['owner_id'] != owner_id:
+            raise ValueError(f"Folder {folder_id} does not belong to {owner_id}")
+        
+        if folder['status'] not in ['indexed', 'segmented', 'uploaded', 'active']:
+            raise ValueError(f"Folder must be indexed before sharing (status: {folder['status']})")
+        
+        # Generate share ID
+        share_id = str(uuid.uuid4())
+        
+        # Calculate expiry
+        expires_at = None
+        if expiry_days and expiry_days > 0:
+            expires_at = (datetime.now() + timedelta(days=expiry_days)).isoformat()
+        
+        # Prepare share data based on access level
+        share_type = 'full'  # Always create full shares for now
+        access_level_str = access_level.value.lower()
+        encryption_key = None
+        password_hash = None
+        password_salt = None
+        metadata = {
+            'created_by': owner_id,
+            'created_at': datetime.now().isoformat(),
+            'folder_status': folder['status']
         }
         
-        logger.info(f"Created {share_type} share: {share_info.share_id}")
+        if access_level == AccessLevel.PUBLIC:
+            # Generate encryption key for public share
+            encryption_key = secrets.token_hex(32)
+            metadata['access_type'] = 'public'
+            metadata['key_embedded'] = True
+            
+        elif access_level == AccessLevel.PROTECTED:
+            if not password:
+                raise ValueError("Password required for protected share")
+            # Generate salt and hash password
+            password_salt = secrets.token_hex(16)
+            password_hash = hashlib.pbkdf2_hmac(
+                'sha256',
+                password.encode(),
+                password_salt.encode(),
+                100000  # iterations
+            ).hex()
+            metadata['access_type'] = 'protected'
+            metadata['requires_password'] = True
+            
+        elif access_level == AccessLevel.PRIVATE:
+            if not allowed_users:
+                raise ValueError("Allowed users required for private share")
+            # Store allowed users in metadata
+            metadata['access_type'] = 'private'
+            metadata['allowed_users'] = allowed_users
+            # Generate per-user keys would go here
+            encryption_key = secrets.token_hex(32)  # Master key
+            
+        # Generate access string (share link)
+        access_string = f"usenet://{share_id}"
+        if access_level == AccessLevel.PUBLIC:
+            # Embed key in access string for public shares
+            access_string = f"usenet://{share_id}?key={encryption_key}"
         
-        return share_dict
+        # Insert into shares table
+        self.db.execute(
+            """INSERT INTO shares 
+               (share_id, folder_id, owner_id, share_type, access_level, access_type,
+                encryption_key, password_hash, password_salt, access_string,
+                allowed_users, expires_at, metadata, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (share_id, folder_id, owner_id, share_type, access_level_str, access_level_str,
+             encryption_key, password_hash, password_salt, access_string,
+             json.dumps(allowed_users) if allowed_users else None,
+             expires_at,
+             json.dumps(metadata),
+             datetime.now().isoformat())
+        )
+        
+        # Create access commitments for private shares
+        if access_level == AccessLevel.PRIVATE and allowed_users:
+            for user_id in allowed_users:
+                commitment_hash = hashlib.sha256(
+                    f"{share_id}:{user_id}".encode()
+                ).hexdigest()
+                
+                self.db.execute(
+                    """INSERT INTO access_commitments 
+                       (share_id, user_id, commitment_hash, created_at)
+                       VALUES (?, ?, ?, ?)""",
+                    (share_id, user_id, commitment_hash, datetime.now().isoformat())
+                )
+        
+        # Log the creation
+        logger.info(f"Created {access_level_str} share {share_id} for folder {folder_id}")
+        
+        # Return share information
+        return {
+            'success': True,
+            'share_id': share_id,
+            'folder_id': folder_id,
+            'share_type': share_type,
+            'access_string': access_string,
+            'owner_id': owner_id,
+            'expires_at': expires_at,
+            'access_level': access_level_str,
+            'allowed_users': allowed_users if access_level == AccessLevel.PRIVATE else None,
+            'requires_password': access_level == AccessLevel.PROTECTED,
+            'created_at': datetime.now().isoformat(),
+            'usenet_note': 'Share created locally. Upload to Usenet to make it accessible.',
+            'access_control_note': {
+                'public': 'Anyone with the share link can access',
+                'protected': 'Password required for access',
+                'private': f'{len(allowed_users)} authorized users only' if allowed_users else 'Private share'
+            }.get(access_level_str, 'Unknown access type')
+        }
     
     def verify_access(self, share_id: str, user_id: str,
                      password: Optional[str] = None) -> bool:
