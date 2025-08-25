@@ -16,6 +16,7 @@ import hashlib
 import secrets
 import uuid
 import time
+import json
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -3177,6 +3178,205 @@ class UnifiedAPIServer:
             except Exception as e:
                 logger.error(f"Failed to add folder: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/cancel_upload")
+        async def cancel_upload(request: dict):
+            """
+            Cancel an active or queued upload operation.
+            
+            IMPORTANT Usenet Context:
+            - Can ONLY cancel uploads that haven't been posted to Usenet yet
+            - Once a segment is posted to Usenet, it CANNOT be removed
+            - Cancellation affects local queue only, not Usenet articles
+            
+            Upload States:
+            - QUEUED: Can cancel (not started)
+            - UPLOADING: Can cancel (stops further segments)
+            - COMPLETED: Cannot cancel (already on Usenet)
+            - FAILED: Already stopped
+            - CANCELLED: Already cancelled
+            
+            Partial Upload Implications:
+            - If some segments were uploaded before cancellation, they remain on Usenet
+            - The share will be incomplete and cannot be downloaded
+            - Consider creating a new complete share instead
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            upload_id = request.get("upload_id")
+            if not upload_id:
+                raise HTTPException(status_code=400, detail="upload_id is required")
+            
+            try:
+                # Check current upload status in database
+                upload = self.system.db.fetch_one(
+                    """SELECT queue_id, state, entity_type, entity_id, metadata,
+                              started_at, completed_at
+                       FROM upload_queue 
+                       WHERE queue_id = ?""",
+                    (upload_id,)
+                )
+                
+                if not upload:
+                    raise HTTPException(status_code=404, detail=f"Upload not found: {upload_id}")
+                
+                current_state = upload['state']
+                
+                # Check if cancellable
+                if current_state == 'completed':
+                    return {
+                        "success": False,
+                        "message": "Cannot cancel completed upload",
+                        "upload_id": upload_id,
+                        "state": current_state,
+                        "reason": "Content already posted to Usenet and cannot be removed",
+                        "usenet_immutability": True,
+                        "recommendation": "Create a new share if changes are needed"
+                    }
+                
+                if current_state == 'cancelled':
+                    return {
+                        "success": False,
+                        "message": "Upload already cancelled",
+                        "upload_id": upload_id,
+                        "state": current_state,
+                        "cancelled_at": upload.get('completed_at')
+                    }
+                
+                if current_state == 'failed':
+                    return {
+                        "success": False,
+                        "message": "Upload already failed",
+                        "upload_id": upload_id,
+                        "state": current_state,
+                        "failed_at": upload.get('completed_at'),
+                        "recommendation": "Retry upload or investigate failure reason"
+                    }
+                
+                # Parse metadata to get segment progress
+                metadata = json.loads(upload['metadata']) if upload['metadata'] else {}
+                segments_completed = metadata.get('segments_completed', 0)
+                total_segments = metadata.get('total_segments', 0)
+                posted_message_ids = metadata.get('message_ids', [])
+                
+                # Cancel in upload queue if it exists there
+                if hasattr(self.system, 'upload_queue'):
+                    try:
+                        self.system.upload_queue.cancel(upload_id)
+                    except:
+                        pass  # Queue might not have this item
+                
+                # Update database state
+                from datetime import datetime
+                now = datetime.now().isoformat()
+                
+                # Add cancellation info to metadata
+                metadata['cancelled_at'] = now
+                metadata['cancelled_by'] = request.get('cancelled_by', 'user')
+                metadata['cancellation_reason'] = request.get('reason', 'User requested')
+                
+                self.system.db.execute(
+                    """UPDATE upload_queue 
+                       SET state = 'cancelled', 
+                           completed_at = ?,
+                           metadata = ?
+                       WHERE queue_id = ?""",
+                    (now, json.dumps(metadata), upload_id)
+                )
+                
+                # Prepare response
+                response = {
+                    "success": True,
+                    "message": "Upload cancelled successfully",
+                    "upload_id": upload_id,
+                    "previous_state": current_state,
+                    "new_state": "cancelled",
+                    "cancelled_at": now,
+                    "progress_at_cancellation": {
+                        "segments_completed": segments_completed,
+                        "total_segments": total_segments,
+                        "percentage": round((segments_completed / total_segments * 100), 2) if total_segments > 0 else 0
+                    }
+                }
+                
+                # Add warnings for partial uploads
+                if segments_completed > 0:
+                    response["warnings"] = {
+                        "partial_upload": True,
+                        "segments_on_usenet": segments_completed,
+                        "message_ids_posted": len(posted_message_ids),
+                        "usenet_immutability": "Posted segments cannot be removed from Usenet",
+                        "share_status": "Incomplete - cannot be downloaded",
+                        "recommendation": "Create a new complete share"
+                    }
+                    
+                    # Sample of posted message IDs
+                    if posted_message_ids:
+                        response["warnings"]["sample_posted_ids"] = posted_message_ids[:5]
+                
+                # Handle different entity types
+                entity_type = upload['entity_type']
+                entity_id = upload['entity_id']
+                
+                if entity_type == 'folder':
+                    # Update folder status
+                    self.system.db.execute(
+                        """UPDATE folders 
+                           SET status = 'cancelled', 
+                               metadata = json_set(
+                                   COALESCE(metadata, '{}'),
+                                   '$.upload_cancelled_at', ?
+                               )
+                           WHERE folder_id = ?""",
+                        (now, entity_id)
+                    )
+                    response["folder_id"] = entity_id
+                    response["folder_status"] = "cancelled"
+                    
+                elif entity_type == 'share':
+                    # Update share status
+                    self.system.db.execute(
+                        """UPDATE shares 
+                           SET metadata = json_set(
+                                   COALESCE(metadata, '{}'),
+                                   '$.upload_cancelled_at', ?
+                               )
+                           WHERE share_id = ?""",
+                        (now, entity_id)
+                    )
+                    response["share_id"] = entity_id
+                    
+                    # Check if share has other uploads
+                    other_uploads = self.system.db.fetch_one(
+                        """SELECT COUNT(*) as count 
+                           FROM upload_queue 
+                           WHERE entity_id = ? 
+                             AND entity_type = 'share'
+                             AND queue_id != ?
+                             AND state NOT IN ('cancelled', 'failed')""",
+                        (entity_id, upload_id)
+                    )
+                    
+                    if other_uploads and other_uploads['count'] > 0:
+                        response["note"] = f"Share has {other_uploads['count']} other upload attempts"
+                
+                # Add next steps
+                response["next_steps"] = {
+                    "retry": f"POST /api/v1/upload_folder to retry upload",
+                    "delete": f"DELETE /api/v1/folders/{entity_id} to remove folder" if entity_type == 'folder' else None,
+                    "create_new": "POST /api/v1/create_share to create a new share"
+                }
+                response["next_steps"] = {k: v for k, v in response["next_steps"].items() if v}
+                
+                return response
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to cancel upload: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/index_folder")
         async def index_folder(request: dict):
             """Index folder with real implementation"""

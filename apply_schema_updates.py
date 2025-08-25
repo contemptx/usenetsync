@@ -25,7 +25,7 @@ def apply_schema_updates():
         print("Schema initialized")
         
         # Create all tables (will skip existing ones)
-        schema.create_tables()
+        schema.create_all_tables()
         print("Tables created/verified")
         
         # Verify new tables exist
@@ -37,9 +37,8 @@ def apply_schema_updates():
             except Exception as e:
                 print(f"❌ Table '{table_name}' check failed: {e}")
         
-        # Create indexes
-        schema.create_indexes()
-        print("Indexes created/verified")
+        # Indexes are created with tables in create_all_tables()
+        print("Indexes created/verified with tables")
         
         print("\n✅ Schema updates applied successfully!")
         return True
