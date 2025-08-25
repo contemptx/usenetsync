@@ -4251,9 +4251,9 @@ class UnifiedAPIServer:
             share_id: Optional[str] = None,
             folder_id: Optional[str] = None,
             user_id: Optional[str] = None,
-            include_permissions: bool = True
+            include_commitments: bool = True
         ):
-            """List authorized users for shares"""
+            """List authorized users for private shares with their access commitments"""
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
@@ -4319,28 +4319,32 @@ class UnifiedAPIServer:
                         "id": auth_user.get('id'),
                         "user_id": auth_user['user_id'],
                         "folder_id": auth_user['folder_id'],
-                        "permissions": auth_user.get('permissions', 'read'),
                         "created_at": auth_user.get('created_at')
                     }
                     
-                    # Get additional user details if available
+                    # Get commitment hash if available (this is what's actually stored in the index)
                     try:
-                        user_details = self.system.db.fetch_one(
-                            "SELECT username, email, is_admin FROM users WHERE user_id = ?",
-                            (auth_user['user_id'],)
+                        # Check if there's a commitment for this user
+                        commitment = self.system.db.fetch_one(
+                            """SELECT commitment_hash FROM access_commitments 
+                               WHERE user_id = ? AND folder_id = ?""",
+                            (auth_user['user_id'], auth_user['folder_id'])
                         )
-                        if user_details:
-                            user_info["username"] = user_details.get('username')
-                            user_info["email"] = user_details.get('email')
-                            user_info["is_admin"] = user_details.get('is_admin', False)
+                        if commitment:
+                            user_info["commitment_hash"] = commitment['commitment_hash']
+                            user_info["has_access"] = True
+                        else:
+                            user_info["has_access"] = False
                     except:
-                        pass
+                        # Table might not exist
+                        user_info["has_access"] = True  # Assume access if no commitment system
                     
                     # Get share information for this folder
-                    if include_permissions:
+                    if include_commitments:
                         try:
                             shares = self.system.db.fetch_all(
-                                """SELECT share_id, share_type, access_level, expires_at, revoked
+                                """SELECT share_id, share_type, access_level, expires_at, revoked,
+                                          allowed_users, access_commitments
                                    FROM shares 
                                    WHERE folder_id = ? AND (revoked IS NULL OR revoked = 0)""",
                                 (auth_user['folder_id'],)
@@ -4352,20 +4356,22 @@ class UnifiedAPIServer:
                                     share_info = {
                                         "share_id": share['share_id'],
                                         "share_type": share.get('share_type', 'full'),
-                                        "access_level": share.get('access_level', 'public'),
+                                        "access_type": share.get('access_level', 'public'),  # public/private/protected
                                         "expires_at": share.get('expires_at'),
                                         "active": not share.get('revoked', False)
                                     }
                                     
-                                    # Check if share has user-specific permissions
-                                    if share.get('allowed_users'):
-                                        try:
-                                            import json
-                                            allowed = json.loads(share['allowed_users'])
-                                            if auth_user['user_id'] in allowed:
-                                                share_info["user_specific_access"] = True
-                                        except:
-                                            pass
+                                    # For private shares, check if user has commitment
+                                    if share.get('access_level') == 'private':
+                                        if share.get('access_commitments'):
+                                            try:
+                                                import json
+                                                commitments = json.loads(share['access_commitments'])
+                                                if auth_user['user_id'] in commitments:
+                                                    share_info["user_commitment"] = commitments[auth_user['user_id']]
+                                                    share_info["included_in_index"] = True
+                                            except:
+                                                pass
                                     
                                     user_info["shares"].append(share_info)
                         except:
@@ -4411,7 +4417,7 @@ class UnifiedAPIServer:
                         "share_id": share_id,
                         "folder_id": folder_id,
                         "user_id": user_id,
-                        "include_permissions": include_permissions
+                        "include_commitments": include_commitments
                     },
                     "total_users": len(users_list),
                     "authorized_users": users_list,
