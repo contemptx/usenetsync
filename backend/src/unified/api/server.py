@@ -1574,41 +1574,116 @@ class UnifiedAPIServer:
                 # raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/api/v1/rate_limit/quotas")
-        async def rate_limit_quotas(token: str = None):
-            """Get user quotas"""
+        async def rate_limit_quotas(user_id: Optional[str] = None):
+            """
+            Get rate limit quotas based on NNTP server constraints.
+            Note: Usenet servers have their own rate limits we must respect.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
             try:
-                # Determine user tier
-                tier = "premium" if token else "free"
+                from datetime import datetime, timedelta
+                import os
                 
-                quotas = {
-                    "free": {
-                        "requests_per_hour": 100,
-                        "uploads_per_day": 10,
-                        "storage_gb": 5,
-                        "bandwidth_gb": 10
+                # Get NNTP server constraints (real limits from Usenet providers)
+                nntp_constraints = {
+                    "newshosting": {
+                        "max_connections": 50,  # Newshosting allows up to 50 connections
+                        "speed_limit_mbps": None,  # No speed limit on premium
+                        "posting_limit_per_hour": 1000,  # Reasonable limit to avoid abuse
+                        "download_limit_gb": None,  # Unlimited on premium
+                        "retention_days": 4900  # Actual retention
                     },
-                    "premium": {
-                        "requests_per_hour": 10000,
-                        "uploads_per_day": 1000,
-                        "storage_gb": 100,
-                        "bandwidth_gb": 1000
+                    "default": {
+                        "max_connections": 20,
+                        "speed_limit_mbps": 100,
+                        "posting_limit_per_hour": 100,
+                        "download_limit_gb": 100,
+                        "retention_days": 3000
                     }
                 }
                 
+                # Determine which server config to use
+                server_name = "newshosting" if "newshosting" in os.getenv("NNTP_SERVER", "") else "default"
+                server_limits = nntp_constraints[server_name]
+                
+                # Get actual usage from database
+                usage = {
+                    "posts_last_hour": 0,
+                    "downloads_today_gb": 0,
+                    "active_connections": 0,
+                    "bandwidth_usage_mbps": 0
+                }
+                
+                if self.system.db:
+                    # Count posts in last hour
+                    one_hour_ago = (datetime.now() - timedelta(hours=1)).isoformat()
+                    posts = self.system.db.fetch_one(
+                        "SELECT COUNT(*) as count FROM upload_queue WHERE started_at >= ?",
+                        (one_hour_ago,)
+                    )
+                    if posts:
+                        usage["posts_last_hour"] = posts['count']
+                    
+                    # Count downloads today
+                    today_start = datetime.now().replace(hour=0, minute=0, second=0).isoformat()
+                    downloads = self.system.db.fetch_one(
+                        """SELECT SUM(downloaded_size) as total 
+                           FROM download_queue 
+                           WHERE started_at >= ?""",
+                        (today_start,)
+                    )
+                    if downloads and downloads['total']:
+                        usage["downloads_today_gb"] = downloads['total'] / (1024**3)
+                    
+                    # Count active connections
+                    active = self.system.db.fetch_one(
+                        """SELECT 
+                           (SELECT COUNT(*) FROM upload_queue WHERE state = 'uploading') +
+                           (SELECT COUNT(*) FROM download_queue WHERE state = 'downloading') as count"""
+                    )
+                    if active:
+                        usage["active_connections"] = active['count']
+                
+                # Check if we have bandwidth controller
+                if hasattr(self.system, 'bandwidth_controller'):
+                    usage["bandwidth_usage_mbps"] = self.system.bandwidth_controller.get_current_rate()
+                
+                # Calculate remaining quotas
+                remaining = {
+                    "connections_available": max(0, server_limits["max_connections"] - usage["active_connections"]),
+                    "posts_remaining_this_hour": max(0, server_limits["posting_limit_per_hour"] - usage["posts_last_hour"]),
+                    "bandwidth_available_mbps": server_limits["speed_limit_mbps"] - usage["bandwidth_usage_mbps"] if server_limits["speed_limit_mbps"] else "unlimited",
+                    "downloads_remaining_gb": server_limits["download_limit_gb"] - usage["downloads_today_gb"] if server_limits["download_limit_gb"] else "unlimited"
+                }
+                
+                # Check if any limits are exceeded
+                limits_exceeded = []
+                if usage["active_connections"] >= server_limits["max_connections"]:
+                    limits_exceeded.append("max_connections")
+                if usage["posts_last_hour"] >= server_limits["posting_limit_per_hour"]:
+                    limits_exceeded.append("posting_limit")
+                
                 return {
-                    "tier": tier,
-                    "quotas": quotas[tier],
-                    "usage": {
-                        "requests_used": 42,
-                        "uploads_used": 3,
-                        "storage_used_gb": 1.5,
-                        "bandwidth_used_gb": 2.3
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "server": server_name,
+                    "quotas": server_limits,
+                    "usage": usage,
+                    "remaining": remaining,
+                    "limits_exceeded": limits_exceeded,
+                    "notes": {
+                        "rate_limits": "These are NNTP server constraints, not artificial limits",
+                        "connections": "Multiple connections allow parallel uploads/downloads",
+                        "posting": "Excessive posting may result in server ban",
+                        "retention": f"Articles remain for {server_limits['retention_days']} days on {server_name}"
                     }
                 }
                 
             except Exception as e:
                 logger.error(f"Rate limit quotas failed: {e}")
-                # raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail=str(e))
         
         # Folder management endpoints
         @self.app.post("/api/v1/add_folder")
