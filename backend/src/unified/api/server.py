@@ -914,11 +914,10 @@ class UnifiedAPIServer:
         
         @self.app.get("/api/v1/auth/permissions")
         async def get_permissions(token: str = None):
-            """Get user permissions"""
+            """Get user capabilities (Usenet has no permissions - only ownership and keys)"""
             try:
                 username = "guest"
-                is_admin = False
-                permissions = []
+                owned_folders = []
                 
                 # Check session
                 if not hasattr(self, '_sessions'):
@@ -927,54 +926,59 @@ class UnifiedAPIServer:
                 if token and token in self._sessions:
                     username = self._sessions[token]['username']
                     
-                    # Try to get user from database
+                    # Get folders this user owns (not admin-based, ownership-based)
                     if self.system and self.system.db:
-                        user = self.system.db.fetch_one(
-                            "SELECT username, is_admin, permissions FROM users WHERE username = ?",
+                        folders = self.system.db.fetch_all(
+                            "SELECT folder_id, path, status FROM folders WHERE owner_id = ?",
                             (username,)
                         )
-                        if user:
-                            is_admin = user.get('is_admin', False)
-                            # Parse permissions JSON if stored
-                            stored_perms = user.get('permissions')
-                            if stored_perms:
-                                try:
-                                    import json
-                                    permissions = json.loads(stored_perms)
-                                except:
-                                    pass
+                        if folders:
+                            owned_folders = [{
+                                "folder_id": f['folder_id'],
+                                "path": f['path'],
+                                "status": f.get('status', 'unknown')
+                            } for f in folders]
                 
-                # Set default permissions based on user type
-                if not permissions:
-                    if is_admin:
-                        permissions = [
-                            "admin:system",
-                            "read:all",
-                            "write:all",
-                            "delete:all",
-                            "manage:users",
-                            "manage:system"
+                # Capabilities are about what you can do, not permissions
+                if username != "guest":
+                    capabilities = {
+                        "local": [
+                            "manage_own_folders",    # Can manage folders you created
+                            "create_shares",         # Can share your own folders
+                            "upload_to_usenet",      # Can post your content
+                            "view_own_operations"    # Can see your uploads/downloads
+                        ],
+                        "usenet": [
+                            "download_public_shares",     # Anyone can with share ID
+                            "download_protected_shares",  # Need password to decrypt
+                            "download_private_shares"     # Need cryptographic commitment
+                        ],
+                        "limitations": [
+                            "cannot_delete_from_usenet",  # Immutable once posted
+                            "cannot_modify_posted",        # No editing after upload
+                            "cannot_manage_others"         # No admin over other users
                         ]
-                    elif username != "guest":
-                        permissions = [
-                            "user:basic",
-                            "read:folders",
-                            "write:folders",
-                            "read:shares",
-                            "write:shares",
-                            "create:shares"
+                    }
+                else:
+                    capabilities = {
+                        "local": [],  # Guests can't manage anything
+                        "usenet": [
+                            "download_public_shares"  # Only public access
+                        ],
+                        "limitations": [
+                            "no_folder_management",
+                            "no_uploads",
+                            "no_private_access"
                         ]
-                    else:
-                        permissions = [
-                            "guest:limited",
-                            "read:public"
-                        ]
+                    }
                 
                 return {
                     "username": username,
-                    "is_admin": is_admin,
-                    "permissions": permissions,
-                    "authenticated": token is not None and token in self._sessions
+                    "owned_folders_count": len(owned_folders),
+                    "owned_folders": owned_folders,
+                    "capabilities": capabilities,
+                    "authenticated": token is not None and token in self._sessions,
+                    "note": "Usenet has no permission system. You either own content (can manage locally) or have keys (can decrypt downloads)."
                 }
                 
             except Exception as e:
@@ -1066,15 +1070,23 @@ class UnifiedAPIServer:
             return {"user_id": user_id, "username": username}
         @self.app.delete("/api/v1/users/{user_id}")
         async def delete_user(user_id: str):
-            """Delete user and all associated data"""
+            """
+            Delete user from LOCAL system only.
+            NOTE: No admin hierarchy - users only own their folders.
+            Their Usenet posts remain on servers (immutable).
+            """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
             try:
+                # Remove user and their local folder ownership records
                 result = self.system.delete_user(user_id)
+                if result.get("success"):
+                    result["note"] = "User removed locally. Their Usenet posts remain on servers."
+                    result["folders_affected"] = "Ownership records removed, content on Usenet unchanged."
                 return result
             except Exception as e:
-                logger.error(f"Failed to delete user: {e}")
+                logger.error(f"Failed to delete user locally: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/batch/folders")
         async def batch_add_folders(request: dict):
@@ -1221,26 +1233,40 @@ class UnifiedAPIServer:
         
         @self.app.delete("/api/v1/batch/files")
         async def batch_delete_files(request: dict = {}):
-            """Batch delete files"""
+            """
+            Batch delete files from LOCAL database only.
+            NOTE: Cannot delete from Usenet - articles are immutable once posted.
+            """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             file_ids = request.get("file_ids")
             if not file_ids:
                 raise HTTPException(status_code=400, detail="file_ids required")
-            # Implement actual batch delete logic
-            return self.system.batch_delete_files(file_ids)
+            
+            # This only affects local database, not Usenet
+            result = self.system.batch_delete_files(file_ids)
+            if result.get("success"):
+                result["note"] = "Files removed from local tracking only. Usenet segments remain on servers."
+            return result
         
         @self.app.delete("/api/v1/folders/{folder_id}")
         async def delete_folder(folder_id: str):
-            """Delete folder and all its contents"""
+            """
+            Delete folder from LOCAL database only.
+            NOTE: This does NOT delete content from Usenet (impossible).
+            Posted articles remain on Usenet servers until retention expires.
+            """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
             try:
+                # This only removes local tracking, not Usenet content
                 result = self.system.delete_folder(folder_id)
+                if result.get("success"):
+                    result["note"] = "Removed from local database. Usenet content remains unchanged."
                 return result
             except Exception as e:
-                logger.error(f"Failed to delete folder: {e}")
+                logger.error(f"Failed to delete folder locally: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/api/v1/monitoring/alerts/add")
