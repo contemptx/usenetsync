@@ -5780,15 +5780,222 @@ class UnifiedAPIServer:
             }
         
         @self.app.get("/api/v1/shares")
-        async def get_shares():
-            """Get all shares from the database"""
-            if not self.system:
-                return {"shares": [{"share_id": "test", "folder_id": "test", "type": "public"}], "total": 1}
+        async def get_shares(
+            folder_id: Optional[str] = None,
+            owner_id: Optional[str] = None,
+            access_level: Optional[str] = None,
+            active_only: bool = True,
+            include_stats: bool = True,
+            limit: int = 100,
+            offset: int = 0
+        ):
+            """
+            List shares with detailed information.
             
-            shares = self.system.db.fetch_all(
-                "SELECT * FROM shares ORDER BY created_at DESC"
-            )
-            return [dict(s) for s in shares] if shares else []
+            Returns shares with:
+            - Access control type (PUBLIC/PROTECTED/PRIVATE)
+            - Upload status and statistics
+            - Authorized users for private shares
+            - Expiry information
+            - Associated folder details
+            
+            NOTE: Shares represent encrypted indexes on Usenet.
+            Access is controlled through cryptography, not permissions.
+            Once uploaded, shares are immutable on Usenet.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                
+                # Build query with filters
+                query = """
+                    SELECT s.*, f.path as folder_path, f.file_count, f.total_size, f.status as folder_status
+                    FROM shares s
+                    LEFT JOIN folders f ON s.folder_id = f.folder_id
+                    WHERE 1=1
+                """
+                params = []
+                
+                if folder_id:
+                    query += " AND s.folder_id = ?"
+                    params.append(folder_id)
+                
+                if owner_id:
+                    query += " AND s.owner_id = ?"
+                    params.append(owner_id)
+                
+                if access_level:
+                    query += " AND s.access_level = ?"
+                    params.append(access_level.lower())
+                
+                if active_only:
+                    query += " AND (s.revoked IS NULL OR s.revoked = 0)"
+                    # Also check expiry
+                    query += " AND (s.expires_at IS NULL OR datetime(s.expires_at) > datetime('now'))"
+                
+                query += " ORDER BY s.id DESC"
+                query += f" LIMIT {limit} OFFSET {offset}"
+                
+                shares = self.system.db.fetch_all(query, tuple(params)) if params else self.system.db.fetch_all(query)
+                
+                if not shares:
+                    return {
+                        "success": True,
+                        "total": 0,
+                        "shares": [],
+                        "filters_applied": {
+                            "folder_id": folder_id,
+                            "owner_id": owner_id,
+                            "access_level": access_level,
+                            "active_only": active_only
+                        }
+                    }
+                
+                share_list = []
+                for share in shares:
+                    share_data = {
+                        "share_id": share['share_id'],
+                        "folder_id": share['folder_id'],
+                        "folder_path": share.get('folder_path'),
+                        "owner_id": share.get('owner_id'),
+                        "access_level": share.get('access_level', 'public'),
+                        "share_type": share.get('share_type', 'full'),
+                        "created_at": share.get('created_at'),
+                        "expires_at": share.get('expires_at'),
+                        "active": not share.get('revoked', False)
+                    }
+                    
+                    # Add folder statistics if available
+                    if include_stats and share.get('folder_path'):
+                        share_data["folder_stats"] = {
+                            "path": share['folder_path'],
+                            "file_count": share.get('file_count', 0),
+                            "total_size": share.get('total_size', 0),
+                            "status": share.get('folder_status', 'unknown')
+                        }
+                    
+                    # Check if expired
+                    if share.get('expires_at'):
+                        try:
+                            expires = datetime.fromisoformat(share['expires_at'])
+                            share_data["expired"] = datetime.now() > expires
+                            if not share_data["expired"]:
+                                remaining = (expires - datetime.now()).total_seconds()
+                                share_data["expires_in_hours"] = round(remaining / 3600, 2)
+                        except:
+                            share_data["expired"] = False
+                    else:
+                        share_data["expired"] = False
+                        share_data["expires_in_hours"] = None  # Never expires
+                    
+                    # Add access control details based on type
+                    if share.get('access_level') == 'private':
+                        # Count authorized users
+                        auth_count = self.system.db.fetch_one(
+                            "SELECT COUNT(*) as count FROM authorized_users WHERE folder_id = ?",
+                            (share['folder_id'],)
+                        )
+                        share_data["authorized_users_count"] = auth_count['count'] if auth_count else 0
+                        share_data["access_note"] = "Requires cryptographic commitment for access"
+                        
+                    elif share.get('access_level') == 'protected':
+                        share_data["password_protected"] = True
+                        share_data["access_note"] = "Requires password for decryption"
+                        
+                    else:  # public
+                        share_data["access_note"] = "Anyone with share ID can decrypt"
+                    
+                    # Check upload status
+                    upload_info = self.system.db.fetch_one(
+                        """SELECT state, progress, uploaded_size, total_size
+                           FROM upload_queue 
+                           WHERE entity_id = ? AND entity_type = 'folder'
+                           ORDER BY created_at DESC LIMIT 1""",
+                        (share['folder_id'],)
+                    )
+                    
+                    if upload_info:
+                        share_data["upload_status"] = {
+                            "state": upload_info['state'],
+                            "progress": upload_info.get('progress', 0),
+                            "uploaded_bytes": upload_info.get('uploaded_size', 0),
+                            "total_bytes": upload_info.get('total_size', 0)
+                        }
+                    else:
+                        share_data["upload_status"] = {
+                            "state": "not_queued",
+                            "progress": 0
+                        }
+                    
+                    # Add Usenet status
+                    share_data["usenet_status"] = {
+                        "immutable": share_data["upload_status"]["state"] == "completed",
+                        "on_usenet": share_data["upload_status"]["progress"] > 0,
+                        "note": "Once uploaded, share cannot be modified, only revoked locally"
+                    }
+                    
+                    share_list.append(share_data)
+                
+                # Get total count for pagination
+                count_query = """
+                    SELECT COUNT(*) as total FROM shares s
+                    WHERE 1=1
+                """
+                count_params = []
+                
+                if folder_id:
+                    count_query += " AND s.folder_id = ?"
+                    count_params.append(folder_id)
+                if owner_id:
+                    count_query += " AND s.owner_id = ?"
+                    count_params.append(owner_id)
+                if access_level:
+                    count_query += " AND s.access_level = ?"
+                    count_params.append(access_level.lower())
+                if active_only:
+                    count_query += " AND (s.revoked IS NULL OR s.revoked = 0)"
+                    count_query += " AND (s.expires_at IS NULL OR datetime(s.expires_at) > datetime('now'))"
+                
+                total_result = self.system.db.fetch_one(count_query, tuple(count_params)) if count_params else self.system.db.fetch_one(count_query)
+                total_count = total_result['total'] if total_result else 0
+                
+                # Calculate statistics
+                stats = {
+                    "total": total_count,
+                    "returned": len(share_list),
+                    "public": sum(1 for s in share_list if s['access_level'] == 'public'),
+                    "protected": sum(1 for s in share_list if s['access_level'] == 'protected'),
+                    "private": sum(1 for s in share_list if s['access_level'] == 'private'),
+                    "active": sum(1 for s in share_list if s['active'] and not s['expired']),
+                    "expired": sum(1 for s in share_list if s['expired']),
+                    "on_usenet": sum(1 for s in share_list if s['usenet_status']['on_usenet'])
+                }
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "shares": share_list,
+                    "pagination": {
+                        "total": total_count,
+                        "limit": limit,
+                        "offset": offset,
+                        "has_more": (offset + limit) < total_count
+                    },
+                    "statistics": stats,
+                    "filters_applied": {
+                        "folder_id": folder_id,
+                        "owner_id": owner_id,
+                        "access_level": access_level,
+                        "active_only": active_only
+                    },
+                    "note": "Shares represent encrypted indexes on Usenet with cryptographic access control"
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to list shares: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/api/v1/shares")
         async def create_share(request: dict = {}):
