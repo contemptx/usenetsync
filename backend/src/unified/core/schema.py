@@ -412,6 +412,39 @@ class UnifiedSchema:
                 )
             """,
             
+            # Schema migrations tracking
+            'schema_migrations': f"""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    id {id_type},
+                    version VARCHAR(50) UNIQUE NOT NULL,
+                    name VARCHAR(255),
+                    applied_at {timestamp_type} DEFAULT CURRENT_TIMESTAMP,
+                    checksum VARCHAR(64),
+                    execution_time_ms INTEGER,
+                    success BOOLEAN DEFAULT TRUE,
+                    error_message {text_type}
+                )
+            """,
+            
+            # Webhooks for event notifications
+            'webhooks': f"""
+                CREATE TABLE IF NOT EXISTS webhooks (
+                    id {id_type},
+                    webhook_id VARCHAR(255) UNIQUE NOT NULL,
+                    url {text_type} NOT NULL,
+                    events {json_type},
+                    secret VARCHAR(255),
+                    active BOOLEAN DEFAULT TRUE,
+                    created_at {timestamp_type} DEFAULT CURRENT_TIMESTAMP,
+                    updated_at {timestamp_type},
+                    last_triggered {timestamp_type},
+                    failure_count INTEGER DEFAULT 0,
+                    last_error {text_type},
+                    headers {json_type},
+                    retry_policy {json_type}
+                )
+            """,
+            
             # Network servers configuration
             'network_servers': f"""
                 CREATE TABLE IF NOT EXISTS network_servers (
@@ -628,6 +661,13 @@ class UnifiedSchema:
             "CREATE INDEX IF NOT EXISTS idx_access_logs_resource ON access_logs(resource_type, resource_id)",
             "CREATE INDEX IF NOT EXISTS idx_access_logs_timestamp ON access_logs(timestamp)",
             "CREATE INDEX IF NOT EXISTS idx_access_logs_granted ON access_logs(granted)",
+            
+            # Schema migrations indexes
+            "CREATE INDEX IF NOT EXISTS idx_schema_migrations_version ON schema_migrations(version)",
+            
+            # Webhooks indexes
+            "CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active)",
+            "CREATE INDEX IF NOT EXISTS idx_webhooks_triggered ON webhooks(last_triggered)",
             
             # Background jobs indexes
             "CREATE INDEX IF NOT EXISTS idx_jobs_state ON background_jobs(state, priority)",
