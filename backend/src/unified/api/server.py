@@ -4792,13 +4792,13 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=400, detail="folder_id is required")
             
             try:
-                # Use REAL segmentation processor
-                segments = self.system.segment_processor.process_folder(folder_id)
+                # Use unified segmentation method
+                segments = self.system.segment_folder(folder_id)
                 return {
                     "success": True,
                     "folder_id": folder_id,
                     "segments_created": len(segments),
-                    "segments": segments
+                    "segments": segments if len(segments) < 10 else segments[:10]  # Limit response size
                 }
             except Exception as e:
                 logger.error(f"Failed to process folder: {e}")
@@ -4865,55 +4865,61 @@ class UnifiedAPIServer:
                         )
                         share_id = share_result['share_id']
                 
-                # Use EXISTING upload system
+                # Use THE unified upload system - NO FALLBACKS
                 upload_start = datetime.now()
                 
-                # Check if we have the existing upload system
-                if hasattr(self.system, 'upload_system'):
-                    # Use existing UnifiedUploadSystem
-                    upload_result = self.system.upload_system.upload_folder(
-                        folder_id=folder_id,
-                        redundancy_level=0,
-                        pack_small_files=True
+                # Initialize upload system if not already done
+                if not hasattr(self.system, 'upload_system') or self.system.upload_system is None:
+                    from unified.unified_system import UnifiedUploadSystem, UnifiedSegmentPacker, UnifiedDatabaseManager
+                    
+                    # Create database manager wrapper for compatibility
+                    class DBManagerWrapper:
+                        def __init__(self, db):
+                            self.db = db
+                        
+                        def fetchall(self, query, params):
+                            # Convert %s placeholders to ? for SQLite
+                            query = query.replace('%s', '?')
+                            return self.db.fetch_all(query, params)
+                        
+                        def fetchone(self, query, params):
+                            # Convert %s placeholders to ? for SQLite
+                            query = query.replace('%s', '?')
+                            return self.db.fetch_one(query, params)
+                        
+                        def execute(self, query, params):
+                            # Convert %s placeholders to ? for SQLite
+                            query = query.replace('%s', '?')
+                            return self.db.execute(query, params)
+                        
+                        def insert(self, table, data):
+                            columns = ', '.join(data.keys())
+                            placeholders = ', '.join(['?' for _ in data])
+                            query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                            return self.db.execute(query, tuple(data.values()))
+                    
+                    db_wrapper = DBManagerWrapper(self.system.db)
+                    
+                    # Initialize THE unified upload system
+                    self.system.upload_system = UnifiedUploadSystem(
+                        nntp_client=self.system.nntp_client,
+                        db_manager=db_wrapper,
+                        security_system=self.system.encryption
                     )
-                    segments_uploaded = upload_result.get('segments_uploaded', 0)
-                    
-                    # Create core index using existing indexing system
-                    if hasattr(self.system, 'indexer'):
-                        core_index = self.system.indexer.create_core_index(folder_id)
-                        # Store core index reference
-                        core_index_id = f"index.{share_id}"
-                    else:
-                        core_index_id = f"index.{share_id}"
-                    
-                elif hasattr(self.system, 'upload_queue'):
-                    # Use existing upload queue system
-                    queue_id = self.system.upload_queue.add(
-                        entity_id=folder_id,
-                        entity_type='folder',
-                        metadata={'share_id': share_id}
-                    )
-                    
-                    # Process queue
-                    if hasattr(self.system.upload_queue, 'process'):
-                        self.system.upload_queue.process()
-                    
-                    segments_uploaded = 0  # Will be updated by queue processor
-                    core_index_id = f"index.{share_id}"
-                else:
-                    # Fallback to basic upload
-                    segments_uploaded = 0
-                    core_index_id = f"index.{share_id}"
-                    
-                    # Get segments from database
-                    segments = self.system.db.fetch_all(
-                        """SELECT s.segment_id, s.segment_index, s.size
-                           FROM segments s
-                           JOIN files f ON s.file_id = f.file_id
-                           WHERE f.folder_id = ?""",
-                        (folder_id,)
-                    )
-                    segments_uploaded = len(segments)
+                
+                # Use THE unified upload system
+                upload_result = self.system.upload_system.upload_folder(
+                    folder_id=folder_id,
+                    redundancy_level=0,
+                    pack_small_files=True
+                )
+                
+                segments_uploaded = upload_result.get('segments_uploaded', 0)
+                
+                # Create and post core index
+                core_index_id = f"index.{share_id}"
+                
+                # TODO: Post core index to Usenet with segment message IDs
                 
                 upload_time = (datetime.now() - upload_start).total_seconds()
                 

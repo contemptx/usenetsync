@@ -10,6 +10,7 @@ import time
 import hashlib
 import logging
 from datetime import datetime
+import uuid
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -225,6 +226,84 @@ class UnifiedSystem:
             "owner_id": owner_id,
             "status": "added"
         }
+    
+    def segment_folder(self, folder_id: str) -> List[Dict[str, Any]]:
+        """
+        Segment all files in a folder into 768KB chunks
+        
+        Args:
+            folder_id: Folder to segment
+            
+        Returns:
+            List of created segments
+        """
+        logger.info(f"Segmenting folder {folder_id}")
+        
+        # Get all files in folder
+        files = self.db.fetch_all(
+            "SELECT file_id, name, path, size FROM files WHERE folder_id = ?",
+            (folder_id,)
+        )
+        
+        if not files:
+            logger.warning(f"No files found in folder {folder_id}")
+            return []
+        
+        all_segments = []
+        
+        for file in files:
+            try:
+                # Use the segment processor to segment each file
+                segments = self.segment_processor.segment_file(
+                    file_path=file['path'],
+                    file_id=file['file_id']
+                )
+                
+                # Store segments in database
+                for i, segment in enumerate(segments):
+                    # Segment might be a dict or object
+                    if hasattr(segment, 'segment_id'):
+                        seg_id = segment.segment_id
+                        seg_size = segment.size
+                        seg_hash = segment.hash
+                        seg_index = getattr(segment, 'segment_index', i)
+                    else:
+                        # It's a dict
+                        seg_id = segment.get('segment_id', str(uuid.uuid4()))
+                        seg_size = segment.get('size', 0)
+                        seg_hash = segment.get('hash', '')
+                        seg_index = segment.get('segment_index', i)
+                    
+                    self.db.execute(
+                        """INSERT OR IGNORE INTO segments 
+                           (segment_id, file_id, segment_index, size, hash, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (seg_id, file['file_id'], seg_index,
+                         seg_size, seg_hash, datetime.now().isoformat())
+                    )
+                    
+                    all_segments.append({
+                        'segment_id': seg_id,
+                        'file_id': file['file_id'],
+                        'file_name': file['name'],
+                        'segment_index': seg_index,
+                        'size': seg_size,
+                        'hash': seg_hash
+                    })
+                    
+                logger.info(f"Segmented {file['name']}: {len(segments)} segments")
+                
+            except Exception as e:
+                logger.error(f"Failed to segment {file['name']}: {e}")
+        
+        # Update folder status
+        self.db.execute(
+            "UPDATE folders SET status = 'segmented' WHERE folder_id = ?",
+            (folder_id,)
+        )
+        
+        logger.info(f"Created {len(all_segments)} segments for folder {folder_id}")
+        return all_segments
     
     def index_folder_by_id(self, folder_id: str, progress_id: Optional[str] = None) -> Dict[str, Any]:
         """
