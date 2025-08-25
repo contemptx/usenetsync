@@ -191,6 +191,42 @@ class RealNNTPClient:
             logger.error(f"❌ Retrieval FAILED: {e}")
             return None
     
+    def post_data(self, data: bytes, subject: str, newsgroup: str = 'alt.binaries.test') -> Tuple[bool, Optional[str]]:
+        """
+        Post binary data to Usenet (wrapper for post_article)
+        
+        Args:
+            data: Binary data to post
+            subject: Subject line
+            newsgroup: Newsgroup to post to
+            
+        Returns:
+            Tuple of (success, message_id)
+        """
+        message_id = self.post_article(
+            subject=subject,
+            body=data,
+            newsgroups=[newsgroup]
+        )
+        return (message_id is not None, message_id)
+    
+    def get_article(self, message_id: str) -> Optional[bytes]:
+        """
+        Get article data by message ID (wrapper for retrieve_article)
+        
+        Args:
+            message_id: Message-ID to retrieve
+            
+        Returns:
+            Article body as bytes or None
+        """
+        result = self.retrieve_article(message_id)
+        if result:
+            article_number, article_lines = result
+            # Join lines and convert to bytes
+            return '\n'.join(article_lines).encode('utf-8')
+        return None
+    
     def select_group(self, newsgroup: str) -> Optional[Dict[str, Any]]:
         """
         Select REAL newsgroup

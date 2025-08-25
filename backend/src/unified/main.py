@@ -141,9 +141,85 @@ class UnifiedSystem:
                 # Initialize upload system with NNTP client
                 try:
                     from unified.unified_system import UnifiedUploadSystem
+                    
+                    # Create database wrapper for UnifiedUploadSystem compatibility
+                    class DBManagerWrapper:
+                        def __init__(self, db):
+                            self.db = db
+                            self.db_type = 'sqlite'  # We're using SQLite
+                        
+                        def fetchall(self, query, params):
+                            # Convert %s placeholders to ? for SQLite
+                            query = query.replace('%s', '?')
+                            # Fix column name mismatches
+                            query = query.replace('f.file_path', 'f.path AS file_path')
+                            query = query.replace('file_path', 'path')
+                            query = query.replace('s.segment_size', 's.size')
+                            query = query.replace('segment_size', 'size')
+                            query = query.replace('s.packed_with', 's.packed_segment_id')
+                            query = query.replace('packed_with', 'packed_segment_id')
+                            # If selecting s.*, add alias for size column
+                            if 's.*' in query:
+                                query = query.replace('s.*', 's.*, s.size AS segment_size')
+                            results = self.db.fetch_all(query, params)
+                            # Post-process results to ensure required columns exist
+                            if results and isinstance(results, list):
+                                for row in results:
+                                    if 'size' in row and 'segment_size' not in row:
+                                        row['segment_size'] = row['size']
+                                    if 'hash' in row and 'segment_hash' not in row:
+                                        row['segment_hash'] = row['hash']
+                                    if 'segment_index' not in row and 'index' in row:
+                                        row['segment_index'] = row['index']
+                            return results
+                        
+                        def fetchone(self, query, params):
+                            # Convert %s placeholders to ? for SQLite
+                            query = query.replace('%s', '?')
+                            # Fix column name mismatches
+                            query = query.replace('f.file_path', 'f.path')
+                            query = query.replace('file_path', 'path')
+                            query = query.replace('s.segment_size', 's.size')
+                            query = query.replace('segment_size', 'size')
+                            query = query.replace('s.packed_with', 's.packed_segment_id')
+                            query = query.replace('packed_with', 'packed_segment_id')
+                            return self.db.fetch_one(query, params)
+                        
+                        def execute(self, query, params):
+                            # Convert %s placeholders to ? for SQLite
+                            query = query.replace('%s', '?')
+                            # Fix column name mismatches
+                            query = query.replace('f.file_path', 'f.path')
+                            query = query.replace('file_path', 'path')
+                            query = query.replace('s.segment_size', 's.size')
+                            query = query.replace('segment_size', 'size')
+                            query = query.replace('s.packed_with', 's.packed_segment_id')
+                            query = query.replace('packed_with', 'packed_segment_id')
+                            return self.db.execute(query, params)
+                        
+                        def insert(self, table, data):
+                            columns = ', '.join(data.keys())
+                            placeholders = ', '.join(['?' for _ in data])
+                            query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                            return self.db.execute(query, tuple(data.values()))
+                        
+                        def insert_returning(self, query, params):
+                            # SQLite doesn't support RETURNING, so we'll insert and get last row id
+                            query = query.replace('%s', '?')
+                            query = query.replace('file_path', 'path')
+                            # Remove RETURNING clause for SQLite
+                            if 'RETURNING' in query:
+                                query = query.split('RETURNING')[0]
+                            self.db.execute(query, params)
+                            # Get the last inserted row id
+                            result = self.db.fetch_one("SELECT last_insert_rowid()", ())
+                            return result['last_insert_rowid()'] if result else None
+                    
+                    db_wrapper = DBManagerWrapper(self.db)
+                    
                     self.upload_system = UnifiedUploadSystem(
                         nntp_client=self.nntp_client,
-                        db_manager=self.db,
+                        db_manager=db_wrapper,
                         security_system=self.encryption
                     )
                     logger.info("✓ Upload system initialized")

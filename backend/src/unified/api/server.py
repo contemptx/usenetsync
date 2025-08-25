@@ -4868,46 +4868,12 @@ class UnifiedAPIServer:
                 # Use THE unified upload system - NO FALLBACKS
                 upload_start = datetime.now()
                 
-                # Initialize upload system if not already done
+                # Check if upload system exists
                 if not hasattr(self.system, 'upload_system') or self.system.upload_system is None:
-                    from unified.unified_system import UnifiedUploadSystem, UnifiedSegmentPacker, UnifiedDatabaseManager
-                    
-                    # Create database manager wrapper for compatibility
-                    class DBManagerWrapper:
-                        def __init__(self, db):
-                            self.db = db
-                        
-                        def fetchall(self, query, params):
-                            # Convert %s placeholders to ? for SQLite
-                            query = query.replace('%s', '?')
-                            return self.db.fetch_all(query, params)
-                        
-                        def fetchone(self, query, params):
-                            # Convert %s placeholders to ? for SQLite
-                            query = query.replace('%s', '?')
-                            return self.db.fetch_one(query, params)
-                        
-                        def execute(self, query, params):
-                            # Convert %s placeholders to ? for SQLite
-                            query = query.replace('%s', '?')
-                            return self.db.execute(query, params)
-                        
-                        def insert(self, table, data):
-                            columns = ', '.join(data.keys())
-                            placeholders = ', '.join(['?' for _ in data])
-                            query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
-                            return self.db.execute(query, tuple(data.values()))
-                    
-                    db_wrapper = DBManagerWrapper(self.system.db)
-                    
-                    # Initialize THE unified upload system
-                    self.system.upload_system = UnifiedUploadSystem(
-                        nntp_client=self.system.nntp_client,
-                        db_manager=db_wrapper,
-                        security_system=self.system.encryption
-                    )
+                    raise HTTPException(status_code=500, 
+                        detail="Upload system not initialized. Check NNTP connection.")
                 
-                # Use THE unified upload system
+                # Use THE existing upload system that was initialized at startup
                 upload_result = self.system.upload_system.upload_folder(
                     folder_id=folder_id,
                     redundancy_level=0,
