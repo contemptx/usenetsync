@@ -451,10 +451,11 @@ class UnifiedAPIServer:
         async def get_all_progress():
             """Get all active progress operations"""
             if not hasattr(self.app.state, 'progress'):
-                return {}
+                self.app.state.progress = {}
             
             # Clean up completed operations older than 5 minutes
             import time
+            from datetime import datetime
             current_time = time.time()
             to_remove = []
             for pid, prog in self.app.state.progress.items():
@@ -470,6 +471,122 @@ class UnifiedAPIServer:
             for pid in to_remove:
                 del self.app.state.progress[pid]
             
+            # Also get active operations from database
+            active_operations = []
+            
+            if self.system and self.system.db:
+                try:
+                    # Get active uploads
+                    uploads = self.system.db.fetch_all(
+                        """SELECT queue_id, entity_id, entity_type, state, progress, 
+                           total_size, uploaded_size, started_at, error_message
+                           FROM upload_queue 
+                           WHERE state IN ('uploading', 'queued', 'paused')"""
+                    )
+                    
+                    for upload in uploads:
+                        operation = {
+                            "progress_id": f"upload_{upload['queue_id']}",
+                            "type": "upload",
+                            "entity_id": upload['entity_id'],
+                            "entity_type": upload['entity_type'],
+                            "status": upload['state'],
+                            "progress": upload['progress'] or 0,
+                            "total_size": upload['total_size'],
+                            "processed_size": upload['uploaded_size'],
+                            "started_at": upload['started_at'],
+                            "error_message": upload['error_message'],
+                            "operation": f"Uploading {upload['entity_type']}"
+                        }
+                        active_operations.append(operation)
+                    
+                    # Get active downloads
+                    downloads = self.system.db.fetch_all(
+                        """SELECT queue_id, entity_id, entity_type, state, progress,
+                           total_size, downloaded_size, started_at, error_message
+                           FROM download_queue
+                           WHERE state IN ('downloading', 'queued', 'paused')"""
+                    )
+                    
+                    for download in downloads:
+                        operation = {
+                            "progress_id": f"download_{download['queue_id']}",
+                            "type": "download",
+                            "entity_id": download['entity_id'],
+                            "entity_type": download['entity_type'],
+                            "status": download['state'],
+                            "progress": download['progress'] or 0,
+                            "total_size": download['total_size'],
+                            "processed_size": download['downloaded_size'],
+                            "started_at": download['started_at'],
+                            "error_message": download['error_message'],
+                            "operation": f"Downloading {download['entity_type']}"
+                        }
+                        active_operations.append(operation)
+                    
+                    # Get any indexing operations
+                    indexing = self.system.db.fetch_all(
+                        """SELECT folder_id, path, status, file_count, indexed_files
+                           FROM folders
+                           WHERE status IN ('indexing', 'segmenting')"""
+                    )
+                    
+                    for idx in indexing:
+                        progress = 0
+                        if idx['file_count'] and idx['file_count'] > 0:
+                            progress = (idx['indexed_files'] or 0) / idx['file_count'] * 100
+                        
+                        operation = {
+                            "progress_id": f"index_{idx['folder_id']}",
+                            "type": "indexing",
+                            "entity_id": idx['folder_id'],
+                            "entity_type": "folder",
+                            "status": idx['status'],
+                            "progress": round(progress, 2),
+                            "total_files": idx['file_count'],
+                            "processed_files": idx['indexed_files'],
+                            "path": idx['path'],
+                            "operation": f"{idx['status'].title()} folder"
+                        }
+                        active_operations.append(operation)
+                
+                except Exception as e:
+                    logger.error(f"Failed to get database operations: {e}")
+            
+            # Combine in-memory and database progress
+            all_progress = {}
+            
+            # Add in-memory progress
+            for pid, prog in self.app.state.progress.items():
+                all_progress[pid] = prog
+            
+            # Add database operations
+            for op in active_operations:
+                pid = op['progress_id']
+                if pid not in all_progress:  # Don't override in-memory progress
+                    all_progress[pid] = op
+            
+            # Calculate summary statistics
+            total_operations = len(all_progress)
+            active_count = sum(1 for p in all_progress.values() if p.get('status') in ['uploading', 'downloading', 'indexing', 'segmenting'])
+            queued_count = sum(1 for p in all_progress.values() if p.get('status') == 'queued')
+            paused_count = sum(1 for p in all_progress.values() if p.get('status') == 'paused')
+            completed_count = sum(1 for p in all_progress.values() if p.get('status') == 'completed')
+            failed_count = sum(1 for p in all_progress.values() if p.get('status') == 'failed')
+            
+            return {
+                "success": True,
+                "timestamp": datetime.now().isoformat(),
+                "summary": {
+                    "total_operations": total_operations,
+                    "active": active_count,
+                    "queued": queued_count,
+                    "paused": paused_count,
+                    "completed": completed_count,
+                    "failed": failed_count
+                },
+                "operations": all_progress
+            }
     
         
         # ==================== AUTHENTICATION ENDPOINTS ====================
