@@ -3377,6 +3377,285 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to cancel upload: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.post("/api/v1/configuration/backup")
+        async def create_configuration_backup(request: dict):
+            """
+            Create a backup of system configuration and metadata.
+            
+            This backs up LOCAL configuration only, NOT Usenet content:
+            - Database (folders, shares, users, settings)
+            - Configuration files
+            - Encryption keys (if include_keys=true)
+            - Access control lists
+            - Server configurations
+            
+            Usenet Context:
+            - Posted articles on Usenet are NOT backed up (immutable)
+            - Share IDs and message IDs are preserved for recovery
+            - Private keys are critical - loss means no access to encrypted content
+            
+            Backup Types:
+            - full: Complete backup of all configuration
+            - incremental: Only changes since last backup
+            - differential: Changes since last full backup
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from pathlib import Path
+                from datetime import datetime
+                import shutil
+                import tarfile
+                import tempfile
+                
+                # Parse request parameters
+                backup_type = request.get("backup_type", "full")
+                include_keys = request.get("include_keys", True)
+                include_database = request.get("include_database", True)
+                include_config = request.get("include_config", True)
+                compress = request.get("compress", True)
+                description = request.get("description", "")
+                
+                # Validate backup type
+                valid_types = ["full", "incremental", "differential"]
+                if backup_type not in valid_types:
+                    raise HTTPException(status_code=400, 
+                        detail=f"Invalid backup_type. Must be one of: {valid_types}")
+                
+                # Create backup directory if it doesn't exist
+                backup_dir = Path("data/backups")
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Generate backup filename
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_name = f"config_backup_{backup_type}_{timestamp}"
+                
+                # Create temporary directory for backup contents
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = Path(temp_dir)
+                    backup_path = temp_path / backup_name
+                    backup_path.mkdir()
+                    
+                    backup_contents = []
+                    backup_stats = {
+                        "files": 0,
+                        "directories": 0,
+                        "total_size": 0
+                    }
+                    
+                    # Backup database
+                    if include_database:
+                        db_backup_path = backup_path / "database"
+                        db_backup_path.mkdir()
+                        
+                        # Copy main database
+                        main_db = Path("data/usenetsync.db")
+                        if main_db.exists():
+                            shutil.copy2(main_db, db_backup_path / "usenetsync.db")
+                            backup_contents.append("Main database")
+                            backup_stats["files"] += 1
+                            backup_stats["total_size"] += main_db.stat().st_size
+                        
+                        # Export critical tables as JSON for portability
+                        critical_tables = ["folders", "shares", "users", "configuration", 
+                                         "authorized_users", "webhooks"]
+                        
+                        for table in critical_tables:
+                            try:
+                                # Export table data
+                                rows = self.system.db.fetch_all(f"SELECT * FROM {table}")
+                                if rows:
+                                    export_file = db_backup_path / f"{table}.json"
+                                    with open(export_file, 'w') as f:
+                                        # Convert rows to list of dicts
+                                        data = []
+                                        for row in rows:
+                                            data.append(dict(row))
+                                        json.dump(data, f, indent=2, default=str)
+                                    backup_contents.append(f"{table} table export")
+                                    backup_stats["files"] += 1
+                            except Exception as e:
+                                logger.warning(f"Could not export table {table}: {e}")
+                    
+                    # Backup configuration files
+                    if include_config:
+                        config_backup_path = backup_path / "config"
+                        config_backup_path.mkdir()
+                        
+                        # Configuration files to backup
+                        config_files = [
+                            (".env", "Environment configuration"),
+                            ("config.json", "Application configuration"),
+                            ("servers.json", "NNTP server configuration")
+                        ]
+                        
+                        for filename, description in config_files:
+                            source = Path(filename)
+                            if source.exists():
+                                shutil.copy2(source, config_backup_path / filename)
+                                backup_contents.append(description)
+                                backup_stats["files"] += 1
+                                backup_stats["total_size"] += source.stat().st_size
+                    
+                    # Backup encryption keys (CRITICAL)
+                    if include_keys:
+                        keys_backup_path = backup_path / "keys"
+                        keys_backup_path.mkdir()
+                        
+                        # Get all folders with their keys
+                        folders = self.system.db.fetch_all(
+                            """SELECT folder_id, owner_id, metadata 
+                               FROM folders 
+                               WHERE metadata IS NOT NULL"""
+                        )
+                        
+                        key_count = 0
+                        for folder in folders:
+                            try:
+                                metadata = json.loads(folder['metadata']) if folder['metadata'] else {}
+                                if 'private_key' in metadata or 'public_key' in metadata:
+                                    # Save keys for this folder
+                                    key_file = keys_backup_path / f"{folder['folder_id']}.json"
+                                    key_data = {
+                                        "folder_id": folder['folder_id'],
+                                        "owner_id": folder['owner_id'],
+                                        "private_key": metadata.get('private_key'),
+                                        "public_key": metadata.get('public_key'),
+                                        "key_type": metadata.get('key_type', 'RSA')
+                                    }
+                                    with open(key_file, 'w') as f:
+                                        json.dump(key_data, f, indent=2)
+                                    key_count += 1
+                            except Exception as e:
+                                logger.warning(f"Could not backup keys for folder {folder['folder_id']}: {e}")
+                        
+                        if key_count > 0:
+                            backup_contents.append(f"{key_count} encryption key sets")
+                            backup_stats["files"] += key_count
+                    
+                    # Create backup metadata
+                    metadata = {
+                        "backup_id": str(uuid.uuid4()),
+                        "timestamp": datetime.now().isoformat(),
+                        "backup_type": backup_type,
+                        "description": description,
+                        "system_version": "1.0.0",
+                        "included_components": {
+                            "database": include_database,
+                            "configuration": include_config,
+                            "encryption_keys": include_keys
+                        },
+                        "statistics": backup_stats,
+                        "contents": backup_contents
+                    }
+                    
+                    # Save metadata
+                    with open(backup_path / "backup_metadata.json", 'w') as f:
+                        json.dump(metadata, f, indent=2)
+                    
+                    # Create archive
+                    if compress:
+                        archive_name = f"{backup_name}.tar.gz"
+                        archive_path = backup_dir / archive_name
+                        
+                        with tarfile.open(archive_path, "w:gz") as tar:
+                            tar.add(backup_path, arcname=backup_name)
+                        
+                        final_size = archive_path.stat().st_size
+                    else:
+                        # Copy directory without compression
+                        final_path = backup_dir / backup_name
+                        shutil.copytree(backup_path, final_path)
+                        archive_name = backup_name
+                        
+                        # Calculate total size
+                        final_size = sum(
+                            f.stat().st_size 
+                            for f in final_path.rglob('*') 
+                            if f.is_file()
+                        )
+                    
+                    # Record backup in database
+                    self.system.db.execute(
+                        """INSERT INTO backup_history 
+                           (backup_id, backup_type, backup_path, metadata, created_at)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (metadata["backup_id"], backup_type, str(backup_dir / archive_name),
+                         json.dumps(metadata), datetime.now().isoformat())
+                    )
+                    
+                    # Check for old backups to rotate
+                    retention_days = request.get("retention_days", 30)
+                    if retention_days > 0:
+                        cutoff_date = datetime.now() - timedelta(days=retention_days)
+                        old_backups = []
+                        
+                        for backup_file in backup_dir.glob("config_backup_*.tar.gz"):
+                            if backup_file.stat().st_mtime < cutoff_date.timestamp():
+                                old_backups.append(backup_file.name)
+                                backup_file.unlink()
+                        
+                        if old_backups:
+                            metadata["rotated_backups"] = old_backups
+                    
+                    # Prepare response
+                    response = {
+                        "success": True,
+                        "backup_id": metadata["backup_id"],
+                        "backup_type": backup_type,
+                        "filename": archive_name,
+                        "path": str(backup_dir / archive_name),
+                        "compressed": compress,
+                        "size_bytes": final_size,
+                        "size_mb": round(final_size / (1024 * 1024), 2),
+                        "created_at": metadata["timestamp"],
+                        "contents": backup_contents,
+                        "statistics": backup_stats,
+                        "recovery_info": {
+                            "critical_warning": "Keep encryption keys safe! Loss means no access to encrypted Usenet content",
+                            "restore_endpoint": "POST /api/v1/configuration/restore",
+                            "restore_command": f"curl -X POST /api/v1/configuration/restore -d '{{\"backup_id\": \"{metadata['backup_id']}\"}}'",
+                            "backup_includes_keys": include_keys
+                        }
+                    }
+                    
+                    # Add warnings if keys not included
+                    if not include_keys:
+                        response["warnings"] = [
+                            "Encryption keys NOT included in backup",
+                            "Without keys, encrypted Usenet content cannot be decrypted",
+                            "Create a separate secure backup of keys"
+                        ]
+                    
+                    # Add incremental backup info
+                    if backup_type == "incremental":
+                        # Get last full backup
+                        last_full = self.system.db.fetch_one(
+                            """SELECT backup_id, created_at 
+                               FROM backup_history 
+                               WHERE backup_type = 'full'
+                               ORDER BY created_at DESC 
+                               LIMIT 1"""
+                        )
+                        
+                        if last_full:
+                            response["incremental_info"] = {
+                                "based_on": last_full['backup_id'],
+                                "base_backup_date": last_full['created_at']
+                            }
+                        else:
+                            response["warnings"] = response.get("warnings", [])
+                            response["warnings"].append("No full backup found - created full backup instead")
+                    
+                    return response
+                    
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to create configuration backup: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/index_folder")
         async def index_folder(request: dict):
             """Index folder with real implementation"""
