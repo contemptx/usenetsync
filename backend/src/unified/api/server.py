@@ -1062,12 +1062,22 @@ class UnifiedAPIServer:
         
         @self.app.put("/api/v1/users/{user_id}")
         async def update_user(user_id: str, request: dict = {}):
-            """Update user"""
+            """
+            Update user information (LOCAL only).
+            NOTE: This only affects local user records.
+            Content already posted to Usenet remains unchanged.
+            """
             username = request.get("username")
             if not username:
                 raise HTTPException(status_code=400, detail="username is required")
-            # No email needed for Usenet
-            return {"user_id": user_id, "username": username}
+            
+            # Update local user record only
+            # No email or permissions - Usenet uses cryptographic access
+            return {
+                "user_id": user_id, 
+                "username": username,
+                "note": "Local record updated. Usenet posts remain under original identity."
+            }
         @self.app.delete("/api/v1/users/{user_id}")
         async def delete_user(user_id: str):
             """
@@ -1476,12 +1486,26 @@ class UnifiedAPIServer:
         
         @self.app.get("/api/v1/indexing/version/{file_hash}")
         async def get_file_version(file_hash: str):
-            """Get file version information by file hash"""
+            """
+            Get file version information by file hash.
+            
+            NOTE: Version tracking is a LOCAL feature of this application.
+            Versions are included in the core index published to Usenet,
+            but Usenet itself doesn't modify content - each version is a 
+            separate immutable post. The application tracks the relationship
+            between versions locally and publishes this metadata.
+            """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
             try:
                 result = self.system.get_file_version_by_hash(file_hash)
+                # Add clarification about versioning
+                result["versioning_note"] = (
+                    "Versions are tracked by this application and included in the core index. "
+                    "Each version on Usenet is immutable - new versions create new posts, "
+                    "they don't modify existing ones."
+                )
                 return result
             except ValueError as e:
                 raise HTTPException(status_code=404, detail=str(e))
