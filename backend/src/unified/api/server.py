@@ -5892,12 +5892,15 @@ class UnifiedAPIServer:
                     
                     # Add access control details based on type
                     if share.get('access_level') == 'private':
-                        # Count authorized users
-                        auth_count = self.system.db.fetch_one(
-                            "SELECT COUNT(*) as count FROM authorized_users WHERE folder_id = ?",
-                            (share['folder_id'],)
-                        )
-                        share_data["authorized_users_count"] = auth_count['count'] if auth_count else 0
+                        # Count authorized users (table might not exist)
+                        try:
+                            auth_count = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM authorized_users WHERE folder_id = ?",
+                                (share['folder_id'],)
+                            )
+                            share_data["authorized_users_count"] = auth_count['count'] if auth_count else 0
+                        except:
+                            share_data["authorized_users_count"] = 0
                         share_data["access_note"] = "Requires cryptographic commitment for access"
                         
                     elif share.get('access_level') == 'protected':
@@ -5996,6 +5999,273 @@ class UnifiedAPIServer:
             except Exception as e:
                 logger.error(f"Failed to list shares: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/v1/shares/{share_id}")
+        async def get_share_details(share_id: str):
+            """
+            Get detailed information about a specific share.
+            
+            Returns comprehensive share data including:
+            - Access control configuration
+            - Encryption details
+            - Upload/download statistics
+            - Authorized users (for private shares)
+            - Core index status
+            - Usenet posting information
+            
+            NOTE: This shows the LOCAL view of the share.
+            Once posted to Usenet, the actual data is immutable.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                import json
+                
+                # Get share details
+                share = self.system.db.fetch_one(
+                    """SELECT s.*, f.path as folder_path, f.file_count, f.total_size, 
+                              f.status as folder_status, f.owner_id as folder_owner
+                       FROM shares s
+                       LEFT JOIN folders f ON s.folder_id = f.folder_id
+                       WHERE s.share_id = ?""",
+                    (share_id,)
+                )
+                
+                if not share:
+                    raise HTTPException(status_code=404, detail=f"Share {share_id} not found")
+                
+                # Build comprehensive share details
+                share_details = {
+                    "share_id": share['share_id'],
+                    "folder_id": share['folder_id'],
+                    "folder_path": share.get('folder_path'),
+                    "owner_id": share.get('owner_id'),
+                    "share_type": share.get('share_type', 'full'),
+                    "access_level": share.get('access_level', 'public'),
+                    "created_at": None,  # Not in current schema
+                    "expires_at": share.get('expires_at'),
+                    "revoked": share.get('revoked', False),
+                    "revoked_at": share.get('revoked_at')
+                }
+                
+                # Add folder information
+                share_details["folder_info"] = {
+                    "path": share.get('folder_path'),
+                    "file_count": share.get('file_count', 0),
+                    "total_size": share.get('total_size', 0),
+                    "status": share.get('folder_status', 'unknown'),
+                    "owner_id": share.get('folder_owner')
+                }
+                
+                # Check expiry status
+                if share.get('expires_at'):
+                    try:
+                        expires = datetime.fromisoformat(share['expires_at'])
+                        share_details["expired"] = datetime.now() > expires
+                        if not share_details["expired"]:
+                            remaining = (expires - datetime.now()).total_seconds()
+                            share_details["expires_in"] = {
+                                "hours": round(remaining / 3600, 2),
+                                "days": round(remaining / 86400, 2)
+                            }
+                    except:
+                        share_details["expired"] = False
+                else:
+                    share_details["expired"] = False
+                    share_details["never_expires"] = True
+                
+                # Add access control details
+                access_details = {
+                    "level": share.get('access_level', 'public'),
+                    "encrypted": share.get('encrypted', False)
+                }
+                
+                if share.get('access_level') == 'public':
+                    access_details["description"] = "Anyone with share ID can download and decrypt"
+                    access_details["requirements"] = []
+                    
+                elif share.get('access_level') == 'protected':
+                    access_details["description"] = "Password required for decryption"
+                    access_details["requirements"] = ["password"]
+                    access_details["has_password"] = bool(share.get('password_hash'))
+                    
+                elif share.get('access_level') == 'private':
+                    access_details["description"] = "Only authorized users with commitments can access"
+                    access_details["requirements"] = ["user_id", "commitment"]
+                    
+                    # Get authorized users (table might not exist)
+                    try:
+                        auth_users = self.system.db.fetch_all(
+                            """SELECT user_id, permissions, added_at 
+                               FROM authorized_users 
+                               WHERE folder_id = ?""",
+                            (share['folder_id'],)
+                        )
+                    except:
+                        auth_users = None
+                    
+                    access_details["authorized_users"] = [
+                        {
+                            "user_id": u['user_id'],
+                            "permissions": json.loads(u['permissions']) if u.get('permissions') else {},
+                            "added_at": u.get('added_at')
+                        } for u in auth_users
+                    ] if auth_users else []
+                    
+                    access_details["authorized_count"] = len(access_details["authorized_users"])
+                    
+                    # Check for commitments
+                    if share.get('access_commitments'):
+                        try:
+                            commitments = json.loads(share['access_commitments'])
+                            access_details["has_commitments"] = len(commitments) > 0
+                            access_details["commitment_count"] = len(commitments)
+                        except:
+                            access_details["has_commitments"] = False
+                
+                share_details["access_control"] = access_details
+                
+                # Add encryption information
+                encryption_info = {
+                    "encrypted": share.get('encrypted', False),
+                    "has_encryption_key": bool(share.get('encryption_key')),
+                    "has_encrypted_index": bool(share.get('encrypted_index')),
+                    "has_wrapped_keys": bool(share.get('wrapped_keys'))
+                }
+                
+                if share.get('access_level') == 'protected':
+                    encryption_info["key_derivation"] = "Password-based (PBKDF2)"
+                    encryption_info["has_salt"] = bool(share.get('password_salt'))
+                elif share.get('access_level') == 'private':
+                    encryption_info["key_distribution"] = "Per-user wrapped keys"
+                else:
+                    encryption_info["key_distribution"] = "Embedded in share"
+                
+                share_details["encryption"] = encryption_info
+                
+                # Get upload status
+                upload_queue = self.system.db.fetch_one(
+                    """SELECT state, progress, started_at, completed_at, error_message,
+                              uploaded_size, total_size
+                       FROM upload_queue 
+                       WHERE entity_id = ? AND entity_type = 'folder'
+                       ORDER BY id DESC LIMIT 1""",
+                    (share['folder_id'],)
+                )
+                
+                if upload_queue:
+                    share_details["upload_status"] = {
+                        "state": upload_queue['state'],
+                        "progress": upload_queue.get('progress', 0),
+                        "started_at": upload_queue.get('started_at'),
+                        "completed_at": upload_queue.get('completed_at'),
+                        "error": upload_queue.get('error_message'),
+                        "uploaded_bytes": upload_queue.get('uploaded_size', 0),
+                        "total_bytes": upload_queue.get('total_size', 0)
+                    }
+                else:
+                    share_details["upload_status"] = {
+                        "state": "not_queued",
+                        "progress": 0
+                    }
+                
+                # Get download statistics
+                download_stats = self.system.db.fetch_one(
+                    """SELECT COUNT(*) as download_count,
+                              MAX(started_at) as last_download
+                       FROM download_queue
+                       WHERE entity_id = ?""",
+                    (share_id,)
+                )
+                
+                share_details["download_stats"] = {
+                    "total_downloads": download_stats['download_count'] if download_stats else 0,
+                    "last_download": download_stats['last_download'] if download_stats and download_stats['last_download'] else None,
+                    "max_downloads": share.get('max_downloads'),
+                    "downloads_remaining": (share['max_downloads'] - (download_stats['download_count'] if download_stats else 0)) if share.get('max_downloads') else None
+                }
+                
+                # Add Usenet status
+                share_details["usenet_status"] = {
+                    "posted": share_details["upload_status"]["progress"] > 0,
+                    "immutable": share_details["upload_status"]["state"] == "completed",
+                    "can_revoke_locally": True,
+                    "can_delete_from_usenet": False,
+                    "note": "Once posted to Usenet, content is immutable. Revocation only affects local access."
+                }
+                
+                # Get core index information if available
+                if share.get('encrypted_index'):
+                    try:
+                        # Don't decrypt, just get metadata
+                        index_size = len(share['encrypted_index']) if share['encrypted_index'] else 0
+                        share_details["core_index"] = {
+                            "exists": True,
+                            "encrypted": True,
+                            "size_bytes": index_size,
+                            "ready_for_upload": index_size > 0
+                        }
+                    except:
+                        share_details["core_index"] = {"exists": False}
+                else:
+                    share_details["core_index"] = {"exists": False}
+                
+                # Add message IDs if uploaded
+                if share_details["upload_status"]["state"] == "completed":
+                    messages = self.system.db.fetch_all(
+                        """SELECT m.message_id, m.newsgroup, m.subject, m.size
+                           FROM messages m
+                           JOIN segments s ON m.segment_id = s.segment_id
+                           JOIN files f ON s.file_id = f.file_id
+                           WHERE f.folder_id = ?
+                           LIMIT 5""",
+                        (share['folder_id'],)
+                    )
+                    
+                    if messages:
+                        share_details["usenet_articles"] = {
+                            "sample_message_ids": [m['message_id'] for m in messages],
+                            "newsgroup": messages[0]['newsgroup'] if messages else None,
+                            "total_articles": len(messages),
+                            "note": "These are immutable Usenet article IDs"
+                        }
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "share": share_details,
+                    "warnings": self._get_share_warnings(share_details)
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get share details: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        def _get_share_warnings(self, share_details: dict) -> list:
+            """Generate warnings based on share status"""
+            warnings = []
+            
+            if share_details.get("expired"):
+                warnings.append("Share has expired locally - downloads may be blocked")
+            
+            if share_details.get("revoked"):
+                warnings.append("Share has been revoked - new downloads blocked")
+            
+            if share_details["upload_status"]["state"] == "failed":
+                warnings.append("Upload to Usenet failed - share not accessible")
+            
+            if share_details.get("access_control", {}).get("level") == "private":
+                if not share_details["access_control"].get("has_commitments"):
+                    warnings.append("Private share has no commitments - users cannot access")
+            
+            if share_details.get("download_stats", {}).get("downloads_remaining") == 0:
+                warnings.append("Download limit reached")
+            
+            return warnings
         
         @self.app.post("/api/v1/shares")
         async def create_share(request: dict = {}):
