@@ -5779,6 +5779,224 @@ class UnifiedAPIServer:
                 "total_size": 0
             }
         
+        @self.app.get("/api/v1/upload/progress/{upload_id}")
+        async def get_upload_progress(upload_id: str):
+            """
+            Get detailed progress for a specific upload operation.
+            
+            Returns real-time information about:
+            - Current state (pending/uploading/completed/failed)
+            - Progress percentage and bytes uploaded
+            - Current segment being uploaded
+            - Upload speed and ETA
+            - Error details if failed
+            - Message IDs for uploaded segments
+            
+            NOTE: This tracks LOCAL upload progress to Usenet.
+            Once posted, articles are immutable on Usenet servers.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime, timedelta
+                
+                # Get upload queue entry
+                upload = self.system.db.fetch_one(
+                    """SELECT queue_id, entity_id, entity_type, state, progress,
+                              total_size, uploaded_size, started_at, completed_at,
+                              error_message, retry_count, priority, metadata
+                       FROM upload_queue
+                       WHERE queue_id = ?""",
+                    (upload_id,)
+                )
+                
+                if not upload:
+                    raise HTTPException(status_code=404, detail=f"Upload {upload_id} not found")
+                
+                # Build progress response
+                progress_data = {
+                    "upload_id": upload['queue_id'],
+                    "entity_id": upload['entity_id'],
+                    "entity_type": upload['entity_type'],
+                    "state": upload['state'],
+                    "progress_percent": upload.get('progress', 0),
+                    "priority": upload.get('priority', 5),
+                    "retry_count": upload.get('retry_count', 0)
+                }
+                
+                # Add size information
+                progress_data["size"] = {
+                    "total_bytes": upload.get('total_size', 0),
+                    "uploaded_bytes": upload.get('uploaded_size', 0),
+                    "remaining_bytes": max(0, (upload.get('total_size', 0) - upload.get('uploaded_size', 0)))
+                }
+                
+                # Add segment information (from metadata if available)
+                import json
+                metadata = {}
+                if upload.get('metadata'):
+                    try:
+                        metadata = json.loads(upload['metadata'])
+                    except:
+                        pass
+                
+                progress_data["segments"] = {
+                    "current": metadata.get('current_segment'),
+                    "completed": metadata.get('segments_completed', 0),
+                    "total": metadata.get('total_segments', 0),
+                    "remaining": max(0, (metadata.get('total_segments', 0) - metadata.get('segments_completed', 0)))
+                }
+                
+                # Calculate timing and speed
+                if upload.get('started_at'):
+                    try:
+                        started = datetime.fromisoformat(upload['started_at'])
+                        elapsed = (datetime.now() - started).total_seconds()
+                        progress_data["timing"] = {
+                            "started_at": upload['started_at'],
+                            "elapsed_seconds": round(elapsed),
+                            "elapsed_formatted": str(timedelta(seconds=int(elapsed)))
+                        }
+                        
+                        # Calculate upload speed if uploading
+                        if upload['state'] == 'uploading' and elapsed > 0 and upload.get('uploaded_size', 0) > 0:
+                            speed_bps = upload['uploaded_size'] / elapsed
+                            progress_data["speed"] = {
+                                "bytes_per_second": round(speed_bps),
+                                "mbps": round(speed_bps * 8 / 1_000_000, 2),
+                                "formatted": f"{round(speed_bps / 1024 / 1024, 2)} MB/s"
+                            }
+                            
+                            # Calculate ETA
+                            remaining_bytes = progress_data["size"]["remaining_bytes"]
+                            if speed_bps > 0 and remaining_bytes > 0:
+                                eta_seconds = remaining_bytes / speed_bps
+                                eta_time = datetime.now() + timedelta(seconds=eta_seconds)
+                                progress_data["eta"] = {
+                                    "seconds": round(eta_seconds),
+                                    "formatted": str(timedelta(seconds=int(eta_seconds))),
+                                    "estimated_completion": eta_time.isoformat()
+                                }
+                    except:
+                        pass
+                
+                # Add completion information
+                if upload.get('completed_at'):
+                    progress_data["completed_at"] = upload['completed_at']
+                    if upload.get('started_at'):
+                        try:
+                            started = datetime.fromisoformat(upload['started_at'])
+                            completed = datetime.fromisoformat(upload['completed_at'])
+                            duration = (completed - started).total_seconds()
+                            progress_data["duration"] = {
+                                "seconds": round(duration),
+                                "formatted": str(timedelta(seconds=int(duration)))
+                            }
+                        except:
+                            pass
+                
+                # Add error information if failed
+                if upload['state'] == 'failed' and upload.get('error_message'):
+                    progress_data["error"] = {
+                        "message": upload['error_message'],
+                        "retry_count": upload.get('retry_count', 0),
+                        "can_retry": upload.get('retry_count', 0) < 3
+                    }
+                
+                # Get entity details based on type
+                if upload['entity_type'] == 'folder':
+                    folder = self.system.db.fetch_one(
+                        "SELECT path, file_count, total_size FROM folders WHERE folder_id = ?",
+                        (upload['entity_id'],)
+                    )
+                    if folder:
+                        progress_data["entity_details"] = {
+                            "type": "folder",
+                            "path": folder['path'],
+                            "file_count": folder.get('file_count', 0),
+                            "total_size": folder.get('total_size', 0)
+                        }
+                        
+                elif upload['entity_type'] == 'file':
+                    file = self.system.db.fetch_one(
+                        "SELECT name, path, size, hash FROM files WHERE file_id = ?",
+                        (upload['entity_id'],)
+                    )
+                    if file:
+                        progress_data["entity_details"] = {
+                            "type": "file",
+                            "name": file['name'],
+                            "path": file['path'],
+                            "size": file.get('size', 0),
+                            "hash": file.get('hash')
+                        }
+                
+                # Get uploaded message IDs if available
+                if upload['state'] in ['uploading', 'completed']:
+                    messages = self.system.db.fetch_all(
+                        """SELECT m.message_id, m.subject, m.newsgroup, m.size, s.segment_index
+                           FROM messages m
+                           JOIN segments s ON m.segment_id = s.segment_id
+                           JOIN files f ON s.file_id = f.file_id
+                           WHERE f.folder_id = ? OR f.file_id = ?
+                           ORDER BY s.segment_index
+                           LIMIT 10""",
+                        (upload['entity_id'], upload['entity_id'])
+                    )
+                    
+                    if messages:
+                        progress_data["uploaded_segments"] = [
+                            {
+                                "segment_index": msg['segment_index'],
+                                "message_id": msg['message_id'],
+                                "newsgroup": msg['newsgroup'],
+                                "size": msg['size']
+                            } for msg in messages
+                        ]
+                        progress_data["usenet_note"] = "These segments are now immutable on Usenet servers"
+                
+                # Add status message
+                if upload['state'] == 'pending':
+                    progress_data["status_message"] = "Upload queued and waiting to start"
+                elif upload['state'] == 'uploading':
+                    if progress_data.get("segments", {}).get("current"):
+                        progress_data["status_message"] = f"Uploading segment {progress_data['segments']['current']} of {progress_data['segments']['total']}"
+                    else:
+                        progress_data["status_message"] = f"Upload in progress - {progress_data['progress_percent']}% complete"
+                elif upload['state'] == 'completed':
+                    progress_data["status_message"] = "Upload completed successfully - content is now on Usenet"
+                elif upload['state'] == 'failed':
+                    progress_data["status_message"] = f"Upload failed: {upload.get('error_message', 'Unknown error')}"
+                elif upload['state'] == 'cancelled':
+                    progress_data["status_message"] = "Upload was cancelled"
+                else:
+                    progress_data["status_message"] = f"Upload state: {upload['state']}"
+                
+                # Add recommendations
+                recommendations = []
+                if upload['state'] == 'failed' and upload.get('retry_count', 0) < 3:
+                    recommendations.append("Consider retrying the upload")
+                if upload['state'] == 'uploading' and progress_data.get('speed', {}).get('mbps', 0) < 1:
+                    recommendations.append("Upload speed is slow - check network connection")
+                if upload['state'] == 'pending' and upload.get('priority', 5) > 5:
+                    recommendations.append("Consider increasing priority to start sooner")
+                
+                if recommendations:
+                    progress_data["recommendations"] = recommendations
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "progress": progress_data
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get upload progress: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.get("/api/v1/status")
         async def get_system_status():
             """
