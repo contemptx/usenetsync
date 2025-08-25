@@ -62,17 +62,43 @@ class UsenetWorkflow:
             (folder_id,)
         )
         
-        # Get segments for each file
+        # Get segments for each file (including packed segments)
         file_segments = {}
-        for file in files:
-            segments = self.db.fetch_all(
-                """SELECT segment_id, segment_index, size, hash, 
-                          message_id, metadata
-                   FROM segments WHERE file_id = ?
-                   ORDER BY segment_index""",
-                (file['file_id'],)
-            )
-            file_segments[file['file_id']] = segments
+        
+        # First check if there are packed segments for this folder
+        packed_segments = self.db.fetch_all(
+            """SELECT ps.packed_segment_id, ps.message_id, ps.total_size
+               FROM packed_segments ps
+               WHERE ps.message_id IS NOT NULL
+               AND EXISTS (
+                   SELECT 1 FROM segments s
+                   JOIN files f ON s.file_id = f.file_id
+                   WHERE f.folder_id = ? AND s.packed_segment_id = ps.packed_segment_id
+               )""",
+            (folder_id,)
+        )
+        
+        if packed_segments:
+            # Use packed segments
+            for file in files:
+                # For packed segments, we'll reference the packed segment
+                file_segments[file['file_id']] = [{
+                    'segment_index': 0,
+                    'size': packed_segments[0]['total_size'] if packed_segments else 0,
+                    'hash': '',
+                    'message_id': packed_segments[0]['message_id'] if packed_segments else None
+                }]
+        else:
+            # Get individual segments
+            for file in files:
+                segments = self.db.fetch_all(
+                    """SELECT segment_id, segment_index, size, hash, 
+                              message_id, metadata
+                       FROM segments WHERE file_id = ?
+                       ORDER BY segment_index""",
+                    (file['file_id'],)
+                )
+                file_segments[file['file_id']] = segments
         
         # Build core index structure
         core_index = {
@@ -83,7 +109,7 @@ class UsenetWorkflow:
                 "folder_id": folder_id,
                 "share_type": share['share_type'],
                 "access_level": share['access_level'],
-                "expires_at": share['expires_at']
+                "expires_at": share['expires_at'].isoformat() if isinstance(share['expires_at'], datetime) else share['expires_at']
             },
             "folder": {
                 "path": folder['path'],
@@ -163,12 +189,7 @@ class UsenetWorkflow:
             message_id = self.nntp.post_article(
                 subject=subject,
                 body=encrypted_index,
-                newsgroups=newsgroups,
-                headers={
-                    "X-USenet-Share-ID": share_id,
-                    "X-USenet-Type": "CoreIndex",
-                    "X-USenet-Version": "1.0"
-                }
+                newsgroups=newsgroups
             )
             
             logger.info(f"Posted core index to Usenet: {message_id}")
@@ -201,29 +222,98 @@ class UsenetWorkflow:
             return self.create_core_index(share_id, None)
         
         try:
-            # Search for core index article
-            # In production, would query by headers or use index server
-            search_pattern = f"[USINDEX] {share_id[:8]}"
+            # First try to get the message ID from the database (if available)
+            message_id = None
+            if self.db:
+                share_data = self.db.fetch_one(
+                    "SELECT metadata FROM shares WHERE share_id = ?",
+                    (share_id,)
+                )
+                if share_data and share_data['metadata']:
+                    import json
+                    metadata = json.loads(share_data['metadata'])
+                    message_id = metadata.get('core_index_message_id')
             
-            # For now, simulate retrieval
-            message_id = f"<index.{share_id}@usenet.local>"
+            if not message_id:
+                # Try to get from folder metadata
+                if self.db:
+                    folder_data = self.db.fetch_one(
+                        """SELECT f.metadata FROM folders f
+                           JOIN shares s ON f.folder_id = s.folder_id
+                           WHERE s.share_id = ?""",
+                        (share_id,)
+                    )
+                    if folder_data and folder_data['metadata']:
+                        metadata = json.loads(folder_data['metadata'])
+                        message_id = metadata.get('core_index_message_id')
+            
+            if not message_id:
+                # In a real system, would search Usenet by subject pattern
+                # For now, we can't retrieve without the message ID
+                logger.error(f"Core index message ID not found for share: {share_id}")
+                return None
+            
+            logger.info(f"Fetching core index from Usenet: {message_id}")
             
             # Fetch article from Usenet
-            article = self.nntp.get_article(message_id)
+            article_data = self.nntp.get_article(message_id)
             
-            if not article:
+            if not article_data:
                 logger.error(f"Core index not found on Usenet: {share_id}")
                 return None
             
-            # Decrypt the index
-            encrypted_body = article.get('body', b'')
-            decrypted = base64.b64decode(encrypted_body)
+            logger.info(f"Retrieved article data: {len(article_data)} bytes, type: {type(article_data)}")
+            
+            # article_data is the raw bytes from Usenet
+            # The body should be base64 encoded
+            try:
+                # Decode from base64
+                decrypted = base64.b64decode(article_data)
+                logger.debug(f"Base64 decoded: {len(decrypted)} bytes")
+            except Exception as e:
+                logger.debug(f"Base64 decode failed: {e}")
+                # If not base64, it might be the raw JSON
+                decrypted = article_data
             
             # Parse JSON
-            core_index = json.loads(decrypted.decode('utf-8'))
+            core_index = None
+            try:
+                if isinstance(decrypted, bytes):
+                    core_index = json.loads(decrypted.decode('utf-8'))
+                else:
+                    core_index = json.loads(decrypted)
+            except json.JSONDecodeError as e:
+                logger.debug(f"Failed to parse as JSON directly: {e}")
+                # Maybe the article data contains headers, try to extract the body
+                # NNTP articles have headers followed by blank line then body
+                if isinstance(article_data, bytes):
+                    article_str = article_data.decode('utf-8', errors='ignore')
+                else:
+                    article_str = str(article_data)
+                
+                # Split by double newline to separate headers from body
+                parts = article_str.split('\n\n', 1)
+                if len(parts) > 1:
+                    body = parts[1]
+                    # Try to decode the body as base64
+                    try:
+                        decrypted = base64.b64decode(body)
+                        core_index = json.loads(decrypted.decode('utf-8'))
+                    except Exception as e2:
+                        logger.debug(f"Failed to decode base64: {e2}")
+                        # Last resort - try to parse as JSON directly
+                        try:
+                            core_index = json.loads(body)
+                        except:
+                            logger.error(f"Could not parse core index from article")
+                            return None
             
-            logger.info(f"Retrieved core index with {len(core_index.get('files', []))} files")
-            return core_index
+            if core_index:
+                logger.info(f"Retrieved core index with {len(core_index.get('files', []))} files")
+                return core_index
+            else:
+                logger.error("Failed to parse core index")
+                return None
             
         except Exception as e:
             logger.error(f"Failed to fetch core index: {e}")

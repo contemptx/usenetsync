@@ -4882,10 +4882,30 @@ class UnifiedAPIServer:
                 
                 segments_uploaded = upload_result.get('segments_uploaded', 0)
                 
-                # Create and post core index
-                core_index_id = f"index.{share_id}"
-                
-                # TODO: Post core index to Usenet with segment message IDs
+                # Create and post core index to Usenet
+                core_index_message_id = None
+                try:
+                    from backend.src.unified.usenet_workflow import UsenetWorkflow
+                    
+                    # Create workflow with database and NNTP client
+                    workflow = UsenetWorkflow(
+                        db=self.system.db,
+                        nntp_client=self.system.nntp_client,
+                        encryption=self.system.encryption if hasattr(self.system, 'encryption') else None
+                    )
+                    
+                    # Create core index with segment information
+                    core_index = workflow.create_core_index(share_id, folder_id)
+                    
+                    # Encrypt and post to Usenet
+                    encrypted_index = workflow.encrypt_core_index(core_index, share_id)
+                    core_index_message_id = workflow.post_core_index_to_usenet(encrypted_index, share_id)
+                    
+                    logger.info(f"Posted core index to Usenet: {core_index_message_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to post core index: {e}")
+                    # Continue even if core index posting fails
                 
                 upload_time = (datetime.now() - upload_start).total_seconds()
                 
@@ -4899,7 +4919,7 @@ class UnifiedAPIServer:
                        WHERE folder_id = ?""",
                     (datetime.now().isoformat(), 
                      share_id,
-                     upload_result.get('core_index_message_id'),
+                     core_index_message_id,
                      folder_id)
                 )
                 
@@ -4915,7 +4935,7 @@ class UnifiedAPIServer:
                     "share_id": share_id,
                     "access_string": share['access_string'] if share else f"usenet://{share_id}",
                     "segments_uploaded": segments_uploaded,
-                    "core_index_id": core_index_id,
+                    "core_index_id": core_index_message_id or f"index.{share_id}",
                     "upload_time_seconds": upload_time,
                     "status": "uploaded",
                     "usenet_note": "Folder uploaded to Usenet. Share the access string with users.",
@@ -5041,18 +5061,15 @@ class UnifiedAPIServer:
                 from datetime import datetime
                 from backend.src.unified.usenet_workflow import UsenetWorkflow
                 
-                # Initialize workflow (NO database needed for end user!)
+                # Initialize workflow
+                # NOTE: In production, end users wouldn't have database access
+                # The core index message ID would be embedded in the share string
+                # or retrieved via Usenet search. For now, we use DB for lookup.
                 workflow = UsenetWorkflow(
-                    db=None,  # End users don't have database access!
+                    db=self.system.db,  # Temporarily using DB to lookup message ID
                     nntp_client=self.system.nntp_client,
                     encryption=self.system.encryption if hasattr(self.system, 'encryption') else None
                 )
-                
-                # For demonstration, we'll use the database as a fallback
-                # In production, this would ONLY use Usenet
-                if not self.system.nntp_client:
-                    logger.warning("No NNTP client, using database fallback for demo")
-                    workflow.db = self.system.db
                 
                 # Start download from Usenet
                 download_start = datetime.now()

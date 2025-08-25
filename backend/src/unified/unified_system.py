@@ -512,6 +512,17 @@ class UnifiedSegmentPacker:
         else:
             packed_array = json.dumps(segment_ids)
             
+        # Insert packed segment record into database
+        total_size = sum(s['segment_size'] for s in segments)
+        file_count = len(segments)
+        
+        self.db.execute("""
+            INSERT INTO packed_segments 
+            (packed_segment_id, total_size, file_count, compression_type, 
+             compressed_size, upload_status, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        """, (packed_id, total_size, file_count, 'yenc', len(packed_bytes), 'pending'))
+        
         for sid in segment_ids:
             self.db.execute("""
                 UPDATE segments 
@@ -521,8 +532,8 @@ class UnifiedSegmentPacker:
             
         return PackedSegment(
             packed_id=packed_id,
-            segments=[],  # Would be populated with actual segment objects
-            total_size=sum(s['segment_size'] for s in segments),
+            segments=segments,  # Keep the actual segments for later use
+            total_size=total_size,
             packed_data=packed_bytes
         )
 
@@ -621,7 +632,8 @@ class UnifiedUploadSystem:
             )
             
             if success:
-                message_id = response[1] if isinstance(response, tuple) else str(response)
+                # response is the message_id string directly
+                message_id = response
                 
                 # Store encrypted location
                 encrypted_location = self._encrypt_location(message_id)
@@ -653,7 +665,7 @@ class UnifiedUploadSystem:
                         # Store redundancy info
                         self._store_redundancy_info(
                             segment['segment_id'], i + 1,
-                            r_response[1] if isinstance(r_response, tuple) else str(r_response),
+                            r_response,  # r_response is the message_id string directly
                             redundant_subject
                         )
                         
@@ -684,6 +696,31 @@ class UnifiedUploadSystem:
             )
             
             if success:
+                # response is the message_id string
+                message_id = response
+                
+                # Store message ID for packed segment
+                self.db.execute("""
+                    UPDATE packed_segments 
+                    SET message_id = %s, subject = %s, 
+                        upload_status = 'uploaded', uploaded_at = CURRENT_TIMESTAMP
+                    WHERE packed_segment_id = %s
+                """, (message_id, usenet_subject, packed.packed_id))
+                
+                # Also update individual segments that were packed
+                for segment in packed.segments:
+                    if isinstance(segment, dict):
+                        seg_id = segment.get('segment_id')
+                    else:
+                        seg_id = getattr(segment, 'segment_id', None)
+                    
+                    if seg_id:
+                        self.db.execute("""
+                            UPDATE segments 
+                            SET packed_segment_id = %s, upload_status = 'uploaded'
+                            WHERE segment_id = %s
+                        """, (packed.packed_id, seg_id))
+                
                 # Upload redundancy copies
                 for i in range(redundancy_level):
                     redundant_data = self._create_redundant_copy(packed.packed_data, i)
@@ -693,6 +730,7 @@ class UnifiedUploadSystem:
                         newsgroup="alt.binaries.test"
                     )
                     
+                logger.info(f"Packed segment uploaded with message ID: {message_id}")
                 return True
                 
         except Exception as e:

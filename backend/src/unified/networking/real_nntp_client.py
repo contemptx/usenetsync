@@ -160,6 +160,53 @@ class RealNNTPClient:
             logger.error(f"❌ Post FAILED: {e}")
             return None
     
+    def retrieve_article_body(self, message_id: str) -> Optional[bytes]:
+        """
+        Retrieve REAL article body from Usenet
+        
+        Args:
+            message_id: Message-ID to retrieve
+            
+        Returns:
+            Article body as bytes or None
+        """
+        if not self.authenticated:
+            raise RuntimeError("Not authenticated")
+        
+        try:
+            logger.info(f"Retrieving article body: {message_id}")
+            
+            # Use BODY command to get just the body
+            response = self.client.body(message_id)
+            
+            if response:
+                # Extract body data
+                if hasattr(response, 'lines'):
+                    lines = response.lines
+                elif isinstance(response, (list, tuple)):
+                    # Might be (status, lines) tuple
+                    if len(response) > 1:
+                        lines = response[1]
+                    else:
+                        lines = response
+                else:
+                    lines = str(response).split('\n')
+                
+                # Join lines and return as bytes
+                if isinstance(lines, list):
+                    body = '\n'.join(str(line) for line in lines)
+                else:
+                    body = str(lines)
+                
+                logger.info(f"✅ RETRIEVED body: {len(body)} bytes")
+                return body.encode('utf-8')
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Body retrieval FAILED: {e}")
+            return None
+    
     def retrieve_article(self, message_id: str) -> Optional[Tuple[int, List[str]]]:
         """
         Retrieve REAL article from Usenet
@@ -179,9 +226,33 @@ class RealNNTPClient:
             # REAL article retrieval
             response = self.client.article(message_id)
             
-            # Parse response
-            article_number = response[0]
-            article_lines = response[1]
+            # Parse response - pynntp returns different types
+            if isinstance(response, tuple) and len(response) >= 2:
+                article_number = response[0]
+                article_data = response[1]
+            else:
+                article_number = 0
+                article_data = response
+            
+            # Convert to list of lines if needed
+            if hasattr(article_data, 'lines'):
+                # pynntp Article object
+                article_lines = article_data.lines
+            elif isinstance(article_data, list):
+                article_lines = article_data
+            elif isinstance(article_data, str):
+                article_lines = article_data.split('\n')
+            elif isinstance(article_data, bytes):
+                article_lines = article_data.decode('utf-8', errors='ignore').split('\n')
+            else:
+                # Try to extract lines from the object
+                article_lines = []
+                try:
+                    # pynntp might return a special object
+                    for line in article_data:
+                        article_lines.append(str(line))
+                except:
+                    article_lines = [str(article_data)]
             
             logger.info(f"✅ RETRIEVED article {article_number} ({len(article_lines)} lines)")
             
@@ -212,7 +283,7 @@ class RealNNTPClient:
     
     def get_article(self, message_id: str) -> Optional[bytes]:
         """
-        Get article data by message ID (wrapper for retrieve_article)
+        Get article body by message ID
         
         Args:
             message_id: Message-ID to retrieve
@@ -220,12 +291,8 @@ class RealNNTPClient:
         Returns:
             Article body as bytes or None
         """
-        result = self.retrieve_article(message_id)
-        if result:
-            article_number, article_lines = result
-            # Join lines and convert to bytes
-            return '\n'.join(article_lines).encode('utf-8')
-        return None
+        # Use the body method directly to get just the body
+        return self.retrieve_article_body(message_id)
     
     def select_group(self, newsgroup: str) -> Optional[Dict[str, Any]]:
         """
