@@ -2087,6 +2087,304 @@ class UnifiedAPIServer:
                 logger.error(f"Search failed: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        # ==================== SECURITY ====================
+        @self.app.get("/api/v1/security/check_access")
+        async def check_access(
+            user_id: str,
+            resource_type: str,
+            resource_id: str,
+            access_type: Optional[str] = "read",
+            password: Optional[str] = None,
+            commitment: Optional[str] = None
+        ):
+            """
+            Check if user has access to a resource.
+            
+            resource_type: share, folder, file, segment
+            access_type: read, write, delete, admin
+            password: For protected shares
+            commitment: For private shares (cryptographic proof)
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            if not user_id or not resource_type or not resource_id:
+                raise HTTPException(status_code=400, detail="user_id, resource_type, and resource_id are required")
+            
+            try:
+                from datetime import datetime
+                
+                access_granted = False
+                access_details = {
+                    "user_id": user_id,
+                    "resource_type": resource_type,
+                    "resource_id": resource_id,
+                    "access_type": access_type,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                if resource_type == "share":
+                    # Check share access
+                    share = self.system.db.fetch_one(
+                        "SELECT * FROM shares WHERE share_id = ?",
+                        (resource_id,)
+                    )
+                    
+                    if not share:
+                        access_details["reason"] = "Share not found"
+                        access_granted = False
+                    elif share.get('revoked'):
+                        access_details["reason"] = "Share has been revoked"
+                        access_granted = False
+                    elif share.get('expires_at'):
+                        try:
+                            expires = datetime.fromisoformat(share['expires_at'])
+                            if datetime.now() > expires:
+                                access_details["reason"] = "Share has expired"
+                                access_granted = False
+                            else:
+                                access_details["expires_at"] = share['expires_at']
+                        except:
+                            pass
+                    
+                    if share and not access_granted and not access_details.get("reason"):
+                        access_level = share.get('access_level', 'public')
+                        
+                        if access_level == 'public':
+                            access_granted = True
+                            access_details["access_level"] = "public"
+                            access_details["reason"] = "Public share - access granted"
+                            
+                        elif access_level == 'protected':
+                            if not password:
+                                access_details["reason"] = "Password required for protected share"
+                                access_details["required"] = "password"
+                                access_granted = False
+                            else:
+                                # Check password hash
+                                stored_password = share.get('password_hash')
+                                if stored_password:
+                                    import hashlib
+                                    password_hash = hashlib.sha256(password.encode()).hexdigest()
+                                    if password_hash == stored_password:
+                                        access_granted = True
+                                        access_details["access_level"] = "protected"
+                                        access_details["reason"] = "Password verified"
+                                    else:
+                                        access_details["reason"] = "Invalid password"
+                                        access_granted = False
+                                else:
+                                    access_details["reason"] = "Protected share not properly configured"
+                                    access_granted = False
+                                    
+                        elif access_level == 'private':
+                            # Check if user is authorized
+                            auth_user = self.system.db.fetch_one(
+                                "SELECT * FROM authorized_users WHERE user_id = ? AND folder_id = ?",
+                                (user_id, share.get('folder_id'))
+                            )
+                            
+                            if not auth_user:
+                                access_details["reason"] = "User not authorized for private share"
+                                access_details["required"] = "authorization"
+                                access_granted = False
+                            elif commitment:
+                                # Verify cryptographic commitment
+                                try:
+                                    import json
+                                    commitments = json.loads(share.get('access_commitments', '{}'))
+                                    if user_id in commitments:
+                                        if commitments[user_id] == commitment:
+                                            access_granted = True
+                                            access_details["access_level"] = "private"
+                                            access_details["reason"] = "Commitment verified"
+                                        else:
+                                            access_details["reason"] = "Invalid commitment"
+                                            access_granted = False
+                                    else:
+                                        access_details["reason"] = "No commitment found for user"
+                                        access_granted = False
+                                except:
+                                    access_details["reason"] = "Failed to verify commitment"
+                                    access_granted = False
+                            else:
+                                # Check if user has access without commitment (legacy)
+                                access_granted = True
+                                access_details["access_level"] = "private"
+                                access_details["reason"] = "User is authorized"
+                        
+                        # Record access attempt
+                        if share:
+                            try:
+                                self.system.db.execute(
+                                    """INSERT INTO access_logs (user_id, resource_type, resource_id, 
+                                       access_type, granted, timestamp, reason)
+                                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                                    (user_id, resource_type, resource_id, access_type, 
+                                     access_granted, datetime.now().isoformat(), 
+                                     access_details.get("reason", ""))
+                                )
+                            except:
+                                pass  # Access logs table might not exist
+                
+                elif resource_type == "folder":
+                    # Check folder access
+                    folder = self.system.db.fetch_one(
+                        "SELECT * FROM folders WHERE folder_id = ?",
+                        (resource_id,)
+                    )
+                    
+                    if not folder:
+                        access_details["reason"] = "Folder not found"
+                        access_granted = False
+                    else:
+                        # Check if user is owner
+                        if folder.get('owner_id') == user_id:
+                            access_granted = True
+                            access_details["reason"] = "User is folder owner"
+                            access_details["owner"] = True
+                        else:
+                            # Check if folder is shared
+                            share = self.system.db.fetch_one(
+                                """SELECT * FROM shares 
+                                   WHERE folder_id = ? AND (revoked IS NULL OR revoked = 0)
+                                   ORDER BY created_at DESC LIMIT 1""",
+                                (resource_id,)
+                            )
+                            
+                            if share:
+                                # Recursively check share access
+                                share_access = await check_access(
+                                    user_id=user_id,
+                                    resource_type="share",
+                                    resource_id=share['share_id'],
+                                    access_type=access_type,
+                                    password=password,
+                                    commitment=commitment
+                                )
+                                access_granted = share_access.get("access_granted", False)
+                                access_details["via_share"] = share['share_id']
+                                access_details["reason"] = share_access.get("access_details", {}).get("reason", "")
+                            else:
+                                access_details["reason"] = "Folder not shared"
+                                access_granted = False
+                
+                elif resource_type == "file":
+                    # Check file access via folder
+                    file = self.system.db.fetch_one(
+                        "SELECT * FROM files WHERE file_id = ?",
+                        (resource_id,)
+                    )
+                    
+                    if not file:
+                        access_details["reason"] = "File not found"
+                        access_granted = False
+                    else:
+                        # Check folder access
+                        folder_access = await check_access(
+                            user_id=user_id,
+                            resource_type="folder",
+                            resource_id=file['folder_id'],
+                            access_type=access_type,
+                            password=password,
+                            commitment=commitment
+                        )
+                        access_granted = folder_access.get("access_granted", False)
+                        access_details["via_folder"] = file['folder_id']
+                        access_details["reason"] = folder_access.get("access_details", {}).get("reason", "")
+                
+                elif resource_type == "segment":
+                    # Check segment access via file
+                    segment = self.system.db.fetch_one(
+                        "SELECT * FROM segments WHERE segment_id = ?",
+                        (resource_id,)
+                    )
+                    
+                    if not segment:
+                        access_details["reason"] = "Segment not found"
+                        access_granted = False
+                    else:
+                        # Check file access
+                        file_access = await check_access(
+                            user_id=user_id,
+                            resource_type="file",
+                            resource_id=segment['file_id'],
+                            access_type=access_type,
+                            password=password,
+                            commitment=commitment
+                        )
+                        access_granted = file_access.get("access_granted", False)
+                        access_details["via_file"] = segment['file_id']
+                        access_details["reason"] = file_access.get("access_details", {}).get("reason", "")
+                
+                else:
+                    access_details["reason"] = f"Unknown resource type: {resource_type}"
+                    access_granted = False
+                
+                # Check write/delete/admin permissions
+                if access_granted and access_type != "read":
+                    if resource_type in ["folder", "file", "segment"]:
+                        # Only owners can write/delete
+                        folder_id = resource_id if resource_type == "folder" else None
+                        
+                        if not folder_id and resource_type == "file":
+                            file = self.system.db.fetch_one(
+                                "SELECT folder_id FROM files WHERE file_id = ?",
+                                (resource_id,)
+                            )
+                            folder_id = file['folder_id'] if file else None
+                        
+                        if not folder_id and resource_type == "segment":
+                            segment = self.system.db.fetch_one(
+                                "SELECT f.folder_id FROM segments s JOIN files f ON s.file_id = f.file_id WHERE s.segment_id = ?",
+                                (resource_id,)
+                            )
+                            folder_id = segment['folder_id'] if segment else None
+                        
+                        if folder_id:
+                            folder = self.system.db.fetch_one(
+                                "SELECT owner_id FROM folders WHERE folder_id = ?",
+                                (folder_id,)
+                            )
+                            if folder and folder.get('owner_id') != user_id:
+                                access_granted = False
+                                access_details["reason"] = f"Only owner can {access_type}"
+                
+                return {
+                    "success": True,
+                    "access_granted": access_granted,
+                    "access_details": access_details,
+                    "recommendations": _get_access_recommendations(access_details)
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Access check failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        def _get_access_recommendations(access_details: dict) -> list:
+            """Get recommendations based on access check results"""
+            recommendations = []
+            reason = access_details.get("reason", "")
+            
+            if "Password required" in reason:
+                recommendations.append("Request password from share owner")
+            elif "not authorized" in reason:
+                recommendations.append("Request access from share owner")
+            elif "expired" in reason:
+                recommendations.append("Share has expired - request new share")
+            elif "revoked" in reason:
+                recommendations.append("Share was revoked - request new share")
+            elif "not found" in reason:
+                recommendations.append("Verify the resource ID is correct")
+            elif "Invalid password" in reason:
+                recommendations.append("Verify password with share owner")
+            elif "Invalid commitment" in reason:
+                recommendations.append("Verify your cryptographic commitment")
+            
+            return recommendations
+        
         # Folder management endpoints
         @self.app.post("/api/v1/add_folder")
         async def add_folder(request: dict):
