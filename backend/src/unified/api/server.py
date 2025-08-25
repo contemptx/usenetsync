@@ -2999,7 +2999,24 @@ class UnifiedAPIServer:
         # Folder management endpoints
         @self.app.post("/api/v1/add_folder")
         async def add_folder(request: dict):
-            """Add folder to system with real implementation"""
+            """
+            Add a folder to the system for indexing and sharing.
+            
+            This is the first step in the Usenet sharing workflow:
+            1. Add folder (LOCAL) <- We are here
+            2. Index files (LOCAL)
+            3. Create segments (LOCAL)
+            4. Create share with encryption (LOCAL)
+            5. Upload to Usenet (IMMUTABLE)
+            
+            The folder owner controls:
+            - Encryption keys (public/private keypair)
+            - Share creation and access levels
+            - Upload decisions
+            
+            NOTE: Once uploaded to Usenet, content becomes immutable.
+            Plan folder structure carefully before uploading.
+            """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
@@ -3012,9 +3029,151 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=400, detail="owner_id is required")
             
             try:
-                # Use REAL system method
-                result = self.system.add_folder(path, owner_id)
-                return result
+                import os
+                from datetime import datetime
+                from pathlib import Path
+                
+                # Validate path exists
+                folder_path = Path(path)
+                if not folder_path.exists():
+                    raise HTTPException(status_code=404, detail=f"Folder does not exist: {path}")
+                
+                if not folder_path.is_dir():
+                    raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
+                
+                # Check if folder already exists in database
+                existing = self.system.db.fetch_one(
+                    "SELECT folder_id, status FROM folders WHERE path = ?",
+                    (str(folder_path),)
+                )
+                
+                if existing:
+                    return {
+                        "success": False,
+                        "message": "Folder already exists in system",
+                        "folder_id": existing['folder_id'],
+                        "status": existing['status'],
+                        "action": "Use existing folder or remove it first"
+                    }
+                
+                # Get folder statistics
+                total_size = 0
+                file_count = 0
+                file_types = {}
+                
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        try:
+                            size = os.path.getsize(file_path)
+                            total_size += size
+                            file_count += 1
+                            
+                            # Track file types
+                            ext = os.path.splitext(file)[1].lower()
+                            file_types[ext] = file_types.get(ext, 0) + 1
+                        except:
+                            pass  # Skip inaccessible files
+                
+                # Check for empty folder
+                if file_count == 0:
+                    return {
+                        "success": False,
+                        "message": "Folder is empty",
+                        "path": str(folder_path),
+                        "recommendation": "Add files before adding folder to system"
+                    }
+                
+                # Add folder using system method
+                result = self.system.add_folder(str(folder_path), owner_id)
+                
+                if result.get("success"):
+                    folder_id = result.get("folder_id")
+                    
+                    # Update folder with additional metadata
+                    self.system.db.execute(
+                        """UPDATE folders 
+                           SET file_count = ?, total_size = ?, metadata = ?
+                           WHERE folder_id = ?""",
+                        (file_count, total_size, json.dumps({
+                            "file_types": file_types,
+                            "scan_time": datetime.now().isoformat(),
+                            "original_path": str(folder_path)
+                        }), folder_id)
+                    )
+                    
+                    # Check if user exists, if not create
+                    user = self.system.db.fetch_one(
+                        "SELECT user_id FROM users WHERE user_id = ?",
+                        (owner_id,)
+                    )
+                    
+                    if not user:
+                        self.system.db.execute(
+                            """INSERT INTO users (user_id, username, created_at, is_active)
+                               VALUES (?, ?, ?, ?)""",
+                            (owner_id, owner_id, datetime.now().isoformat(), True)
+                        )
+                    
+                    # Prepare response with comprehensive information
+                    response = {
+                        "success": True,
+                        "folder_id": folder_id,
+                        "path": str(folder_path),
+                        "name": folder_path.name,
+                        "owner_id": owner_id,
+                        "status": "added",
+                        "statistics": {
+                            "file_count": file_count,
+                            "total_size_bytes": total_size,
+                            "total_size_mb": round(total_size / (1024 * 1024), 2),
+                            "average_file_size": round(total_size / file_count) if file_count > 0 else 0,
+                            "file_types": file_types
+                        },
+                        "next_steps": {
+                            "1_index": f"POST /api/v1/index_folder with folder_id={folder_id}",
+                            "2_segment": f"POST /api/v1/segment_folder with folder_id={folder_id}",
+                            "3_create_share": f"POST /api/v1/create_share with folder_id={folder_id}",
+                            "4_upload": f"POST /api/v1/upload_folder with folder_id={folder_id}"
+                        },
+                        "workflow_status": {
+                            "added": True,
+                            "indexed": False,
+                            "segmented": False,
+                            "shared": False,
+                            "uploaded": False
+                        },
+                        "encryption": {
+                            "keys_generated": result.get("keys_generated", False),
+                            "ready_for_encryption": result.get("keys_generated", False)
+                        },
+                        "usenet_notes": {
+                            "current_state": "LOCAL - folder tracked in database",
+                            "immutability": "Content can be modified until uploaded to Usenet",
+                            "ownership": "You control this folder and its encryption keys",
+                            "sharing": "Can create multiple shares with different access levels"
+                        }
+                    }
+                    
+                    # Add size warnings if needed
+                    if total_size > 10 * 1024 * 1024 * 1024:  # 10GB
+                        response["warnings"] = [
+                            "Large folder size may take significant time to upload",
+                            "Consider segmenting into smaller shares",
+                            "Ensure stable connection for upload"
+                        ]
+                    
+                    if file_count > 10000:
+                        if "warnings" not in response:
+                            response["warnings"] = []
+                        response["warnings"].append("Large number of files may impact indexing performance")
+                    
+                    return response
+                else:
+                    return result
+                    
+            except HTTPException:
+                raise
             except Exception as e:
                 logger.error(f"Failed to add folder: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
