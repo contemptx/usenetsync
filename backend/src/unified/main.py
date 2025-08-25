@@ -951,14 +951,17 @@ class UnifiedSystem:
             Download ID for tracking progress
         """
         import uuid
+        import json
         from pathlib import Path
+        from datetime import datetime
         
         # Verify share exists
-        shares = self.db.query('shares', {'share_id': share_id})
-        if not shares:
+        share = self.db.fetch_one(
+            "SELECT * FROM shares WHERE share_id = ?",
+            (share_id,)
+        )
+        if not share:
             raise ValueError(f"Share not found: {share_id}")
-        
-        share = shares[0]
         
         # Check password if required
         if share.get('share_type') == 'protected' and share.get('password_hash'):
@@ -976,20 +979,29 @@ class UnifiedSystem:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Add to download queue
-        self.db.insert('download_queue', {
-            'download_id': download_id,
-            'share_id': share_id,
-            'output_path': str(output_dir),
-            'status': 'queued',
-            'created_at': datetime.now().isoformat()
-        })
+        self.db.execute(
+            """INSERT INTO download_queue 
+               (queue_id, entity_id, entity_type, state, metadata, queued_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (download_id, share['folder_id'], 'folder', 'queued',
+             json.dumps({
+                 'share_id': share_id,
+                 'output_path': str(output_dir)
+             }),
+             datetime.now().isoformat())
+        )
         
         # Start download in background
         import threading
         def download_task():
             try:
-                # Get segments for this share
-                segments = self.db.query('segments', {'folder_id': share['folder_id']})
+                # Get segments for this share (via files)
+                segments = self.db.fetch_all(
+                    """SELECT s.* FROM segments s
+                       JOIN files f ON s.file_id = f.file_id
+                       WHERE f.folder_id = ?""",
+                    (share['folder_id'],)
+                )
                 
                 for segment in segments:
                     # Download from Usenet

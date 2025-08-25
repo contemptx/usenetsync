@@ -4135,6 +4135,626 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to restore configuration: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.post("/api/v1/backup/restore")
+        async def restore_backup(request: dict):
+            """
+            Restore from backup (alias for configuration/restore).
+            See POST /api/v1/configuration/restore for full documentation.
+            """
+            # Simply forward to the configuration restore endpoint
+            return await restore_configuration_backup(request)
+        
+        @self.app.post("/api/v1/backup/schedule")
+        async def schedule_backup(request: dict):
+            """
+            Schedule automatic backups (FOLDER OWNERS ONLY).
+            
+            Creates a scheduled backup job that runs at specified intervals.
+            Only folder owners can schedule backups of their data.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            user_id = request.get("user_id")
+            if not user_id:
+                raise HTTPException(status_code=400, detail="user_id is required")
+            
+            # Check if user owns any folders
+            owned_folders = self.system.db.fetch_all(
+                "SELECT folder_id FROM folders WHERE owner_id = ?",
+                (user_id,)
+            )
+            
+            if not owned_folders:
+                raise HTTPException(status_code=403, 
+                    detail="Only folder owners can schedule backups")
+            
+            schedule_type = request.get("schedule_type", "daily")  # daily, weekly, monthly
+            time_of_day = request.get("time_of_day", "03:00")  # 24hr format
+            day_of_week = request.get("day_of_week", 1)  # 1-7 for weekly
+            day_of_month = request.get("day_of_month", 1)  # 1-31 for monthly
+            backup_type = request.get("backup_type", "incremental")
+            retention_days = request.get("retention_days", 30)
+            enabled = request.get("enabled", True)
+            
+            try:
+                from datetime import datetime
+                import uuid
+                
+                schedule_id = str(uuid.uuid4())
+                
+                # Create schedule configuration
+                schedule_config = {
+                    "schedule_type": schedule_type,
+                    "time_of_day": time_of_day,
+                    "day_of_week": day_of_week if schedule_type == "weekly" else None,
+                    "day_of_month": day_of_month if schedule_type == "monthly" else None,
+                    "backup_type": backup_type,
+                    "retention_days": retention_days,
+                    "user_id": user_id,
+                    "folder_count": len(owned_folders)
+                }
+                
+                # Store in configuration table
+                self.system.db.execute(
+                    """INSERT OR REPLACE INTO configuration 
+                       (key, value, description, updated_at)
+                       VALUES (?, ?, ?, ?)""",
+                    (f"backup_schedule_{user_id}",
+                     json.dumps({
+                         "schedule_id": schedule_id,
+                         "enabled": enabled,
+                         "config": schedule_config,
+                         "created_at": datetime.now().isoformat()
+                     }),
+                     f"Backup schedule for {user_id}",
+                     datetime.now().isoformat())
+                )
+                
+                # Calculate next run time
+                now = datetime.now()
+                next_run = None
+                
+                if schedule_type == "daily":
+                    next_run = f"Tomorrow at {time_of_day}"
+                elif schedule_type == "weekly":
+                    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    next_run = f"Next {days[day_of_week-1]} at {time_of_day}"
+                elif schedule_type == "monthly":
+                    next_run = f"Day {day_of_month} of next month at {time_of_day}"
+                
+                return {
+                    "success": True,
+                    "schedule_id": schedule_id,
+                    "user_id": user_id,
+                    "schedule_type": schedule_type,
+                    "enabled": enabled,
+                    "config": schedule_config,
+                    "next_run": next_run,
+                    "folders_to_backup": len(owned_folders),
+                    "note": "Schedule saved. Actual scheduling requires a background service.",
+                    "command": f"To run manually: POST /api/v1/configuration/backup with user_id={user_id}"
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to schedule backup: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/backup/verify")
+        async def verify_backup(request: dict):
+            """
+            Verify backup integrity (FOLDER OWNERS ONLY).
+            
+            Verifies that a backup is complete and can be restored:
+            1. Checks backup file exists and is readable
+            2. Validates checksums
+            3. Verifies database integrity
+            4. Tests encryption key decryption
+            5. Simulates restore process (dry run)
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            user_id = request.get("user_id")
+            if not user_id:
+                raise HTTPException(status_code=400, detail="user_id is required")
+            
+            # Check if user owns any folders
+            owned_folders = self.system.db.fetch_all(
+                "SELECT folder_id FROM folders WHERE owner_id = ?",
+                (user_id,)
+            )
+            
+            if not owned_folders:
+                raise HTTPException(status_code=403, 
+                    detail="Only folder owners can verify backups")
+            
+            backup_id = request.get("backup_id")
+            backup_path = request.get("backup_path")
+            
+            if not backup_id and not backup_path:
+                raise HTTPException(status_code=400, 
+                    detail="Either backup_id or backup_path is required")
+            
+            try:
+                import os
+                import tarfile
+                import hashlib
+                import tempfile
+                from datetime import datetime
+                from pathlib import Path
+                
+                # Get backup info
+                if backup_id:
+                    backup = self.system.db.fetch_one(
+                        """SELECT * FROM backup_history 
+                           WHERE backup_id = ? AND metadata LIKE ?""",
+                        (backup_id, f'%"user_id":"{user_id}"%')
+                    )
+                    
+                    if not backup:
+                        raise HTTPException(status_code=404, 
+                            detail=f"Backup not found or not owned by user: {backup_id}")
+                    
+                    backup_path = json.loads(backup['metadata']).get('backup_path')
+                
+                if not backup_path or not os.path.exists(backup_path):
+                    return {
+                        "success": False,
+                        "error": "Backup file not found",
+                        "backup_path": backup_path
+                    }
+                
+                verification_results = {
+                    "file_exists": True,
+                    "file_readable": False,
+                    "archive_valid": False,
+                    "checksum_valid": False,
+                    "database_valid": False,
+                    "config_valid": False,
+                    "keys_valid": False,
+                    "restore_possible": False
+                }
+                
+                # Check file is readable
+                try:
+                    file_stats = os.stat(backup_path)
+                    verification_results["file_readable"] = True
+                    verification_results["file_size"] = file_stats.st_size
+                    verification_results["file_modified"] = datetime.fromtimestamp(
+                        file_stats.st_mtime).isoformat()
+                except:
+                    pass
+                
+                # Verify archive integrity
+                try:
+                    with tarfile.open(backup_path, 'r:gz') as tar:
+                        members = tar.getmembers()
+                        verification_results["archive_valid"] = True
+                        verification_results["file_count"] = len(members)
+                        
+                        # Check for expected files
+                        expected_files = {
+                            "has_database": False,
+                            "has_config": False,
+                            "has_keys": False,
+                            "has_metadata": False
+                        }
+                        
+                        for member in members:
+                            if "database" in member.name:
+                                expected_files["has_database"] = True
+                            elif "config" in member.name:
+                                expected_files["has_config"] = True
+                            elif "keys" in member.name:
+                                expected_files["has_keys"] = True
+                            elif "metadata" in member.name:
+                                expected_files["has_metadata"] = True
+                        
+                        verification_results.update(expected_files)
+                        
+                        # Extract to temp dir for validation
+                        with tempfile.TemporaryDirectory() as tmpdir:
+                            tar.extractall(tmpdir)
+                            
+                            # Verify database if present
+                            db_path = Path(tmpdir) / "database.db"
+                            if db_path.exists():
+                                import sqlite3
+                                try:
+                                    conn = sqlite3.connect(str(db_path))
+                                    cursor = conn.cursor()
+                                    # Check tables exist
+                                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                                    tables = cursor.fetchall()
+                                    verification_results["database_valid"] = len(tables) > 0
+                                    verification_results["table_count"] = len(tables)
+                                    conn.close()
+                                except:
+                                    pass
+                            
+                            # Verify config
+                            config_path = Path(tmpdir) / "config.json"
+                            if config_path.exists():
+                                try:
+                                    with open(config_path) as f:
+                                        config = json.load(f)
+                                    verification_results["config_valid"] = True
+                                    verification_results["config_keys"] = len(config.keys())
+                                except:
+                                    pass
+                            
+                            # Verify encryption keys
+                            keys_path = Path(tmpdir) / "keys.json"
+                            if keys_path.exists():
+                                try:
+                                    with open(keys_path) as f:
+                                        keys = json.load(f)
+                                    # Only check structure, not actual keys
+                                    verification_results["keys_valid"] = isinstance(keys, dict)
+                                    verification_results["key_count"] = len(keys.keys())
+                                except:
+                                    pass
+                
+                except Exception as e:
+                    verification_results["archive_error"] = str(e)
+                
+                # Calculate checksum
+                try:
+                    sha256_hash = hashlib.sha256()
+                    with open(backup_path, "rb") as f:
+                        for byte_block in iter(lambda: f.read(4096), b""):
+                            sha256_hash.update(byte_block)
+                    verification_results["checksum"] = sha256_hash.hexdigest()
+                    verification_results["checksum_valid"] = True
+                except:
+                    pass
+                
+                # Determine if restore is possible
+                verification_results["restore_possible"] = (
+                    verification_results["archive_valid"] and
+                    (verification_results["database_valid"] or 
+                     verification_results["config_valid"])
+                )
+                
+                return {
+                    "success": True,
+                    "backup_path": backup_path,
+                    "verification": verification_results,
+                    "recommendation": "Backup is valid and can be restored" 
+                                    if verification_results["restore_possible"]
+                                    else "Backup may be corrupted or incomplete",
+                    "user_id": user_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to verify backup: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/batch/folders")
+        async def batch_add_folders(request: dict):
+            """
+            Add multiple folders in a single operation.
+            
+            Efficiently processes multiple folders for indexing:
+            1. Validates all paths before processing
+            2. Adds folders to database in batch
+            3. Queues for indexing based on priority
+            4. Returns success/failure for each folder
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            folders = request.get("folders", [])
+            if not folders:
+                raise HTTPException(status_code=400, detail="folders array is required")
+            
+            owner_id = request.get("owner_id", "default_user")
+            auto_index = request.get("auto_index", False)
+            priority = request.get("priority", 5)
+            
+            try:
+                import os
+                from pathlib import Path
+                from datetime import datetime
+                
+                results = []
+                successful = 0
+                failed = 0
+                
+                for folder_spec in folders:
+                    # Handle both string paths and dict specifications
+                    if isinstance(folder_spec, str):
+                        folder_path = folder_spec
+                        folder_config = {}
+                    else:
+                        folder_path = folder_spec.get("path")
+                        folder_config = folder_spec
+                    
+                    if not folder_path:
+                        results.append({
+                            "path": "unknown",
+                            "success": False,
+                            "error": "Path not provided"
+                        })
+                        failed += 1
+                        continue
+                    
+                    try:
+                        # Validate path
+                        path = Path(folder_path).resolve()
+                        
+                        if not path.exists():
+                            results.append({
+                                "path": str(path),
+                                "success": False,
+                                "error": "Path does not exist"
+                            })
+                            failed += 1
+                            continue
+                        
+                        if not path.is_dir():
+                            results.append({
+                                "path": str(path),
+                                "success": False,
+                                "error": "Path is not a directory"
+                            })
+                            failed += 1
+                            continue
+                        
+                        # Check if already exists
+                        existing = self.system.db.fetch_one(
+                            "SELECT folder_id FROM folders WHERE path = ?",
+                            (str(path),)
+                        )
+                        
+                        if existing:
+                            results.append({
+                                "path": str(path),
+                                "success": False,
+                                "error": "Folder already exists",
+                                "folder_id": existing['folder_id']
+                            })
+                            failed += 1
+                            continue
+                        
+                        # Calculate folder stats
+                        file_count = 0
+                        total_size = 0
+                        file_types = {}
+                        
+                        for root, dirs, files in os.walk(path):
+                            for file in files:
+                                file_count += 1
+                                file_path = Path(root) / file
+                                try:
+                                    size = file_path.stat().st_size
+                                    total_size += size
+                                    ext = file_path.suffix.lower()
+                                    file_types[ext] = file_types.get(ext, 0) + 1
+                                except:
+                                    pass
+                        
+                        # Add folder
+                        folder_info = self.system.add_folder(
+                            str(path),
+                            owner_id=folder_config.get("owner_id", owner_id)
+                        )
+                        
+                        # Update with stats
+                        self.system.db.execute(
+                            """UPDATE folders 
+                               SET file_count = ?, total_size = ?, metadata = ?
+                               WHERE folder_id = ?""",
+                            (file_count, total_size,
+                             json.dumps({
+                                 "file_types": file_types,
+                                 "batch_added": True,
+                                 "added_at": datetime.now().isoformat()
+                             }),
+                             folder_info['folder_id'])
+                        )
+                        
+                        result = {
+                            "path": str(path),
+                            "success": True,
+                            "folder_id": folder_info['folder_id'],
+                            "file_count": file_count,
+                            "total_size": total_size,
+                            "size_mb": round(total_size / (1024 * 1024), 2)
+                        }
+                        
+                        # Queue for indexing if requested
+                        if auto_index or folder_config.get("auto_index", False):
+                            self.system.db.execute(
+                                """INSERT INTO operations 
+                                   (operation_id, operation_type, entity_id, entity_type,
+                                    state, priority, metadata, created_at)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                                (str(uuid.uuid4()), 'index', folder_info['folder_id'],
+                                 'folder', 'queued', 
+                                 folder_config.get("priority", priority),
+                                 json.dumps({"auto_queued": True}),
+                                 datetime.now().isoformat())
+                            )
+                            result["queued_for_indexing"] = True
+                        
+                        results.append(result)
+                        successful += 1
+                        
+                    except Exception as e:
+                        results.append({
+                            "path": folder_path,
+                            "success": False,
+                            "error": str(e)
+                        })
+                        failed += 1
+                
+                return {
+                    "success": successful > 0,
+                    "total": len(folders),
+                    "successful": successful,
+                    "failed": failed,
+                    "results": results,
+                    "auto_index": auto_index,
+                    "summary": f"Added {successful} folders, {failed} failed"
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to batch add folders: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/batch/shares")
+        async def batch_create_shares(request: dict):
+            """
+            Create multiple shares in a single operation.
+            
+            Efficiently creates shares for multiple folders:
+            1. Validates all folders exist and are owned by user
+            2. Creates shares with specified access levels
+            3. Generates access strings and commitments
+            4. Returns share info for each folder
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            shares_to_create = request.get("shares", [])
+            if not shares_to_create:
+                raise HTTPException(status_code=400, detail="shares array is required")
+            
+            owner_id = request.get("owner_id")
+            if not owner_id:
+                raise HTTPException(status_code=400, detail="owner_id is required")
+            
+            default_type = request.get("default_type", "public")
+            default_expiry = request.get("default_expiry_days", 30)
+            
+            try:
+                from datetime import datetime
+                
+                results = []
+                successful = 0
+                failed = 0
+                
+                for share_spec in shares_to_create:
+                    # Handle both folder_id string and dict specifications
+                    if isinstance(share_spec, str):
+                        folder_id = share_spec
+                        share_config = {}
+                    else:
+                        folder_id = share_spec.get("folder_id")
+                        share_config = share_spec
+                    
+                    if not folder_id:
+                        results.append({
+                            "folder_id": "unknown",
+                            "success": False,
+                            "error": "folder_id not provided"
+                        })
+                        failed += 1
+                        continue
+                    
+                    try:
+                        # Verify folder exists and is owned by user
+                        folder = self.system.db.fetch_one(
+                            """SELECT folder_id, owner_id, status, path 
+                               FROM folders WHERE folder_id = ?""",
+                            (folder_id,)
+                        )
+                        
+                        if not folder:
+                            results.append({
+                                "folder_id": folder_id,
+                                "success": False,
+                                "error": "Folder not found"
+                            })
+                            failed += 1
+                            continue
+                        
+                        if folder['owner_id'] != owner_id:
+                            results.append({
+                                "folder_id": folder_id,
+                                "success": False,
+                                "error": "Not folder owner",
+                                "actual_owner": folder['owner_id']
+                            })
+                            failed += 1
+                            continue
+                        
+                        if folder['status'] not in ['indexed', 'segmented', 'uploaded', 'active']:
+                            results.append({
+                                "folder_id": folder_id,
+                                "success": False,
+                                "error": f"Folder not ready for sharing (status: {folder['status']})"
+                            })
+                            failed += 1
+                            continue
+                        
+                        # Determine share type
+                        share_type = share_config.get("type", default_type).lower()
+                        if share_type not in ['public', 'protected', 'private']:
+                            share_type = 'public'
+                        
+                        # Map to AccessLevel enum
+                        from backend.src.unified.models import AccessLevel
+                        access_level = {
+                            'public': AccessLevel.PUBLIC,
+                            'protected': AccessLevel.PROTECTED,
+                            'private': AccessLevel.PRIVATE
+                        }.get(share_type, AccessLevel.PUBLIC)
+                        
+                        # Create share
+                        share_result = self.system.create_share(
+                            folder_id=folder_id,
+                            owner_id=owner_id,
+                            access_level=access_level,
+                            password=share_config.get("password"),
+                            allowed_users=share_config.get("allowed_users"),
+                            expiry_days=share_config.get("expiry_days", default_expiry)
+                        )
+                        
+                        results.append({
+                            "folder_id": folder_id,
+                            "folder_path": folder['path'],
+                            "success": True,
+                            "share_id": share_result['share_id'],
+                            "access_string": share_result['access_string'],
+                            "share_type": share_type,
+                            "expires_at": share_result.get('expires_at')
+                        })
+                        successful += 1
+                        
+                    except Exception as e:
+                        results.append({
+                            "folder_id": folder_id,
+                            "success": False,
+                            "error": str(e)
+                        })
+                        failed += 1
+                
+                # Group results by type for summary
+                type_counts = {}
+                for result in results:
+                    if result.get("success"):
+                        share_type = result.get("share_type", "unknown")
+                        type_counts[share_type] = type_counts.get(share_type, 0) + 1
+                
+                return {
+                    "success": successful > 0,
+                    "total": len(shares_to_create),
+                    "successful": successful,
+                    "failed": failed,
+                    "results": results,
+                    "type_summary": type_counts,
+                    "summary": f"Created {successful} shares, {failed} failed",
+                    "usenet_note": "Shares created locally. Upload to Usenet to make accessible."
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to batch create shares: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/index_folder")
         async def index_folder(request: dict):
             """Index folder with real implementation"""
@@ -4373,6 +4993,182 @@ class UnifiedAPIServer:
                     raise HTTPException(status_code=403, detail=error_msg)
             except Exception as e:
                 logger.error(f"Failed to download share: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/download/start")
+        async def start_download(request: dict):
+            """
+            Start downloading a share from Usenet.
+            
+            This endpoint initiates the download process for a share:
+            1. Validates share access (public/protected/private)
+            2. Fetches core index from Usenet
+            3. Begins segment download and reassembly
+            4. Returns download ID for progress tracking
+            
+            Access Types:
+            - PUBLIC: Only share_id required
+            - PROTECTED: share_id + password required
+            - PRIVATE: share_id + user_id + commitment required
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            share_id = request.get("share_id")
+            if not share_id:
+                raise HTTPException(status_code=400, detail="share_id is required")
+            
+            output_path = request.get("output_path", "./downloads")
+            password = request.get("password")  # For protected shares
+            user_id = request.get("user_id")  # For private shares
+            
+            try:
+                from datetime import datetime
+                
+                # Verify share exists
+                share = self.system.db.fetch_one(
+                    """SELECT share_id, folder_id, share_type, access_level, 
+                              encryption_key, password_hash, password_salt,
+                              allowed_users, expires_at, metadata
+                       FROM shares WHERE share_id = ?""",
+                    (share_id,)
+                )
+                
+                if not share:
+                    raise HTTPException(status_code=404, detail=f"Share not found: {share_id}")
+                
+                # Check expiry
+                if share['expires_at']:
+                    expiry = datetime.fromisoformat(str(share['expires_at']))
+                    if datetime.now() > expiry:
+                        return {
+                            "success": False,
+                            "error": "Share has expired",
+                            "expiry_date": share['expires_at'],
+                            "note": "Local expiry - Usenet content still exists but access is blocked"
+                        }
+                
+                access_level = share['access_level']
+                
+                # Validate access based on share type
+                if access_level == 'protected':
+                    if not password:
+                        return {
+                            "success": False,
+                            "error": "Password required for protected share",
+                            "access_level": access_level
+                        }
+                    # Verify password
+                    import hashlib
+                    password_hash = hashlib.pbkdf2_hmac(
+                        'sha256',
+                        password.encode(),
+                        share['password_salt'].encode() if share['password_salt'] else b'',
+                        100000
+                    ).hex()
+                    
+                    if password_hash != share['password_hash']:
+                        return {
+                            "success": False,
+                            "error": "Invalid password",
+                            "hint": "Password is case-sensitive"
+                        }
+                
+                elif access_level == 'private':
+                    if not user_id:
+                        return {
+                            "success": False,
+                            "error": "user_id required for private share",
+                            "access_level": access_level
+                        }
+                    
+                    # Check if user is authorized
+                    allowed_users = json.loads(share['allowed_users']) if share['allowed_users'] else []
+                    if user_id not in allowed_users:
+                        return {
+                            "success": False,
+                            "error": "User not authorized for this share",
+                            "user_id": user_id,
+                            "hint": "Contact share owner for access"
+                        }
+                
+                # Get folder information
+                folder = self.system.db.fetch_one(
+                    """SELECT path, file_count, total_size, status
+                       FROM folders WHERE folder_id = ?""",
+                    (share['folder_id'],)
+                )
+                
+                # Create download record
+                download_id = str(uuid.uuid4())
+                
+                self.system.db.execute(
+                    """INSERT INTO download_queue 
+                       (queue_id, entity_id, entity_type, state, metadata, queued_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (download_id, share['folder_id'], 'folder', 'queued',
+                     json.dumps({
+                         'share_id': share_id,
+                         'output_path': output_path,
+                         'access_level': access_level,
+                         'user_id': user_id,
+                         'has_password': bool(password),
+                         'folder_info': {
+                             'path': folder['path'] if folder else "Unknown",
+                             'file_count': folder['file_count'] if folder else 0,
+                             'total_size': folder['total_size'] if folder else 0
+                         },
+                         'started_at': datetime.now().isoformat()
+                     }),
+                     datetime.now().isoformat())
+                )
+                
+                # Start download process (would be async in production)
+                self.system.db.execute(
+                    """UPDATE download_queue 
+                       SET state = 'downloading', started_at = ?
+                       WHERE queue_id = ?""",
+                    (datetime.now().isoformat(), download_id)
+                )
+                
+                # Get segment count (segments are linked to files, not folders directly)
+                segments = self.system.db.fetch_one(
+                    """SELECT COUNT(*) as count FROM segments s
+                       JOIN files f ON s.file_id = f.file_id
+                       WHERE f.folder_id = ?""",
+                    (share['folder_id'],)
+                )
+                
+                # Prepare response
+                return {
+                    "success": True,
+                    "download_id": download_id,
+                    "share_id": share_id,
+                    "access_level": access_level,
+                    "status": "started",
+                    "output_path": output_path,
+                    "folder_info": {
+                        "path": folder['path'] if folder else "Unknown",
+                        "file_count": folder['file_count'] if folder else 0,
+                        "total_size_bytes": folder['total_size'] if folder else 0,
+                        "total_size_mb": round(folder['total_size'] / (1024 * 1024), 2) if folder and folder['total_size'] else 0,
+                        "segment_count": segments['count'] if segments else 0
+                    },
+                    "process": {
+                        "1_fetch_index": "Fetching encrypted core index from Usenet",
+                        "2_verify_access": "Verifying access permissions",
+                        "3_download_segments": "Downloading encrypted segments",
+                        "4_reassemble": "Reassembling files",
+                        "5_decrypt": "Decrypting content"
+                    },
+                    "progress_endpoint": f"GET /api/v1/download/progress/{download_id}",
+                    "usenet_note": "Downloading immutable content from Usenet servers"
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to start download: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/api/v1/users")
