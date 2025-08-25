@@ -1563,6 +1563,161 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get file version: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/segmentation/info/{file_hash}")
+        async def get_segmentation_info(file_hash: str):
+            """
+            Get detailed segmentation information for a file.
+            
+            Returns:
+            - Segment details (size, hash, index)
+            - Upload status for each segment
+            - Message IDs for uploaded segments (Usenet article IDs)
+            - Packing information (if small files were packed together)
+            - Redundancy information (if using PAR2-like redundancy)
+            
+            NOTE: Segments are immutable once posted to Usenet.
+            Each segment gets a unique Message-ID that identifies it on Usenet servers.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                # Find file(s) with this hash
+                files = self.system.db.fetch_all(
+                    """SELECT f.file_id, f.name, f.path, f.size, f.segment_size,
+                              f.total_segments, f.folder_id, fo.path as folder_path
+                       FROM files f
+                       JOIN folders fo ON f.folder_id = fo.folder_id
+                       WHERE f.hash = ?""",
+                    (file_hash,)
+                )
+                
+                if not files:
+                    raise HTTPException(status_code=404, detail=f"No file found with hash {file_hash}")
+                
+                # Get the primary file (latest version)
+                file_info = dict(files[0])
+                
+                # Get all segments for this file
+                segments = self.system.db.fetch_all(
+                    """SELECT s.segment_id, s.segment_index, s.redundancy_index,
+                              s.size, s.compressed_size, s.hash, 
+                              s.message_id, s.subject, s.newsgroup,
+                              s.packed_segment_id, s.packing_index,
+                              s.upload_status, s.uploaded_at, s.error_message,
+                              s.offset_start, s.offset_end
+                       FROM segments s
+                       WHERE s.file_id = ?
+                       ORDER BY s.segment_index, s.redundancy_index""",
+                    (file_info['file_id'],)
+                )
+                
+                # Process segment information
+                segment_list = []
+                uploaded_count = 0
+                pending_count = 0
+                failed_count = 0
+                total_uploaded_size = 0
+                
+                for seg in segments:
+                    segment_data = {
+                        "segment_id": seg['segment_id'],
+                        "index": seg['segment_index'],
+                        "redundancy_index": seg['redundancy_index'],
+                        "size": seg['size'],
+                        "compressed_size": seg['compressed_size'],
+                        "hash": seg['hash'],
+                        "offset": {
+                            "start": seg['offset_start'],
+                            "end": seg['offset_end']
+                        },
+                        "upload_status": seg['upload_status'],
+                        "uploaded_at": seg['uploaded_at']
+                    }
+                    
+                    # Add Usenet-specific info if uploaded
+                    if seg['upload_status'] == 'uploaded':
+                        uploaded_count += 1
+                        total_uploaded_size += seg['size']
+                        segment_data["usenet_info"] = {
+                            "message_id": seg['message_id'],
+                            "subject": seg['subject'],
+                            "newsgroup": seg['newsgroup'],
+                            "immutable": True,
+                            "note": "This segment is permanently stored on Usenet servers"
+                        }
+                    elif seg['upload_status'] == 'failed':
+                        failed_count += 1
+                        segment_data["error"] = seg['error_message']
+                    else:
+                        pending_count += 1
+                    
+                    # Add packing info if this segment was packed
+                    if seg['packed_segment_id']:
+                        segment_data["packing"] = {
+                            "packed_segment_id": seg['packed_segment_id'],
+                            "packing_index": seg['packing_index'],
+                            "note": "Small file packed with others for efficiency"
+                        }
+                    
+                    segment_list.append(segment_data)
+                
+                # Calculate statistics
+                total_segments = len(segment_list)
+                upload_progress = (uploaded_count / total_segments * 100) if total_segments > 0 else 0
+                
+                # Check if file is part of a share
+                share_info = self.system.db.fetch_one(
+                    """SELECT s.share_id, s.access_level, s.created_at
+                       FROM shares s
+                       WHERE s.folder_id = ?
+                       ORDER BY s.created_at DESC
+                       LIMIT 1""",
+                    (file_info['folder_id'],)
+                )
+                
+                result = {
+                    "file_info": {
+                        "file_id": file_info['file_id'],
+                        "name": file_info['name'],
+                        "path": file_info['path'],
+                        "size": file_info['size'],
+                        "hash": file_hash,
+                        "folder_path": file_info['folder_path']
+                    },
+                    "segmentation": {
+                        "segment_size": file_info['segment_size'],
+                        "total_segments": total_segments,
+                        "segments": segment_list
+                    },
+                    "upload_status": {
+                        "uploaded": uploaded_count,
+                        "pending": pending_count,
+                        "failed": failed_count,
+                        "progress_percent": round(upload_progress, 2),
+                        "total_uploaded_bytes": total_uploaded_size
+                    },
+                    "share_info": {
+                        "share_id": share_info['share_id'] if share_info else None,
+                        "access_level": share_info['access_level'] if share_info else None,
+                        "shared": share_info is not None
+                    },
+                    "usenet_notes": {
+                        "immutability": "Uploaded segments cannot be modified or deleted from Usenet",
+                        "retention": "Segments remain on servers based on retention policies (typically 3000+ days)",
+                        "message_ids": "Each segment has a unique Message-ID for retrieval from Usenet",
+                        "redundancy": "Redundancy segments provide error recovery capability"
+                    }
+                }
+                
+                return result
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get segmentation info: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/webhooks")
         async def create_webhook(request: dict):
             """Create webhook"""
