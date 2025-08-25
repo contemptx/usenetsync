@@ -4567,6 +4567,147 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to list commitments: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/publishing/expiry/check")
+        async def check_share_expiry(
+            share_id: Optional[str] = None,
+            check_all: bool = False,
+            include_expired: bool = False
+        ):
+            """
+            Check local share access expiry status.
+            NOTE: This does NOT control Usenet article expiry - that's determined by server retention.
+            This only controls how long a share ID remains valid for local access.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                
+                current_time = datetime.now()
+                
+                if share_id:
+                    # Check specific share
+                    share = self.system.db.fetch_one(
+                        "SELECT * FROM shares WHERE share_id = ?",
+                        (share_id,)
+                    )
+                    
+                    if not share:
+                        raise HTTPException(status_code=404, detail=f"Share {share_id} not found")
+                    
+                    expires_at = share.get('expires_at')
+                    is_expired = False
+                    time_remaining = None
+                    
+                    if expires_at:
+                        try:
+                            expiry_time = datetime.fromisoformat(expires_at)
+                            is_expired = current_time > expiry_time
+                            if not is_expired:
+                                time_remaining = (expiry_time - current_time).total_seconds()
+                        except:
+                            pass
+                    
+                    return {
+                        "success": True,
+                        "timestamp": current_time.isoformat(),
+                        "share_id": share_id,
+                        "folder_id": share.get('folder_id'),
+                        "created_at": share.get('created_at'),
+                        "expires_at": expires_at,
+                        "is_expired": is_expired,
+                        "is_revoked": bool(share.get('revoked', False)),
+                        "time_remaining_seconds": time_remaining,
+                        "access_valid": not is_expired and not share.get('revoked', False),
+                        "note": "This controls local access only. Usenet articles remain until server retention expires."
+                    }
+                
+                elif check_all:
+                    # Check all shares
+                    query = "SELECT * FROM shares WHERE 1=1"
+                    if not include_expired:
+                        query += " AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
+                    
+                    shares = self.system.db.fetch_all(query)
+                    if not shares:
+                        shares = []
+                    
+                    results = []
+                    expired_count = 0
+                    active_count = 0
+                    never_expires_count = 0
+                    
+                    for share in shares:
+                        expires_at = share.get('expires_at')
+                        is_expired = False
+                        time_remaining = None
+                        
+                        if expires_at:
+                            try:
+                                expiry_time = datetime.fromisoformat(expires_at)
+                                is_expired = current_time > expiry_time
+                                if not is_expired:
+                                    time_remaining = (expiry_time - current_time).total_seconds()
+                            except:
+                                pass
+                        else:
+                            never_expires_count += 1
+                        
+                        if is_expired:
+                            expired_count += 1
+                        elif not share.get('revoked', False):
+                            active_count += 1
+                        
+                        share_info = {
+                            "share_id": share['share_id'],
+                            "folder_id": share['folder_id'],
+                            "expires_at": expires_at,
+                            "is_expired": is_expired,
+                            "is_revoked": bool(share.get('revoked', False)),
+                            "time_remaining_seconds": time_remaining,
+                            "access_valid": not is_expired and not share.get('revoked', False)
+                        }
+                        
+                        results.append(share_info)
+                    
+                    return {
+                        "success": True,
+                        "timestamp": current_time.isoformat(),
+                        "summary": {
+                            "total_shares": len(results),
+                            "active": active_count,
+                            "expired": expired_count,
+                            "never_expires": never_expires_count,
+                            "include_expired": include_expired
+                        },
+                        "shares": results,
+                        "note": "Expiry controls local access only. Usenet retention is server-dependent."
+                    }
+                
+                else:
+                    # Return general expiry information
+                    return {
+                        "success": True,
+                        "timestamp": current_time.isoformat(),
+                        "info": {
+                            "local_expiry": "Shares can have optional local access expiry",
+                            "usenet_retention": "Articles remain on Usenet servers based on their retention policies",
+                            "typical_retention": {
+                                "binary_groups": "3000-5000+ days on premium servers",
+                                "text_groups": "10+ years on many servers",
+                                "varies_by": "Server, newsgroup, article size"
+                            },
+                            "important_note": "Once posted to Usenet, articles cannot be deleted or expired by the poster"
+                        }
+                    }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to check expiry: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
