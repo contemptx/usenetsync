@@ -368,6 +368,50 @@ class UnifiedSchema:
                 )
             """,
             
+            # Authorized users for private shares (cryptographic access control)
+            'authorized_users': f"""
+                CREATE TABLE IF NOT EXISTS authorized_users (
+                    id {id_type},
+                    user_id VARCHAR(64) NOT NULL,
+                    folder_id {uuid_type} NOT NULL,
+                    permissions {json_type},
+                    added_at {timestamp_type} DEFAULT CURRENT_TIMESTAMP,
+                    added_by VARCHAR(64),
+                    revoked BOOLEAN DEFAULT FALSE,
+                    revoked_at {timestamp_type},
+                    UNIQUE(user_id, folder_id)
+                )
+            """,
+            
+            # Access commitments for cryptographic verification
+            'access_commitments': f"""
+                CREATE TABLE IF NOT EXISTS access_commitments (
+                    id {id_type},
+                    share_id VARCHAR(255) NOT NULL,
+                    user_id VARCHAR(64) NOT NULL,
+                    commitment_hash VARCHAR(64) NOT NULL,
+                    wrapped_key {text_type},
+                    created_at {timestamp_type} DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(share_id, user_id)
+                )
+            """,
+            
+            # Access logs for audit trail
+            'access_logs': f"""
+                CREATE TABLE IF NOT EXISTS access_logs (
+                    id {id_type},
+                    user_id VARCHAR(64) NOT NULL,
+                    resource_type VARCHAR(50) NOT NULL,
+                    resource_id VARCHAR(255) NOT NULL,
+                    operation VARCHAR(50) NOT NULL,
+                    granted BOOLEAN NOT NULL,
+                    timestamp {timestamp_type} DEFAULT CURRENT_TIMESTAMP,
+                    reason {text_type},
+                    ip_address VARCHAR(45),
+                    user_agent {text_type}
+                )
+            """,
+            
             # Network servers configuration
             'network_servers': f"""
                 CREATE TABLE IF NOT EXISTS network_servers (
@@ -569,6 +613,21 @@ class UnifiedSchema:
             "CREATE INDEX IF NOT EXISTS idx_operations_entity ON operations(entity_id)",
             "CREATE INDEX IF NOT EXISTS idx_operations_type ON operations(operation_type)",
             "CREATE INDEX IF NOT EXISTS idx_operations_user ON operations(user_id)",
+            
+            # Authorized users indexes
+            "CREATE INDEX IF NOT EXISTS idx_authorized_users_folder ON authorized_users(folder_id)",
+            "CREATE INDEX IF NOT EXISTS idx_authorized_users_user ON authorized_users(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_authorized_users_revoked ON authorized_users(revoked)",
+            
+            # Access commitments indexes
+            "CREATE INDEX IF NOT EXISTS idx_access_commitments_share ON access_commitments(share_id)",
+            "CREATE INDEX IF NOT EXISTS idx_access_commitments_user ON access_commitments(user_id)",
+            
+            # Access logs indexes
+            "CREATE INDEX IF NOT EXISTS idx_access_logs_user ON access_logs(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_access_logs_resource ON access_logs(resource_type, resource_id)",
+            "CREATE INDEX IF NOT EXISTS idx_access_logs_timestamp ON access_logs(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_access_logs_granted ON access_logs(granted)",
             
             # Background jobs indexes
             "CREATE INDEX IF NOT EXISTS idx_jobs_state ON background_jobs(state, priority)",
