@@ -350,18 +350,18 @@ class UnifiedAPIServer:
         async def get_user_info():
             """Get user information from database"""
             if not self.system or not self.system.db:
-                return {"username": "default", "email": "user@example.com"}
+                return {"user_id": "default_user", "username": "default"}
             
             # Get first user from users table
             users = self.system.db.fetch_all("SELECT * FROM users LIMIT 1")
             if users and len(users) > 0:
                 user = users[0]
                 return {
+                    "user_id": user.get("user_id", "default_user"),
                     "username": user.get("username", "default"),
-                    "email": user.get("email", "user@example.com"),
                     "created_at": user.get("created_at", "")
                 }
-            return {"username": "default", "email": "user@example.com"}
+            return {"user_id": "default_user", "username": "default"}
         
         @self.app.post("/api/v1/initialize_user")
         async def initialize_user(request: dict = {}):
@@ -371,10 +371,12 @@ class UnifiedAPIServer:
             
             display_name = request.get("displayName", "User")
             
-            # Create or update user
+            # Create or update user  
+            import uuid
+            user_id = str(uuid.uuid4())
             self.system.db.execute(
-                "INSERT OR REPLACE INTO users (username, email, created_at) VALUES (?, ?, datetime('now'))",
-                (display_name, f"{display_name.lower()}@example.com")
+                "INSERT OR REPLACE INTO users (user_id, username, created_at) VALUES (?, ?, datetime('now'))",
+                (user_id, display_name)
             )
             
             return {"success": True}
@@ -995,7 +997,7 @@ class UnifiedAPIServer:
                 password = request.get('password')
                 if not password:
                     raise HTTPException(status_code=400, detail="password is required")
-                email = request.get('email', 'test@example.com')
+                # No email needed for Usenet - privacy focused
                 
                 if not username or not password:
                     raise HTTPException(status_code=400, detail="Username and password required")
@@ -1013,7 +1015,7 @@ class UnifiedAPIServer:
                 self._users[username] = {
                     'id': user_id,
                     'password_hash': hashlib.sha256(password.encode()).hexdigest(),
-                    'email': email,
+                    
                     'created_at': datetime.now().isoformat()
                 }
                 
@@ -1042,7 +1044,7 @@ class UnifiedAPIServer:
                         return {
                             "user_id": user_id,
                             "username": username,
-                            "email": data.get('email'),
+                            
                             "created_at": data.get('created_at')
                         }
                 
@@ -1060,8 +1062,8 @@ class UnifiedAPIServer:
             username = request.get("username")
             if not username:
                 raise HTTPException(status_code=400, detail="username is required")
-            email = request.get("email", "test@example.com")
-            return {"user_id": user_id, "username": username, "email": email}
+            # No email needed for Usenet
+            return {"user_id": user_id, "username": username}
         @self.app.delete("/api/v1/users/{user_id}")
         async def delete_user(user_id: str):
             """Delete user and all associated data"""
@@ -1871,7 +1873,9 @@ class UnifiedAPIServer:
         @self.app.post("/api/v1/folders/index")
         async def index_folder(request: dict = {}):
             """Index folder"""
-            folder_path = request.get("folder_path", "/tmp/test")
+            folder_path = request.get("folder_path")
+            if not folder_path:
+                raise HTTPException(status_code=400, detail="folder_path is required")
             owner_id = request.get("owner_id")
             if not owner_id:
                 raise HTTPException(status_code=400, detail="owner_id is required")
