@@ -4260,15 +4260,150 @@ class UnifiedAPIServer:
             try:
                 from datetime import datetime
                 
-                # Check if authorized_users table exists
-                if not self.system.db:
-                    return {
-                        "success": False,
-                        "message": "Database not initialized",
-                        "authorized_users": []
-                    }
+                # Build query based on filters
+                query = "SELECT * FROM authorized_users WHERE 1=1"
+                params = []
                 
-                # For now, return test data to verify endpoint works
+                if share_id:
+                    # First get folder_id from shares table
+                    share = self.system.db.fetch_one(
+                        "SELECT folder_id FROM shares WHERE share_id = ?",
+                        (share_id,)
+                    )
+                    if share:
+                        query += " AND folder_id = ?"
+                        params.append(share['folder_id'])
+                    else:
+                        # No share found, return empty list
+                        return {
+                            "success": True,
+                            "timestamp": datetime.now().isoformat(),
+                            "filters": {
+                                "share_id": share_id,
+                                "folder_id": folder_id,
+                                "user_id": user_id
+                            },
+                            "total_users": 0,
+                            "authorized_users": []
+                        }
+                
+                if folder_id:
+                    query += " AND folder_id = ?"
+                    params.append(folder_id)
+                
+                if user_id:
+                    query += " AND user_id = ?"
+                    params.append(user_id)
+                
+                query += " ORDER BY created_at DESC"
+                
+                # Get authorized users
+                authorized_users = []
+                try:
+                    if params:
+                        authorized_users = self.system.db.fetch_all(query, tuple(params))
+                    else:
+                        authorized_users = self.system.db.fetch_all(query)
+                except Exception as e:
+                    # Table might not exist, return empty
+                    logger.warning(f"authorized_users table query failed: {e}")
+                    authorized_users = []
+                
+                if not authorized_users:
+                    authorized_users = []
+                
+                # Process results
+                users_list = []
+                for auth_user in authorized_users:
+                    user_info = {
+                        "id": auth_user.get('id'),
+                        "user_id": auth_user['user_id'],
+                        "folder_id": auth_user['folder_id'],
+                        "permissions": auth_user.get('permissions', 'read'),
+                        "created_at": auth_user.get('created_at')
+                    }
+                    
+                    # Get additional user details if available
+                    try:
+                        user_details = self.system.db.fetch_one(
+                            "SELECT username, email, is_admin FROM users WHERE user_id = ?",
+                            (auth_user['user_id'],)
+                        )
+                        if user_details:
+                            user_info["username"] = user_details.get('username')
+                            user_info["email"] = user_details.get('email')
+                            user_info["is_admin"] = user_details.get('is_admin', False)
+                    except:
+                        pass
+                    
+                    # Get share information for this folder
+                    if include_permissions:
+                        try:
+                            shares = self.system.db.fetch_all(
+                                """SELECT share_id, share_type, access_level, expires_at, revoked
+                                   FROM shares 
+                                   WHERE folder_id = ? AND (revoked IS NULL OR revoked = 0)""",
+                                (auth_user['folder_id'],)
+                            )
+                            
+                            if shares:
+                                user_info["shares"] = []
+                                for share in shares:
+                                    share_info = {
+                                        "share_id": share['share_id'],
+                                        "share_type": share.get('share_type', 'full'),
+                                        "access_level": share.get('access_level', 'public'),
+                                        "expires_at": share.get('expires_at'),
+                                        "active": not share.get('revoked', False)
+                                    }
+                                    
+                                    # Check if share has user-specific permissions
+                                    if share.get('allowed_users'):
+                                        try:
+                                            import json
+                                            allowed = json.loads(share['allowed_users'])
+                                            if auth_user['user_id'] in allowed:
+                                                share_info["user_specific_access"] = True
+                                        except:
+                                            pass
+                                    
+                                    user_info["shares"].append(share_info)
+                        except:
+                            pass
+                    
+                    # Get folder details
+                    try:
+                        folder = self.system.db.fetch_one(
+                            "SELECT path, status, file_count, total_size FROM folders WHERE folder_id = ?",
+                            (auth_user['folder_id'],)
+                        )
+                        if folder:
+                            user_info["folder"] = {
+                                "path": folder['path'],
+                                "status": folder['status'],
+                                "file_count": folder.get('file_count', 0),
+                                "total_size": folder.get('total_size', 0)
+                            }
+                    except:
+                        pass
+                    
+                    users_list.append(user_info)
+                
+                # Group by folder if no specific filters
+                folders_summary = {}
+                if not share_id and not folder_id and not user_id:
+                    for user in users_list:
+                        fid = user['folder_id']
+                        if fid not in folders_summary:
+                            folders_summary[fid] = {
+                                "folder_id": fid,
+                                "path": user.get('folder', {}).get('path'),
+                                "authorized_users": [],
+                                "total_users": 0
+                            }
+                        folders_summary[fid]["authorized_users"].append(user['user_id'])
+                        folders_summary[fid]["total_users"] += 1
+                
                 return {
                     "success": True,
                     "timestamp": datetime.now().isoformat(),
@@ -4278,15 +4413,16 @@ class UnifiedAPIServer:
                         "user_id": user_id,
                         "include_permissions": include_permissions
                     },
-                    "total_users": 0,
-                    "authorized_users": [],
-                    "folders_summary": []
+                    "total_users": len(users_list),
+                    "authorized_users": users_list,
+                    "folders_summary": list(folders_summary.values()) if folders_summary else []
                 }
                 
             except Exception as e:
                 logger.error(f"Failed to list authorized users: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
-@self.app.post("/api/v1/folder_info")
+        
+        @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
             folder_id = request.get("folder_id")
