@@ -6290,6 +6290,222 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get upload queue: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/users")
+        async def get_users(
+            has_folders: Optional[bool] = None,
+            has_shares: Optional[bool] = None,
+            limit: int = 100,
+            offset: int = 0
+        ):
+            """
+            Get list of users in the system.
+            
+            NOTE: Usenet has no user system. These are LOCAL users who:
+            - Own folders (have private/public keys)
+            - Can create shares (encrypted indexes)
+            - Can be authorized for private shares
+            
+            Users do NOT have:
+            - Permissions on Usenet (binary access only)
+            - Admin privileges over others
+            - Ability to modify posted content
+            
+            has_folders: Filter users who own folders
+            has_shares: Filter users who have created shares
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                import json
+                
+                # Get users from database
+                users_query = """
+                    SELECT DISTINCT u.user_id, u.username, u.created_at,
+                           COUNT(DISTINCT f.folder_id) as folder_count,
+                           COUNT(DISTINCT s.share_id) as share_count,
+                           SUM(f.file_count) as total_files,
+                           SUM(f.total_size) as total_size
+                    FROM users u
+                    LEFT JOIN folders f ON u.user_id = f.owner_id
+                    LEFT JOIN shares s ON u.user_id = s.owner_id
+                    GROUP BY u.user_id, u.username, u.created_at
+                """
+                
+                # If users table doesn't exist, get from folders/shares
+                try:
+                    users = self.system.db.fetch_all(users_query)
+                except:
+                    # Fallback: Get users from folders and shares
+                    users_query = """
+                        SELECT DISTINCT 
+                            COALESCE(f.owner_id, s.owner_id) as user_id,
+                            COALESCE(f.owner_id, s.owner_id) as username,
+                            NULL as created_at,
+                            COUNT(DISTINCT f.folder_id) as folder_count,
+                            COUNT(DISTINCT s.share_id) as share_count,
+                            SUM(f.file_count) as total_files,
+                            SUM(f.total_size) as total_size
+                        FROM folders f
+                        FULL OUTER JOIN shares s ON f.owner_id = s.owner_id
+                        WHERE f.owner_id IS NOT NULL OR s.owner_id IS NOT NULL
+                        GROUP BY COALESCE(f.owner_id, s.owner_id)
+                    """
+                    
+                    # SQLite doesn't support FULL OUTER JOIN, use UNION
+                    users_query = """
+                        SELECT 
+                            owner_id as user_id,
+                            owner_id as username,
+                            NULL as created_at,
+                            COUNT(DISTINCT folder_id) as folder_count,
+                            0 as share_count,
+                            SUM(file_count) as total_files,
+                            SUM(total_size) as total_size
+                        FROM folders
+                        WHERE owner_id IS NOT NULL
+                        GROUP BY owner_id
+                        
+                        UNION
+                        
+                        SELECT 
+                            s.owner_id as user_id,
+                            s.owner_id as username,
+                            NULL as created_at,
+                            0 as folder_count,
+                            COUNT(DISTINCT s.share_id) as share_count,
+                            0 as total_files,
+                            0 as total_size
+                        FROM shares s
+                        LEFT JOIN folders f ON s.owner_id = f.owner_id
+                        WHERE s.owner_id IS NOT NULL AND f.owner_id IS NULL
+                        GROUP BY s.owner_id
+                    """
+                    
+                    users = self.system.db.fetch_all(users_query)
+                
+                if not users:
+                    return {
+                        "success": True,
+                        "users": [],
+                        "total": 0,
+                        "note": "No users found. Users are created when they own folders or create shares."
+                    }
+                
+                # Process users
+                user_list = []
+                for user in users:
+                    user_data = {
+                        "user_id": user['user_id'],
+                        "username": user.get('username', user['user_id']),
+                        "created_at": user.get('created_at'),
+                        "statistics": {
+                            "folders_owned": user.get('folder_count', 0),
+                            "shares_created": user.get('share_count', 0),
+                            "total_files": user.get('total_files', 0),
+                            "total_size_bytes": user.get('total_size', 0)
+                        }
+                    }
+                    
+                    # Apply filters
+                    if has_folders is not None:
+                        if has_folders and user_data["statistics"]["folders_owned"] == 0:
+                            continue
+                        if not has_folders and user_data["statistics"]["folders_owned"] > 0:
+                            continue
+                    
+                    if has_shares is not None:
+                        if has_shares and user_data["statistics"]["shares_created"] == 0:
+                            continue
+                        if not has_shares and user_data["statistics"]["shares_created"] > 0:
+                            continue
+                    
+                    # Get recent activity
+                    recent_upload = self.system.db.fetch_one(
+                        """SELECT MAX(completed_at) as last_upload
+                           FROM upload_queue 
+                           WHERE entity_id IN (
+                               SELECT folder_id FROM folders WHERE owner_id = ?
+                           ) AND state = 'completed'""",
+                        (user['user_id'],)
+                    )
+                    
+                    if recent_upload and recent_upload['last_upload']:
+                        user_data["last_upload"] = recent_upload['last_upload']
+                    
+                    # Get authorized shares (private shares this user can access)
+                    try:
+                        auth_shares = self.system.db.fetch_one(
+                            """SELECT COUNT(*) as count
+                               FROM authorized_users
+                               WHERE user_id = ?""",
+                            (user['user_id'],)
+                        )
+                        if auth_shares:
+                            user_data["authorized_shares"] = auth_shares['count']
+                    except:
+                        user_data["authorized_shares"] = 0
+                    
+                    # Add capabilities (what this user can do)
+                    user_data["capabilities"] = {
+                        "can_create_folders": True,
+                        "can_create_shares": user_data["statistics"]["folders_owned"] > 0,
+                        "can_upload": user_data["statistics"]["folders_owned"] > 0,
+                        "can_download": True,  # Anyone can download public shares
+                        "has_private_keys": user_data["statistics"]["folders_owned"] > 0
+                    }
+                    
+                    # Add Usenet-specific notes
+                    user_data["usenet_notes"] = {
+                        "identity": "User identity is LOCAL only, not recognized by Usenet",
+                        "ownership": "Owns folders locally, controls encryption keys",
+                        "access": "Access to shares controlled by cryptography, not Usenet permissions",
+                        "immutability": "Cannot modify or delete content once posted to Usenet"
+                    }
+                    
+                    user_list.append(user_data)
+                
+                # Apply pagination
+                total_users = len(user_list)
+                user_list = user_list[offset:offset + limit]
+                
+                # Calculate overall statistics
+                total_stats = {
+                    "total_users": total_users,
+                    "users_with_folders": sum(1 for u in user_list if u["statistics"]["folders_owned"] > 0),
+                    "users_with_shares": sum(1 for u in user_list if u["statistics"]["shares_created"] > 0),
+                    "total_folders": sum(u["statistics"]["folders_owned"] for u in user_list),
+                    "total_shares": sum(u["statistics"]["shares_created"] for u in user_list)
+                }
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "users": user_list,
+                    "pagination": {
+                        "total": total_users,
+                        "limit": limit,
+                        "offset": offset,
+                        "has_more": (offset + limit) < total_users
+                    },
+                    "statistics": total_stats,
+                    "filters": {
+                        "has_folders": has_folders,
+                        "has_shares": has_shares
+                    },
+                    "system_notes": {
+                        "user_model": "LOCAL user tracking only - Usenet has no user system",
+                        "authentication": "Based on cryptographic keys, not server accounts",
+                        "permissions": "Binary access model - you have the key or you don't",
+                        "admin_users": "No admin concept - each user controls their own content"
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get users: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.get("/api/v1/status")
         async def get_system_status():
             """
