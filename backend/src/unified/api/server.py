@@ -1817,6 +1817,276 @@ class UnifiedAPIServer:
                 logger.error(f"Rate limit quotas failed: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        # ==================== SEARCH ====================
+        @self.app.get("/api/v1/search")
+        async def search(
+            query: str,
+            search_type: Optional[str] = "all",
+            entity_type: Optional[str] = None,
+            limit: int = 50,
+            offset: int = 0,
+            sort_by: Optional[str] = "relevance",
+            include_metadata: bool = True
+        ):
+            """
+            Universal search across folders, files, shares, and segments.
+            
+            search_type: all, exact, prefix, contains
+            entity_type: folder, file, share, segment (None = all)
+            sort_by: relevance, date, size, name
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            if not query or len(query.strip()) < 2:
+                raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
+            
+            try:
+                from datetime import datetime
+                
+                query = query.strip()
+                results = {
+                    "folders": [],
+                    "files": [],
+                    "shares": [],
+                    "segments": []
+                }
+                
+                # Prepare search pattern based on type
+                if search_type == "exact":
+                    pattern = query
+                elif search_type == "prefix":
+                    pattern = f"{query}%"
+                elif search_type == "contains":
+                    pattern = f"%{query}%"
+                else:  # all
+                    pattern = f"%{query}%"
+                
+                # Search folders
+                if entity_type in [None, "folder"]:
+                    folder_query = """
+                        SELECT folder_id, path, status, file_count, total_size, 
+                               created_at, updated_at, owner_id
+                        FROM folders 
+                        WHERE path LIKE ? 
+                        ORDER BY 
+                            CASE WHEN path = ? THEN 0 ELSE 1 END,
+                            path
+                        LIMIT ? OFFSET ?
+                    """
+                    folders = self.system.db.fetch_all(
+                        folder_query, 
+                        (pattern, query, limit if entity_type == "folder" else 10, offset if entity_type == "folder" else 0)
+                    )
+                    
+                    for folder in folders:
+                        folder_result = {
+                            "type": "folder",
+                            "id": folder['folder_id'],
+                            "path": folder['path'],
+                            "status": folder['status'],
+                            "file_count": folder.get('file_count', 0),
+                            "total_size": folder.get('total_size', 0),
+                            "created_at": folder.get('created_at'),
+                            "relevance_score": 100 if folder['path'] == query else 
+                                             90 if folder['path'].startswith(query) else
+                                             80 if query in folder['path'] else 70
+                        }
+                        
+                        if include_metadata:
+                            # Check for shares
+                            shares_count = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM shares WHERE folder_id = ?",
+                                (folder['folder_id'],)
+                            )
+                            folder_result["shares_count"] = shares_count['count'] if shares_count else 0
+                            
+                            # Check if uploaded
+                            upload = self.system.db.fetch_one(
+                                "SELECT state FROM upload_queue WHERE entity_id = ? AND entity_type = 'folder'",
+                                (folder['folder_id'],)
+                            )
+                            folder_result["upload_status"] = upload['state'] if upload else None
+                        
+                        results["folders"].append(folder_result)
+                
+                # Search files
+                if entity_type in [None, "file"]:
+                    file_query = """
+                        SELECT file_id, folder_id, path, name, size, hash,
+                               created_at, modified_at, mime_type
+                        FROM files 
+                        WHERE name LIKE ? OR path LIKE ?
+                        ORDER BY 
+                            CASE WHEN name = ? THEN 0 ELSE 1 END,
+                            name
+                        LIMIT ? OFFSET ?
+                    """
+                    files = self.system.db.fetch_all(
+                        file_query,
+                        (pattern, pattern, query, limit if entity_type == "file" else 10, offset if entity_type == "file" else 0)
+                    )
+                    
+                    for file in files:
+                        file_result = {
+                            "type": "file",
+                            "id": file['file_id'],
+                            "folder_id": file['folder_id'],
+                            "name": file['name'],
+                            "path": file['path'],
+                            "size": file.get('size', 0),
+                            "hash": file.get('hash'),
+                            "mime_type": file.get('mime_type'),
+                            "created_at": file.get('created_at'),
+                            "relevance_score": 100 if file['name'] == query else
+                                             90 if file['name'].startswith(query) else
+                                             80 if query in file['name'] else 70
+                        }
+                        
+                        if include_metadata:
+                            # Check segmentation status
+                            segments_count = self.system.db.fetch_one(
+                                "SELECT COUNT(*) as count FROM segments WHERE file_id = ?",
+                                (file['file_id'],)
+                            )
+                            file_result["segments_count"] = segments_count['count'] if segments_count else 0
+                            
+                            # Get folder path
+                            folder = self.system.db.fetch_one(
+                                "SELECT path FROM folders WHERE folder_id = ?",
+                                (file['folder_id'],)
+                            )
+                            file_result["folder_path"] = folder['path'] if folder else None
+                        
+                        results["files"].append(file_result)
+                
+                # Search shares
+                if entity_type in [None, "share"]:
+                    # Search by share_id or folder path
+                    share_query = """
+                        SELECT s.share_id, s.folder_id, s.owner_id, s.share_type,
+                               s.access_level, s.created_at, s.expires_at, s.revoked,
+                               f.path as folder_path
+                        FROM shares s
+                        LEFT JOIN folders f ON s.folder_id = f.folder_id
+                        WHERE s.share_id LIKE ? OR f.path LIKE ?
+                        ORDER BY s.created_at DESC
+                        LIMIT ? OFFSET ?
+                    """
+                    shares = self.system.db.fetch_all(
+                        share_query,
+                        (pattern, pattern, limit if entity_type == "share" else 10, offset if entity_type == "share" else 0)
+                    )
+                    
+                    for share in shares:
+                        share_result = {
+                            "type": "share",
+                            "id": share['share_id'],
+                            "folder_id": share['folder_id'],
+                            "folder_path": share.get('folder_path'),
+                            "share_type": share.get('share_type', 'full'),
+                            "access_level": share.get('access_level', 'public'),
+                            "created_at": share.get('created_at'),
+                            "expires_at": share.get('expires_at'),
+                            "active": not share.get('revoked', False),
+                            "relevance_score": 100 if share['share_id'].startswith(query) else
+                                             80 if query in share['share_id'] else
+                                             70 if share.get('folder_path') and query in share['folder_path'] else 60
+                        }
+                        
+                        if include_metadata:
+                            # Get folder details
+                            folder = self.system.db.fetch_one(
+                                "SELECT file_count, total_size, status FROM folders WHERE folder_id = ?",
+                                (share['folder_id'],)
+                            )
+                            if folder:
+                                share_result["folder_file_count"] = folder.get('file_count', 0)
+                                share_result["folder_total_size"] = folder.get('total_size', 0)
+                                share_result["folder_status"] = folder.get('status')
+                        
+                        results["shares"].append(share_result)
+                
+                # Search segments (by hash or message_id)
+                if entity_type in [None, "segment"]:
+                    segment_query = """
+                        SELECT s.segment_id, s.file_id, s.segment_index, s.size,
+                               s.hash, s.message_id, s.created_at,
+                               f.name as file_name, f.path as file_path
+                        FROM segments s
+                        LEFT JOIN files f ON s.file_id = f.file_id
+                        WHERE s.hash LIKE ? OR s.message_id LIKE ? OR f.name LIKE ?
+                        ORDER BY s.created_at DESC
+                        LIMIT ? OFFSET ?
+                    """
+                    segments = self.system.db.fetch_all(
+                        segment_query,
+                        (pattern, pattern, pattern, limit if entity_type == "segment" else 10, offset if entity_type == "segment" else 0)
+                    )
+                    
+                    for segment in segments:
+                        segment_result = {
+                            "type": "segment",
+                            "id": segment['segment_id'],
+                            "file_id": segment['file_id'],
+                            "file_name": segment.get('file_name'),
+                            "segment_index": segment['segment_index'],
+                            "size": segment.get('size', 0),
+                            "hash": segment.get('hash'),
+                            "message_id": segment.get('message_id'),
+                            "created_at": segment.get('created_at'),
+                            "relevance_score": 100 if segment.get('hash') and segment['hash'].startswith(query) else
+                                             90 if segment.get('message_id') and query in segment['message_id'] else
+                                             70
+                        }
+                        
+                        results["segments"].append(segment_result)
+                
+                # Calculate total results and sort by relevance if requested
+                total_results = sum(len(v) for v in results.values())
+                
+                if sort_by == "relevance":
+                    for key in results:
+                        results[key].sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+                elif sort_by == "date":
+                    for key in results:
+                        results[key].sort(key=lambda x: x.get('created_at', ''), reverse=True)
+                elif sort_by == "size":
+                    for key in results:
+                        if key in ['folders', 'files', 'segments']:
+                            results[key].sort(key=lambda x: x.get('total_size' if key == 'folders' else 'size', 0), reverse=True)
+                elif sort_by == "name":
+                    for key in results:
+                        name_field = 'path' if key == 'folders' else 'name' if key == 'files' else 'id'
+                        results[key].sort(key=lambda x: x.get(name_field, ''))
+                
+                # Remove empty result sets if searching for specific entity type
+                if entity_type:
+                    results = {k: v for k, v in results.items() if v}
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "query": query,
+                    "search_type": search_type,
+                    "entity_type": entity_type,
+                    "total_results": total_results,
+                    "limit": limit,
+                    "offset": offset,
+                    "sort_by": sort_by,
+                    "results": results,
+                    "result_counts": {
+                        "folders": len(results.get("folders", [])),
+                        "files": len(results.get("files", [])),
+                        "shares": len(results.get("shares", [])),
+                        "segments": len(results.get("segments", []))
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Search failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         # Folder management endpoints
         @self.app.post("/api/v1/add_folder")
         async def add_folder(request: dict):
