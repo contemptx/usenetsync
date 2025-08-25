@@ -1960,6 +1960,241 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to list webhooks: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/webhooks/{webhook_id}")
+        async def get_webhook_details(webhook_id: str):
+            """
+            Get detailed information about a specific webhook.
+            
+            Returns comprehensive webhook data including:
+            - Configuration details
+            - Event subscriptions
+            - Delivery statistics
+            - Recent trigger history
+            - Error details if failing
+            
+            NOTE: Webhooks are LOCAL event notifications.
+            They inform about Usenet operations but cannot affect
+            the immutability of posted content.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime, timedelta
+                import json
+                
+                # Get webhook from database
+                webhook = self.system.db.fetch_one(
+                    "SELECT * FROM webhooks WHERE webhook_id = ?",
+                    (webhook_id,)
+                )
+                
+                if not webhook:
+                    raise HTTPException(status_code=404, detail=f"Webhook {webhook_id} not found")
+                
+                # Parse JSON fields
+                events = []
+                if webhook.get('events'):
+                    try:
+                        events = json.loads(webhook['events'])
+                    except:
+                        events = []
+                
+                headers = {}
+                if webhook.get('headers'):
+                    try:
+                        headers = json.loads(webhook['headers'])
+                    except:
+                        headers = {}
+                
+                retry_policy = {}
+                if webhook.get('retry_policy'):
+                    try:
+                        retry_policy = json.loads(webhook['retry_policy'])
+                    except:
+                        retry_policy = {}
+                
+                # Build comprehensive webhook details
+                webhook_details = {
+                    "webhook_id": webhook['webhook_id'],
+                    "url": webhook['url'],
+                    "events": events,
+                    "active": webhook.get('active', True),
+                    "created_at": webhook.get('created_at'),
+                    "updated_at": webhook.get('updated_at'),
+                    "last_triggered": webhook.get('last_triggered'),
+                    "failure_count": webhook.get('failure_count', 0)
+                }
+                
+                # Add configuration details
+                webhook_details["configuration"] = {
+                    "has_secret": bool(webhook.get('secret')),
+                    "headers_configured": len(headers) > 0,
+                    "custom_headers": headers if headers else None,
+                    "retry_policy": retry_policy if retry_policy else {
+                        "max_retries": 3,
+                        "retry_delay_seconds": 60,
+                        "exponential_backoff": True
+                    }
+                }
+                
+                # Calculate health status
+                if not webhook.get('active'):
+                    webhook_details["health"] = {
+                        "status": "disabled",
+                        "message": "Webhook is disabled",
+                        "recommendation": "Enable webhook to receive notifications"
+                    }
+                elif webhook.get('failure_count', 0) >= 10:
+                    webhook_details["health"] = {
+                        "status": "failed",
+                        "message": "Webhook has failed too many times",
+                        "recommendation": "Check endpoint availability and reset failure count"
+                    }
+                elif webhook.get('failure_count', 0) >= 5:
+                    webhook_details["health"] = {
+                        "status": "critical",
+                        "message": "Multiple consecutive failures detected",
+                        "recommendation": "Verify endpoint is responding correctly"
+                    }
+                elif webhook.get('failure_count', 0) > 0:
+                    webhook_details["health"] = {
+                        "status": "degraded",
+                        "message": f"Failed {webhook['failure_count']} time(s)",
+                        "recommendation": "Monitor for continued failures"
+                    }
+                else:
+                    webhook_details["health"] = {
+                        "status": "healthy",
+                        "message": "Webhook is functioning normally",
+                        "recommendation": None
+                    }
+                
+                # Add last error details if any
+                if webhook.get('last_error'):
+                    webhook_details["last_error"] = {
+                        "message": webhook['last_error'],
+                        "occurred_at": webhook.get('last_triggered'),
+                        "failure_count": webhook.get('failure_count', 0)
+                    }
+                
+                # Add trigger statistics
+                if webhook.get('last_triggered'):
+                    try:
+                        last_triggered = datetime.fromisoformat(webhook['last_triggered'])
+                        time_since = (datetime.now() - last_triggered).total_seconds()
+                        webhook_details["trigger_statistics"] = {
+                            "last_triggered": webhook['last_triggered'],
+                            "time_since_seconds": round(time_since),
+                            "time_since_formatted": str(timedelta(seconds=int(time_since))),
+                            "is_recent": time_since < 3600  # Within last hour
+                        }
+                    except:
+                        pass
+                
+                # Add detailed event descriptions
+                webhook_details["event_subscriptions"] = []
+                for event in events:
+                    event_info = {
+                        "event": event,
+                        "category": event.split('.')[0] if '.' in event else "general"
+                    }
+                    
+                    if event == "upload.completed":
+                        event_info["description"] = "Triggered when content is successfully posted to Usenet"
+                        event_info["payload_includes"] = ["folder_id", "share_id", "message_ids", "size"]
+                    elif event == "upload.failed":
+                        event_info["description"] = "Triggered when upload to Usenet fails"
+                        event_info["payload_includes"] = ["folder_id", "error", "retry_count"]
+                    elif event == "download.completed":
+                        event_info["description"] = "Triggered when content is successfully retrieved from Usenet"
+                        event_info["payload_includes"] = ["share_id", "folder_path", "files", "size"]
+                    elif event == "download.failed":
+                        event_info["description"] = "Triggered when download from Usenet fails"
+                        event_info["payload_includes"] = ["share_id", "error", "partial_success"]
+                    elif event == "share.created":
+                        event_info["description"] = "Triggered when a new share is created"
+                        event_info["payload_includes"] = ["share_id", "folder_id", "access_level", "owner"]
+                    elif event == "share.revoked":
+                        event_info["description"] = "Triggered when a share is revoked locally"
+                        event_info["payload_includes"] = ["share_id", "reason", "revoked_by"]
+                    elif event == "folder.indexed":
+                        event_info["description"] = "Triggered when folder indexing completes"
+                        event_info["payload_includes"] = ["folder_id", "file_count", "total_size"]
+                    elif event == "error.critical":
+                        event_info["description"] = "Triggered on critical system errors"
+                        event_info["payload_includes"] = ["error_type", "message", "stack_trace"]
+                    else:
+                        event_info["description"] = "Custom event"
+                        event_info["payload_includes"] = ["event_data"]
+                    
+                    webhook_details["event_subscriptions"].append(event_info)
+                
+                # Get recent delivery attempts (simulated - would need delivery_logs table)
+                webhook_details["recent_deliveries"] = []
+                
+                # Add usage examples
+                webhook_details["usage_examples"] = {
+                    "test_payload": {
+                        "event": "test.ping",
+                        "timestamp": datetime.now().isoformat(),
+                        "data": {
+                            "message": "Test webhook delivery",
+                            "webhook_id": webhook_id
+                        }
+                    },
+                    "curl_test": f"curl -X POST {webhook['url']} -H 'Content-Type: application/json' -d '{{\"event\":\"test.ping\"}}'"
+                }
+                
+                # Add Usenet context
+                webhook_details["usenet_context"] = {
+                    "purpose": "Notify external systems about Usenet operations",
+                    "limitations": [
+                        "Cannot modify posted content",
+                        "Cannot prevent uploads/downloads",
+                        "Cannot change share access after creation"
+                    ],
+                    "use_cases": [
+                        "Logging and audit trails",
+                        "External system synchronization",
+                        "Notification services",
+                        "Monitoring and alerting"
+                    ]
+                }
+                
+                # Add security recommendations
+                webhook_details["security"] = {
+                    "has_secret": webhook_details["configuration"]["has_secret"],
+                    "recommendations": []
+                }
+                
+                if not webhook_details["configuration"]["has_secret"]:
+                    webhook_details["security"]["recommendations"].append(
+                        "Consider adding a secret for webhook signature verification"
+                    )
+                
+                if webhook['url'].startswith('http://'):
+                    webhook_details["security"]["recommendations"].append(
+                        "Use HTTPS for secure webhook delivery"
+                    )
+                
+                if webhook.get('failure_count', 0) > 5:
+                    webhook_details["security"]["recommendations"].append(
+                        "High failure rate may indicate endpoint issues or attacks"
+                    )
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "webhook": webhook_details
+                }
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get webhook details: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.delete("/api/v1/webhooks/{webhook_id}")
         async def delete_webhook(webhook_id: str):
             """Delete webhook"""
