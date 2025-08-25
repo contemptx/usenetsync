@@ -2093,16 +2093,19 @@ class UnifiedAPIServer:
             user_id: str,
             resource_type: str,
             resource_id: str,
-            access_type: Optional[str] = "read",
+            operation: Optional[str] = "download",
             password: Optional[str] = None,
             commitment: Optional[str] = None
         ):
             """
             Check if user has access to a resource.
             
-            resource_type: share, folder, file, segment
-            access_type: read, write, delete, admin
-            password: For protected shares
+            For LOCAL operations (manage): Only folder owner has access
+            For USENET operations (download): Binary access - you have it or you don't
+            
+            resource_type: share, folder
+            operation: download (from Usenet), manage (local only)
+            password: For protected shares (decryption key)
             commitment: For private shares (cryptographic proof)
             """
             if not self.system:
@@ -2119,7 +2122,7 @@ class UnifiedAPIServer:
                     "user_id": user_id,
                     "resource_type": resource_type,
                     "resource_id": resource_id,
-                    "access_type": access_type,
+                    "operation": operation,
                     "timestamp": datetime.now().isoformat()
                 }
                 
@@ -2218,9 +2221,9 @@ class UnifiedAPIServer:
                             try:
                                 self.system.db.execute(
                                     """INSERT INTO access_logs (user_id, resource_type, resource_id, 
-                                       access_type, granted, timestamp, reason)
+                                       operation, granted, timestamp, reason)
                                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                                    (user_id, resource_type, resource_id, access_type, 
+                                    (user_id, resource_type, resource_id, operation, 
                                      access_granted, datetime.now().isoformat(), 
                                      access_details.get("reason", ""))
                                 )
@@ -2228,7 +2231,7 @@ class UnifiedAPIServer:
                                 pass  # Access logs table might not exist
                 
                 elif resource_type == "folder":
-                    # Check folder access
+                    # For folders, check operation type
                     folder = self.system.db.fetch_one(
                         "SELECT * FROM folders WHERE folder_id = ?",
                         (resource_id,)
@@ -2237,118 +2240,49 @@ class UnifiedAPIServer:
                     if not folder:
                         access_details["reason"] = "Folder not found"
                         access_granted = False
-                    else:
-                        # Check if user is owner
+                    elif operation == "manage":
+                        # LOCAL OPERATION: Only owner can manage
                         if folder.get('owner_id') == user_id:
                             access_granted = True
-                            access_details["reason"] = "User is folder owner"
+                            access_details["reason"] = "User is folder owner - can manage locally"
                             access_details["owner"] = True
                         else:
-                            # Check if folder is shared
-                            share = self.system.db.fetch_one(
-                                """SELECT * FROM shares 
-                                   WHERE folder_id = ? AND (revoked IS NULL OR revoked = 0)
-                                   ORDER BY created_at DESC LIMIT 1""",
-                                (resource_id,)
+                            access_granted = False
+                            access_details["reason"] = "Only folder owner can manage"
+                    elif operation == "download":
+                        # USENET OPERATION: Check if folder has been shared
+                        share = self.system.db.fetch_one(
+                            """SELECT * FROM shares 
+                               WHERE folder_id = ? AND (revoked IS NULL OR revoked = 0)
+                               ORDER BY created_at DESC LIMIT 1""",
+                            (resource_id,)
+                        )
+                        
+                        if not share:
+                            access_details["reason"] = "Folder not published to Usenet"
+                            access_granted = False
+                        else:
+                            # Check share access (binary - you have it or you don't)
+                            share_access = await check_access(
+                                user_id=user_id,
+                                resource_type="share",
+                                resource_id=share['share_id'],
+                                operation="download",
+                                password=password,
+                                commitment=commitment
                             )
-                            
-                            if share:
-                                # Recursively check share access
-                                share_access = await check_access(
-                                    user_id=user_id,
-                                    resource_type="share",
-                                    resource_id=share['share_id'],
-                                    access_type=access_type,
-                                    password=password,
-                                    commitment=commitment
-                                )
-                                access_granted = share_access.get("access_granted", False)
-                                access_details["via_share"] = share['share_id']
-                                access_details["reason"] = share_access.get("access_details", {}).get("reason", "")
-                            else:
-                                access_details["reason"] = "Folder not shared"
-                                access_granted = False
-                
-                elif resource_type == "file":
-                    # Check file access via folder
-                    file = self.system.db.fetch_one(
-                        "SELECT * FROM files WHERE file_id = ?",
-                        (resource_id,)
-                    )
-                    
-                    if not file:
-                        access_details["reason"] = "File not found"
-                        access_granted = False
+                            access_granted = share_access.get("access_granted", False)
+                            access_details["via_share"] = share['share_id']
+                            access_details["reason"] = share_access.get("access_details", {}).get("reason", "")
                     else:
-                        # Check folder access
-                        folder_access = await check_access(
-                            user_id=user_id,
-                            resource_type="folder",
-                            resource_id=file['folder_id'],
-                            access_type=access_type,
-                            password=password,
-                            commitment=commitment
-                        )
-                        access_granted = folder_access.get("access_granted", False)
-                        access_details["via_folder"] = file['folder_id']
-                        access_details["reason"] = folder_access.get("access_details", {}).get("reason", "")
-                
-                elif resource_type == "segment":
-                    # Check segment access via file
-                    segment = self.system.db.fetch_one(
-                        "SELECT * FROM segments WHERE segment_id = ?",
-                        (resource_id,)
-                    )
-                    
-                    if not segment:
-                        access_details["reason"] = "Segment not found"
+                        access_details["reason"] = f"Invalid operation: {operation}"
                         access_granted = False
-                    else:
-                        # Check file access
-                        file_access = await check_access(
-                            user_id=user_id,
-                            resource_type="file",
-                            resource_id=segment['file_id'],
-                            access_type=access_type,
-                            password=password,
-                            commitment=commitment
-                        )
-                        access_granted = file_access.get("access_granted", False)
-                        access_details["via_file"] = segment['file_id']
-                        access_details["reason"] = file_access.get("access_details", {}).get("reason", "")
+                
+
                 
                 else:
-                    access_details["reason"] = f"Unknown resource type: {resource_type}"
+                    access_details["reason"] = f"Unknown resource type: {resource_type}. Valid types: share, folder"
                     access_granted = False
-                
-                # Check write/delete/admin permissions
-                if access_granted and access_type != "read":
-                    if resource_type in ["folder", "file", "segment"]:
-                        # Only owners can write/delete
-                        folder_id = resource_id if resource_type == "folder" else None
-                        
-                        if not folder_id and resource_type == "file":
-                            file = self.system.db.fetch_one(
-                                "SELECT folder_id FROM files WHERE file_id = ?",
-                                (resource_id,)
-                            )
-                            folder_id = file['folder_id'] if file else None
-                        
-                        if not folder_id and resource_type == "segment":
-                            segment = self.system.db.fetch_one(
-                                "SELECT f.folder_id FROM segments s JOIN files f ON s.file_id = f.file_id WHERE s.segment_id = ?",
-                                (resource_id,)
-                            )
-                            folder_id = segment['folder_id'] if segment else None
-                        
-                        if folder_id:
-                            folder = self.system.db.fetch_one(
-                                "SELECT owner_id FROM folders WHERE folder_id = ?",
-                                (folder_id,)
-                            )
-                            if folder and folder.get('owner_id') != user_id:
-                                access_granted = False
-                                access_details["reason"] = f"Only owner can {access_type}"
                 
                 return {
                     "success": True,
@@ -2367,21 +2301,26 @@ class UnifiedAPIServer:
             """Get recommendations based on access check results"""
             recommendations = []
             reason = access_details.get("reason", "")
+            operation = access_details.get("operation", "")
             
             if "Password required" in reason:
-                recommendations.append("Request password from share owner")
+                recommendations.append("Request decryption password from share owner")
             elif "not authorized" in reason:
-                recommendations.append("Request access from share owner")
+                recommendations.append("Request to be added to private share by owner")
             elif "expired" in reason:
-                recommendations.append("Share has expired - request new share")
+                recommendations.append("Share has expired locally - request new share")
             elif "revoked" in reason:
                 recommendations.append("Share was revoked - request new share")
             elif "not found" in reason:
                 recommendations.append("Verify the resource ID is correct")
             elif "Invalid password" in reason:
-                recommendations.append("Verify password with share owner")
+                recommendations.append("Verify decryption password with share owner")
             elif "Invalid commitment" in reason:
-                recommendations.append("Verify your cryptographic commitment")
+                recommendations.append("Verify your cryptographic commitment matches the index")
+            elif "not published" in reason:
+                recommendations.append("Folder has not been published to Usenet yet")
+            elif "Only folder owner" in reason and operation == "manage":
+                recommendations.append("Only the folder owner can perform local management operations")
             
             return recommendations
         
