@@ -4432,6 +4432,141 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to list authorized users: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/publishing/commitment/list")
+        async def list_commitments(
+            share_id: Optional[str] = None,
+            folder_id: Optional[str] = None,
+            user_id: Optional[str] = None,
+            active_only: bool = True
+        ):
+            """List cryptographic commitments for private shares"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                
+                commitments_list = []
+                
+                # Get shares based on filters
+                query = "SELECT * FROM shares WHERE 1=1"
+                params = []
+                
+                if share_id:
+                    query += " AND share_id = ?"
+                    params.append(share_id)
+                
+                if folder_id:
+                    query += " AND folder_id = ?"
+                    params.append(folder_id)
+                
+                if active_only:
+                    query += " AND (revoked IS NULL OR revoked = 0)"
+                
+                # Only get private shares that have commitments
+                query += " AND access_level = 'private'"
+                
+                shares = []
+                if params:
+                    shares = self.system.db.fetch_all(query, tuple(params))
+                else:
+                    shares = self.system.db.fetch_all(query)
+                
+                if not shares:
+                    shares = []
+                
+                for share in shares:
+                    # Parse access_commitments JSON field
+                    if share.get('access_commitments'):
+                        try:
+                            import json
+                            commitments = json.loads(share['access_commitments'])
+                            
+                            # Filter by user_id if specified
+                            if user_id:
+                                if user_id in commitments:
+                                    commitment_info = {
+                                        "share_id": share['share_id'],
+                                        "folder_id": share['folder_id'],
+                                        "user_id": user_id,
+                                        "commitment": commitments[user_id],
+                                        "created_at": share.get('created_at'),
+                                        "expires_at": share.get('expires_at'),
+                                        "active": not share.get('revoked', False)
+                                    }
+                                    
+                                    # Add folder info
+                                    folder = self.system.db.fetch_one(
+                                        "SELECT path, status FROM folders WHERE folder_id = ?",
+                                        (share['folder_id'],)
+                                    )
+                                    if folder:
+                                        commitment_info["folder_path"] = folder['path']
+                                        commitment_info["folder_status"] = folder['status']
+                                    
+                                    commitments_list.append(commitment_info)
+                            else:
+                                # Return all commitments for this share
+                                for uid, commitment in commitments.items():
+                                    commitment_info = {
+                                        "share_id": share['share_id'],
+                                        "folder_id": share['folder_id'],
+                                        "user_id": uid,
+                                        "commitment": commitment,
+                                        "created_at": share.get('created_at'),
+                                        "expires_at": share.get('expires_at'),
+                                        "active": not share.get('revoked', False)
+                                    }
+                                    
+                                    # Add folder info
+                                    folder = self.system.db.fetch_one(
+                                        "SELECT path, status FROM folders WHERE folder_id = ?",
+                                        (share['folder_id'],)
+                                    )
+                                    if folder:
+                                        commitment_info["folder_path"] = folder['path']
+                                        commitment_info["folder_status"] = folder['status']
+                                    
+                                    commitments_list.append(commitment_info)
+                        except json.JSONDecodeError:
+                            logger.warning(f"Invalid JSON in access_commitments for share {share['share_id']}")
+                        except Exception as e:
+                            logger.error(f"Error parsing commitments: {e}")
+                
+                # Group by share if no specific filters
+                shares_summary = {}
+                if not share_id and not user_id:
+                    for commitment in commitments_list:
+                        sid = commitment['share_id']
+                        if sid not in shares_summary:
+                            shares_summary[sid] = {
+                                "share_id": sid,
+                                "folder_id": commitment['folder_id'],
+                                "folder_path": commitment.get('folder_path'),
+                                "total_commitments": 0,
+                                "user_ids": []
+                            }
+                        shares_summary[sid]["total_commitments"] += 1
+                        shares_summary[sid]["user_ids"].append(commitment['user_id'])
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "filters": {
+                        "share_id": share_id,
+                        "folder_id": folder_id,
+                        "user_id": user_id,
+                        "active_only": active_only
+                    },
+                    "total_commitments": len(commitments_list),
+                    "commitments": commitments_list,
+                    "shares_summary": list(shares_summary.values()) if shares_summary else []
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to list commitments: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
