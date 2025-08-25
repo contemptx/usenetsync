@@ -1,0 +1,124 @@
+name: Block Mocks and Placeholders
+
+on: 
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  check-no-mocks:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Check for banned patterns
+        run: |
+          echo "🔍 Scanning for placeholders and mock data..."
+          
+          BANNED=(
+            "test@example.com"
+            "user@example.com"
+            "/tmp/test"
+            "TODO"
+            "FIXME"
+            "class Mock"
+            "class Fake"
+            "class Stub"
+            "random\.uniform"
+            "random\.randint"
+            "placeholder"
+            "demo_"
+            "sample_"
+            "DEMO-"
+            "TEST-"
+            "example\.com"
+          )
+          
+          FOUND_VIOLATIONS=0
+          
+          for pattern in "${BANNED[@]}"; do
+            echo "Checking for: $pattern"
+            if grep -r "$pattern" backend/src --include="*.py" 2>/dev/null; then
+              echo "::error::Found banned pattern: $pattern"
+              FOUND_VIOLATIONS=1
+            fi
+          done
+          
+          if [ $FOUND_VIOLATIONS -eq 1 ]; then
+            echo "::error::Placeholders or mock data detected!"
+            exit 1
+          fi
+          
+          echo "✅ No placeholders found"
+      
+      - name: Verify real NNTP configuration
+        run: |
+          echo "🔍 Verifying real NNTP server usage..."
+          
+          # Check NNTP client uses real server
+          if ! grep -q "news.newshosting.com" backend/src/unified/networking/nntp_client.py 2>/dev/null; then
+            if [ -f backend/src/unified/networking/nntp_client.py ]; then
+              echo "::warning::NNTP client should use real server (news.newshosting.com)"
+            fi
+          fi
+          
+          # Check for mock NNTP classes
+          if grep -r "class.*Mock.*NNTP\|class.*Fake.*NNTP" backend/src --include="*.py" 2>/dev/null; then
+            echo "::error::Mock NNTP classes detected"
+            exit 1
+          fi
+          
+          echo "✅ NNTP configuration verified"
+      
+      - name: Check for email fields
+        run: |
+          echo "🔍 Checking for email fields (privacy violation)..."
+          
+          if grep -r "email.*=.*request\.\(get\|json\)" backend/src --include="*.py" 2>/dev/null; then
+            echo "::error::Email fields detected in API endpoints"
+            exit 1
+          fi
+          
+          if grep -r "'email':" backend/src --include="*.py" 2>/dev/null | grep -v "# No email"; then
+            echo "::error::Email fields in responses detected"
+            exit 1
+          fi
+          
+          echo "✅ No email fields found"
+      
+      - name: Check for permission levels
+        run: |
+          echo "🔍 Checking for incorrect permission models..."
+          
+          if grep -r "permission.*=.*['\"]read['\"]" backend/src --include="*.py" 2>/dev/null; then
+            echo "::error::Read/write/admin permissions detected - Usenet uses binary access"
+            exit 1
+          fi
+          
+          echo "✅ Binary access model verified"
+      
+      - name: Verify no mock imports
+        run: |
+          echo "🔍 Checking for mock imports..."
+          
+          if grep -r "from unittest.mock import\|import mock" backend/src --include="*.py" 2>/dev/null; then
+            echo "::error::Mock imports detected - use real systems"
+            exit 1
+          fi
+          
+          echo "✅ No mock imports found"
+      
+      - name: Run enforcement validator
+        run: |
+          if [ -f backend/src/unified/enforcement.py ]; then
+            python backend/src/unified/enforcement.py
+          fi
+          
+          echo "✅ All checks passed!"
