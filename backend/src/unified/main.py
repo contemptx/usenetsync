@@ -119,6 +119,9 @@ class UnifiedSystem:
         from unified.upload.queue import UnifiedUploadQueue
         self.upload_queue = UnifiedUploadQueue(self.db)
         
+        # Initialize upload system if NNTP client is available
+        self.upload_system = None
+        
         # Initialize NNTP client with real credentials
         try:
             from unified.networking.real_nntp_client import RealNNTPClient
@@ -133,6 +136,18 @@ class UnifiedSystem:
             )
             if connected:
                 logger.info("✓ NNTP client connected to Newshosting")
+                
+                # Initialize upload system with NNTP client
+                try:
+                    from unified.unified_system import UnifiedUploadSystem
+                    self.upload_system = UnifiedUploadSystem(
+                        nntp_client=self.nntp_client,
+                        db_manager=self.db,
+                        security_system=self.encryption
+                    )
+                    logger.info("✓ Upload system initialized")
+                except Exception as e:
+                    logger.warning(f"Could not initialize upload system: {e}")
             else:
                 logger.warning("Could not connect to Newshosting")
                 self.nntp_client = None
