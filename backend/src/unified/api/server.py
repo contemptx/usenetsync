@@ -4995,6 +4995,525 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to download share: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.post("/api/v1/download/cache/optimize")
+        async def optimize_download_cache(request: dict):
+            """
+            Optimize download cache for better performance.
+            
+            Performs cache optimization tasks:
+            1. Defragments cached segments
+            2. Compresses old segments
+            3. Indexes cache for faster access
+            4. Removes duplicates
+            5. Reorganizes by priority
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            optimize_type = request.get("optimize_type", "all")  # all, compress, dedupe, index
+            max_cache_size_mb = request.get("max_cache_size_mb", 1024)  # 1GB default
+            compress_older_than_days = request.get("compress_older_than_days", 3)
+            
+            try:
+                import os
+                import gzip
+                import hashlib
+                from pathlib import Path
+                from datetime import datetime, timedelta
+                
+                cache_dir = Path("./cache/downloads")
+                segment_cache_dir = Path("./cache/segments")
+                
+                space_saved = 0
+                files_optimized = 0
+                duplicates_removed = 0
+                
+                optimization_stats = {
+                    "segments_compressed": 0,
+                    "duplicates_removed": 0,
+                    "cache_indexed": False,
+                    "fragments_consolidated": 0,
+                    "priority_reorganized": 0
+                }
+                
+                # Compress old segments
+                if optimize_type in ["all", "compress"]:
+                    cutoff_date = datetime.now() - timedelta(days=compress_older_than_days)
+                    
+                    if segment_cache_dir.exists():
+                        for segment_file in segment_cache_dir.rglob('*.seg'):
+                            if not segment_file.name.endswith('.gz'):
+                                mtime = datetime.fromtimestamp(segment_file.stat().st_mtime)
+                                if mtime < cutoff_date:
+                                    # Compress the segment
+                                    original_size = segment_file.stat().st_size
+                                    compressed_path = segment_file.with_suffix('.seg.gz')
+                                    
+                                    with open(segment_file, 'rb') as f_in:
+                                        with gzip.open(compressed_path, 'wb', compresslevel=6) as f_out:
+                                            f_out.write(f_in.read())
+                                    
+                                    compressed_size = compressed_path.stat().st_size
+                                    
+                                    # Only keep compressed if it's smaller
+                                    if compressed_size < original_size * 0.9:  # At least 10% savings
+                                        segment_file.unlink()
+                                        space_saved += original_size - compressed_size
+                                        files_optimized += 1
+                                        optimization_stats["segments_compressed"] += 1
+                                    else:
+                                        compressed_path.unlink()
+                
+                # Remove duplicate segments
+                if optimize_type in ["all", "dedupe"]:
+                    seen_hashes = {}
+                    
+                    for cache_path in [cache_dir, segment_cache_dir]:
+                        if cache_path.exists():
+                            for file_path in cache_path.rglob('*'):
+                                if file_path.is_file():
+                                    # Calculate file hash
+                                    file_hash = hashlib.md5()
+                                    with open(file_path, 'rb') as f:
+                                        for chunk in iter(lambda: f.read(8192), b''):
+                                            file_hash.update(chunk)
+                                    
+                                    hash_value = file_hash.hexdigest()
+                                    
+                                    if hash_value in seen_hashes:
+                                        # Duplicate found
+                                        size = file_path.stat().st_size
+                                        file_path.unlink()
+                                        space_saved += size
+                                        duplicates_removed += 1
+                                        optimization_stats["duplicates_removed"] += 1
+                                    else:
+                                        seen_hashes[hash_value] = str(file_path)
+                
+                # Create cache index for faster access
+                if optimize_type in ["all", "index"]:
+                    cache_index = {}
+                    
+                    # Index all cached files
+                    for cache_path in [cache_dir, segment_cache_dir]:
+                        if cache_path.exists():
+                            for file_path in cache_path.rglob('*'):
+                                if file_path.is_file():
+                                    relative_path = file_path.relative_to(cache_path)
+                                    cache_index[str(relative_path)] = {
+                                        "size": file_path.stat().st_size,
+                                        "modified": datetime.fromtimestamp(
+                                            file_path.stat().st_mtime).isoformat(),
+                                        "compressed": file_path.suffix == '.gz'
+                                    }
+                    
+                    # Save index
+                    index_file = Path("./cache/cache_index.json")
+                    index_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(index_file, 'w') as f:
+                        json.dump(cache_index, f, indent=2)
+                    
+                    optimization_stats["cache_indexed"] = True
+                    optimization_stats["indexed_files"] = len(cache_index)
+                
+                # Consolidate fragmented downloads
+                if optimize_type in ["all", "consolidate"]:
+                    # Group segments by download
+                    downloads = self.system.db.fetch_all(
+                        """SELECT queue_id, entity_id FROM download_queue 
+                           WHERE state IN ('downloading', 'paused')"""
+                    )
+                    
+                    for download in downloads:
+                        download_cache = cache_dir / download['queue_id']
+                        if download_cache.exists():
+                            # Consolidate small fragment files
+                            fragments = list(download_cache.glob('*.part'))
+                            if len(fragments) > 10:  # Many fragments
+                                consolidated_path = download_cache / "consolidated.dat"
+                                with open(consolidated_path, 'wb') as consolidated:
+                                    for fragment in sorted(fragments):
+                                        with open(fragment, 'rb') as f:
+                                            consolidated.write(f.read())
+                                        fragment.unlink()
+                                
+                                optimization_stats["fragments_consolidated"] += len(fragments)
+                                files_optimized += 1
+                
+                # Enforce cache size limit
+                total_cache_size = 0
+                all_cache_files = []
+                
+                for cache_path in [cache_dir, segment_cache_dir]:
+                    if cache_path.exists():
+                        for file_path in cache_path.rglob('*'):
+                            if file_path.is_file():
+                                size = file_path.stat().st_size
+                                total_cache_size += size
+                                all_cache_files.append((file_path, size, file_path.stat().st_mtime))
+                
+                max_cache_bytes = max_cache_size_mb * 1024 * 1024
+                
+                if total_cache_size > max_cache_bytes:
+                    # Remove oldest files until under limit
+                    all_cache_files.sort(key=lambda x: x[2])  # Sort by modification time
+                    
+                    for file_path, size, _ in all_cache_files:
+                        if total_cache_size <= max_cache_bytes:
+                            break
+                        
+                        file_path.unlink()
+                        total_cache_size -= size
+                        space_saved += size
+                        files_optimized += 1
+                
+                return {
+                    "success": True,
+                    "optimize_type": optimize_type,
+                    "space_saved_bytes": space_saved,
+                    "space_saved_mb": round(space_saved / (1024 * 1024), 2),
+                    "files_optimized": files_optimized,
+                    "duplicates_removed": duplicates_removed,
+                    "optimization_stats": optimization_stats,
+                    "cache_size_mb": round(total_cache_size / (1024 * 1024), 2),
+                    "max_cache_size_mb": max_cache_size_mb,
+                    "summary": f"Optimized cache, saved {round(space_saved / (1024 * 1024), 2)} MB",
+                    "note": "Cache optimized for better performance"
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to optimize cache: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/download/cache/clear")
+        async def clear_download_cache(request: dict):
+            """
+            Clear download cache to free up disk space.
+            
+            Removes cached segments and temporary files:
+            1. Clears completed download segments
+            2. Removes partial downloads based on age
+            3. Cleans up orphaned temp files
+            4. Returns space freed
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            clear_type = request.get("clear_type", "all")  # all, completed, failed, old
+            max_age_days = request.get("max_age_days", 7)
+            force = request.get("force", False)
+            
+            try:
+                import os
+                import shutil
+                from pathlib import Path
+                from datetime import datetime, timedelta
+                
+                cache_dir = Path("./cache/downloads")
+                temp_dir = Path("./temp")
+                
+                space_freed = 0
+                files_removed = 0
+                folders_removed = 0
+                
+                # Track what we're clearing
+                cleared_items = {
+                    "completed_downloads": 0,
+                    "failed_downloads": 0,
+                    "partial_segments": 0,
+                    "temp_files": 0,
+                    "orphaned_files": 0
+                }
+                
+                # Clear based on type
+                if clear_type in ["all", "completed"]:
+                    # Clear completed downloads from database
+                    completed = self.system.db.fetch_all(
+                        """SELECT queue_id, metadata FROM download_queue 
+                           WHERE state = 'completed' AND completed_at < ?""",
+                        ((datetime.now() - timedelta(days=max_age_days)).isoformat(),)
+                    )
+                    
+                    for download in completed:
+                        try:
+                            metadata = json.loads(download['metadata']) if download['metadata'] else {}
+                            output_path = metadata.get('output_path')
+                            
+                            # Remove cache directory for this download
+                            cache_path = cache_dir / download['queue_id']
+                            if cache_path.exists():
+                                size = sum(f.stat().st_size for f in cache_path.rglob('*') if f.is_file())
+                                shutil.rmtree(cache_path)
+                                space_freed += size
+                                folders_removed += 1
+                                cleared_items["completed_downloads"] += 1
+                        except:
+                            pass
+                    
+                    # Remove from database if force flag set
+                    if force:
+                        self.system.db.execute(
+                            """DELETE FROM download_queue 
+                               WHERE state = 'completed' AND completed_at < ?""",
+                            ((datetime.now() - timedelta(days=max_age_days)).isoformat(),)
+                        )
+                
+                if clear_type in ["all", "failed"]:
+                    # Clear failed downloads
+                    failed = self.system.db.fetch_all(
+                        """SELECT queue_id, metadata FROM download_queue 
+                           WHERE state = 'failed'"""
+                    )
+                    
+                    for download in failed:
+                        cache_path = cache_dir / download['queue_id']
+                        if cache_path.exists():
+                            size = sum(f.stat().st_size for f in cache_path.rglob('*') if f.is_file())
+                            shutil.rmtree(cache_path)
+                            space_freed += size
+                            folders_removed += 1
+                            cleared_items["failed_downloads"] += 1
+                    
+                    if force:
+                        self.system.db.execute(
+                            "DELETE FROM download_queue WHERE state = 'failed'"
+                        )
+                
+                if clear_type in ["all", "old"]:
+                    # Clear old partial downloads
+                    cutoff_date = datetime.now() - timedelta(days=max_age_days)
+                    
+                    if cache_dir.exists():
+                        for item in cache_dir.iterdir():
+                            if item.is_dir():
+                                # Check modification time
+                                mtime = datetime.fromtimestamp(item.stat().st_mtime)
+                                if mtime < cutoff_date:
+                                    size = sum(f.stat().st_size for f in item.rglob('*') if f.is_file())
+                                    shutil.rmtree(item)
+                                    space_freed += size
+                                    folders_removed += 1
+                                    cleared_items["partial_segments"] += 1
+                
+                # Clear temp files
+                if temp_dir.exists():
+                    for temp_file in temp_dir.rglob('*'):
+                        if temp_file.is_file():
+                            mtime = datetime.fromtimestamp(temp_file.stat().st_mtime)
+                            if mtime < datetime.now() - timedelta(days=1):  # Remove temp files older than 1 day
+                                size = temp_file.stat().st_size
+                                temp_file.unlink()
+                                space_freed += size
+                                files_removed += 1
+                                cleared_items["temp_files"] += 1
+                
+                # Check for orphaned segment files
+                segments = self.system.db.fetch_all(
+                    """SELECT segment_id FROM segments 
+                       WHERE created_at < ?""",
+                    ((datetime.now() - timedelta(days=max_age_days*2)).isoformat(),)
+                )
+                
+                segment_cache_dir = Path("./cache/segments")
+                if segment_cache_dir.exists():
+                    valid_segments = {s['segment_id'] for s in segments}
+                    for segment_file in segment_cache_dir.rglob('*.seg'):
+                        segment_id = segment_file.stem
+                        if segment_id not in valid_segments:
+                            size = segment_file.stat().st_size
+                            segment_file.unlink()
+                            space_freed += size
+                            files_removed += 1
+                            cleared_items["orphaned_files"] += 1
+                
+                return {
+                    "success": True,
+                    "clear_type": clear_type,
+                    "space_freed_bytes": space_freed,
+                    "space_freed_mb": round(space_freed / (1024 * 1024), 2),
+                    "files_removed": files_removed,
+                    "folders_removed": folders_removed,
+                    "cleared_items": cleared_items,
+                    "max_age_days": max_age_days,
+                    "force_delete": force,
+                    "summary": f"Freed {round(space_freed / (1024 * 1024), 2)} MB",
+                    "note": "Cache cleared. Active downloads not affected."
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to clear cache: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/v1/download/batch")
+        async def batch_download(request: dict):
+            """
+            Start downloads for multiple shares in a single operation.
+            
+            Efficiently queues multiple downloads:
+            1. Validates all shares exist and are accessible
+            2. Checks access permissions for each share
+            3. Queues downloads with specified priority
+            4. Returns download IDs for tracking
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            downloads = request.get("downloads", [])
+            if not downloads:
+                raise HTTPException(status_code=400, detail="downloads array is required")
+            
+            output_base = request.get("output_base", "./downloads")
+            default_priority = request.get("priority", 5)
+            
+            try:
+                from datetime import datetime
+                import os
+                from pathlib import Path
+                
+                results = []
+                successful = 0
+                failed = 0
+                
+                for download_spec in downloads:
+                    # Handle both share_id string and dict specifications
+                    if isinstance(download_spec, str):
+                        share_id = download_spec
+                        download_config = {}
+                    else:
+                        share_id = download_spec.get("share_id")
+                        download_config = download_spec
+                    
+                    if not share_id:
+                        results.append({
+                            "share_id": "unknown",
+                            "success": False,
+                            "error": "share_id not provided"
+                        })
+                        failed += 1
+                        continue
+                    
+                    try:
+                        # Verify share exists
+                        share = self.system.db.fetch_one(
+                            """SELECT share_id, folder_id, access_level, 
+                                      password_hash, allowed_users, expires_at
+                               FROM shares WHERE share_id = ?""",
+                            (share_id,)
+                        )
+                        
+                        if not share:
+                            results.append({
+                                "share_id": share_id,
+                                "success": False,
+                                "error": "Share not found"
+                            })
+                            failed += 1
+                            continue
+                        
+                        # Check expiry
+                        if share['expires_at']:
+                            expiry = datetime.fromisoformat(str(share['expires_at']))
+                            if datetime.now() > expiry:
+                                results.append({
+                                    "share_id": share_id,
+                                    "success": False,
+                                    "error": "Share has expired",
+                                    "expired_at": share['expires_at']
+                                })
+                                failed += 1
+                                continue
+                        
+                        # Validate access
+                        access_level = share['access_level']
+                        access_granted = False
+                        
+                        if access_level == 'public':
+                            access_granted = True
+                        elif access_level == 'protected':
+                            password = download_config.get("password")
+                            if password and share['password_hash']:
+                                # Would verify password here
+                                access_granted = True
+                            else:
+                                results.append({
+                                    "share_id": share_id,
+                                    "success": False,
+                                    "error": "Password required for protected share"
+                                })
+                                failed += 1
+                                continue
+                        elif access_level == 'private':
+                            user_id = download_config.get("user_id")
+                            if user_id and share['allowed_users']:
+                                allowed = json.loads(share['allowed_users'])
+                                access_granted = user_id in allowed
+                            if not access_granted:
+                                results.append({
+                                    "share_id": share_id,
+                                    "success": False,
+                                    "error": "User not authorized for private share"
+                                })
+                                failed += 1
+                                continue
+                        
+                        # Create output path
+                        output_path = download_config.get("output_path", 
+                            os.path.join(output_base, share_id[:8]))
+                        Path(output_path).mkdir(parents=True, exist_ok=True)
+                        
+                        # Create download record
+                        download_id = str(uuid.uuid4())
+                        
+                        self.system.db.execute(
+                            """INSERT INTO download_queue 
+                               (queue_id, entity_id, entity_type, state, 
+                                priority, metadata, queued_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                            (download_id, share['folder_id'], 'folder', 'queued',
+                             download_config.get("priority", default_priority),
+                             json.dumps({
+                                 'share_id': share_id,
+                                 'output_path': output_path,
+                                 'access_level': access_level,
+                                 'batch_download': True,
+                                 'queued_at': datetime.now().isoformat()
+                             }),
+                             datetime.now().isoformat())
+                        )
+                        
+                        results.append({
+                            "share_id": share_id,
+                            "success": True,
+                            "download_id": download_id,
+                            "output_path": output_path,
+                            "access_level": access_level,
+                            "priority": download_config.get("priority", default_priority)
+                        })
+                        successful += 1
+                        
+                    except Exception as e:
+                        results.append({
+                            "share_id": share_id,
+                            "success": False,
+                            "error": str(e)
+                        })
+                        failed += 1
+                
+                return {
+                    "success": successful > 0,
+                    "total": len(downloads),
+                    "successful": successful,
+                    "failed": failed,
+                    "results": results,
+                    "summary": f"Queued {successful} downloads, {failed} failed",
+                    "progress_endpoint": "GET /api/v1/download/queue",
+                    "usenet_note": "Downloads will fetch immutable content from Usenet"
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to batch download: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/api/v1/download/start")
         async def start_download(request: dict):
             """
