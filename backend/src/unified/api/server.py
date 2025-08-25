@@ -1128,29 +1128,79 @@ class UnifiedAPIServer:
         
         @self.app.post("/api/v1/batch/shares")
         async def batch_create_shares(request: dict):
-            """Create multiple shares"""
+            """
+            Create multiple shares with same access control.
+            
+            Each share creates an encrypted core index for Usenet.
+            Access levels:
+            - PUBLIC: Anyone can decrypt with share ID
+            - PROTECTED: Same password for all shares
+            - PRIVATE: Same authorized users for all shares
+            """
             try:
                 folder_ids = request.get('folder_ids')
                 if not folder_ids:
                     raise HTTPException(status_code=400, detail="folder_ids is required")
-                access_level = request.get('access_level', 'public')
                 
-                if not folder_ids:
-                    raise HTTPException(status_code=400, detail="Folder IDs required")
+                access_level = request.get('access_level', 'public')
+                password = request.get('password')  # For protected shares
+                authorized_users = request.get('authorized_users', [])  # For private shares
+                owner_id = request.get('owner_id', 'system')
+                
+                # Validate requirements
+                if access_level == 'protected' and not password:
+                    return {
+                        "success": False,
+                        "error": "Protected shares require a password"
+                    }
+                if access_level == 'private' and not authorized_users:
+                    return {
+                        "success": False,
+                        "error": "Private shares require authorized_users list"
+                    }
                 
                 results = []
+                failed = []
+                
                 for folder_id in folder_ids:
-                    share_id = f"SHARE-{uuid.uuid4().hex[:8].upper()}"
-                    results.append({
-                        "folder_id": folder_id,
-                        "share_id": share_id,
-                        "access_level": access_level
-                    })
+                    try:
+                        # Create share with proper access control
+                        from unified.security.access_control import AccessLevel
+                        
+                        level = AccessLevel.PUBLIC
+                        if access_level == 'protected':
+                            level = AccessLevel.PROTECTED
+                        elif access_level == 'private':
+                            level = AccessLevel.PRIVATE
+                        
+                        share = self.system.create_share(
+                            folder_id=folder_id,
+                            owner_id=owner_id,
+                            access_level=level,
+                            password=password if access_level == 'protected' else None,
+                            allowed_users=authorized_users if access_level == 'private' else None
+                        )
+                        
+                        results.append({
+                            "folder_id": folder_id,
+                            "share_id": share.get('share_id'),
+                            "access_level": access_level,
+                            "encrypted": True,
+                            "ready_for_usenet": True
+                        })
+                    except Exception as e:
+                        failed.append({
+                            "folder_id": folder_id,
+                            "error": str(e)
+                        })
                 
                 return {
-                    "success": True,
+                    "success": len(results) > 0,
                     "created": len(results),
-                    "shares": results
+                    "failed": len(failed),
+                    "shares": results,
+                    "errors": failed if failed else None,
+                    "note": "Each share will create an immutable encrypted index on Usenet"
                 }
                 
             except Exception as e:
@@ -2478,7 +2528,17 @@ class UnifiedAPIServer:
                 raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/create_share")
         async def create_share(request: dict):
-            """Create a share with real implementation"""
+            """
+            Create a share with cryptographic access control.
+            
+            This creates an encrypted core index that will be posted to Usenet.
+            Access is controlled through encryption, not Usenet permissions:
+            - PUBLIC: Decryption key included in share
+            - PROTECTED: Key derived from password
+            - PRIVATE: Cryptographic commitments for authorized users
+            
+            Once posted to Usenet, the share cannot be modified (only new versions).
+            """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
@@ -2489,38 +2549,79 @@ class UnifiedAPIServer:
             share_type = request.get("shareType", "public")
             password = request.get("password")
             expiry_days = request.get("expiryDays", 30)
+            authorized_users = request.get("authorized_users", [])
             
             try:
-                # Use REAL share creation
+                # Validate share type and requirements
                 from unified.security.access_control import AccessLevel
                 
                 # Map share_type to AccessLevel
                 access_level = AccessLevel.PUBLIC
                 if share_type.lower() == 'private':
                     access_level = AccessLevel.PRIVATE
+                    if not authorized_users:
+                        return {
+                            "success": False,
+                            "error": "Private shares require authorized_users list",
+                            "note": "Users will be added via cryptographic commitments"
+                        }
                 elif share_type.lower() == 'protected':
                     access_level = AccessLevel.PROTECTED
+                    if not password:
+                        return {
+                            "success": False,
+                            "error": "Protected shares require a password",
+                            "note": "Password will be used to derive encryption key"
+                        }
                 
-                # Get owner_id from request or use a default
+                # Get owner_id from request or session
                 owner_id = request.get("owner_id")
                 if not owner_id:
-                    # Try to get from session or use system default
                     owner_id = request.get("userId", "system")
                 
+                # Create share with appropriate access control
                 share = self.system.create_share(
                     folder_id=folder_id,
                     owner_id=owner_id,
                     access_level=access_level,
                     password=password,
+                    allowed_users=authorized_users if access_level == AccessLevel.PRIVATE else None,
                     expiry_days=expiry_days
                 )
+                
+                # Add clarification about what happens next
+                share["access_control_note"] = {
+                    "public": "Anyone with share ID can decrypt",
+                    "protected": "Password required for decryption",
+                    "private": "Only authorized users with commitments can decrypt"
+                }.get(share_type.lower(), "Unknown access type")
+                
+                share["usenet_note"] = (
+                    "When uploaded, this creates an immutable encrypted index on Usenet. "
+                    "Access control is enforced through cryptography, not server permissions."
+                )
+                
                 return share
             except Exception as e:
                 logger.error(f"Failed to create share: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         @self.app.post("/api/v1/download_share")
         async def download_share(request: dict):
-            """Download a shared folder with real implementation"""
+            """
+            Download a shared folder from Usenet.
+            
+            Process:
+            1. Fetches encrypted core index from Usenet using share_id
+            2. Verifies access based on share type:
+               - PUBLIC: Uses embedded key
+               - PROTECTED: Derives key from provided password
+               - PRIVATE: Verifies user commitment and uses wrapped key
+            3. Decrypts core index to get file metadata and segment info
+            4. Downloads and reassembles encrypted segments
+            5. Decrypts files using appropriate keys
+            
+            NOTE: Downloads from immutable Usenet posts - content cannot be modified.
+            """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
             
@@ -2530,20 +2631,57 @@ class UnifiedAPIServer:
             
             output_path = request.get("outputPath", "./downloads")
             password = request.get("password")
+            user_id = request.get("user_id")  # For private shares
+            commitment = request.get("commitment")  # For private share verification
             
             try:
-                # Use REAL download
-                download_id = self.system.start_download(
-                    share_id=share_id,
-                    output_path=output_path,
-                    password=password
-                )
+                # Start download with appropriate credentials
+                download_params = {
+                    "share_id": share_id,
+                    "output_path": output_path
+                }
+                
+                # Add credentials based on what's provided
+                if password:
+                    download_params["password"] = password
+                if user_id:
+                    download_params["user_id"] = user_id
+                if commitment:
+                    download_params["commitment"] = commitment
+                
+                download_id = self.system.start_download(**download_params)
+                
                 return {
                     "success": True,
                     "download_id": download_id,
                     "share_id": share_id,
-                    "status": "started"
+                    "status": "started",
+                    "process_note": (
+                        "Downloading encrypted segments from Usenet. "
+                        "Access will be verified using provided credentials."
+                    ),
+                    "immutability_note": (
+                        "Content is downloaded from immutable Usenet posts. "
+                        "The data received matches what was originally published."
+                    )
                 }
+            except ValueError as e:
+                # Access denied or invalid credentials
+                error_msg = str(e)
+                if "password" in error_msg.lower():
+                    return {
+                        "success": False,
+                        "error": "Invalid password for protected share",
+                        "hint": "Password is used to derive decryption key"
+                    }
+                elif "commitment" in error_msg.lower() or "authorized" in error_msg.lower():
+                    return {
+                        "success": False,
+                        "error": "Not authorized for private share",
+                        "hint": "User must be in authorized list with valid commitment"
+                    }
+                else:
+                    raise HTTPException(status_code=403, detail=error_msg)
             except Exception as e:
                 logger.error(f"Failed to download share: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
