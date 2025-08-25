@@ -1126,7 +1126,7 @@ class UnifiedSystem:
                     allowed_users: Optional[List[str]] = None,
                     expiry_days: int = 30) -> Dict[str, Any]:
         """
-        Create share for folder
+        Create share for folder using UnifiedPublishingSystem
         
         Args:
             folder_id: Folder to share
@@ -1139,24 +1139,74 @@ class UnifiedSystem:
         Returns:
             Share information
         """
-        if access_level == AccessLevel.PUBLIC:
-            share = self.access_control.create_public_share(folder_id, owner_id, expiry_days)
-        elif access_level == AccessLevel.PRIVATE:
-            share = self.access_control.create_private_share(
-                folder_id, owner_id, allowed_users or [], expiry_days
-            )
-        elif access_level == AccessLevel.PROTECTED:
-            if not password:
-                raise ValueError("Password required for protected share")
-            share = self.access_control.create_protected_share(
-                folder_id, owner_id, password, expiry_days
-            )
-        else:
-            raise ValueError(f"Invalid access level: {access_level}")
+        # Import here to avoid circular dependency
+        from backend.src.unified.publishing_system import UnifiedPublishingSystem
         
-        logger.info(f"Created {access_level.value} share: {share['share_id']}")
+        # Create a database wrapper to fix method name mismatch and SQL syntax
+        class DBWrapper:
+            def __init__(self, db):
+                self._db = db
+            
+            def _convert_query(self, query):
+                """Convert PostgreSQL-style syntax to SQLite"""
+                # Replace placeholders
+                query = query.replace('%s', '?')
+                # Replace boolean values
+                query = query.replace(' TRUE', ' 1')
+                query = query.replace(' FALSE', ' 0')
+                query = query.replace('=TRUE', '=1')
+                query = query.replace('=FALSE', '=0')
+                # Replace CURRENT_TIMESTAMP
+                query = query.replace('CURRENT_TIMESTAMP', "datetime('now')")
+                return query
+            
+            def fetchone(self, query, params=None):
+                return self._db.fetch_one(self._convert_query(query), params)
+            
+            def fetch_all(self, query, params=None):
+                return self._db.fetch_all(self._convert_query(query), params)
+            
+            def fetchall(self, query, params=None):
+                return self._db.fetch_all(self._convert_query(query), params)
+            
+            def execute(self, query, params=None):
+                return self._db.execute(self._convert_query(query), params)
+            
+            def insert(self, table, data):
+                columns = ', '.join(data.keys())
+                placeholders = ', '.join(['?' for _ in data])
+                query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                return self._db.execute(query, tuple(data.values()))
         
-        return share
+        # Initialize publishing system if not already done
+        if not hasattr(self, 'publisher'):
+            self.publisher = UnifiedPublishingSystem(DBWrapper(self.db), self)
+        
+        # Map AccessLevel to share_type string
+        share_type = access_level.value.upper()
+        
+        # Use UnifiedPublishingSystem which correctly uses shares table
+        share_info = self.publisher.publish_folder(
+            folder_id=folder_id,
+            share_type=share_type,
+            password=password,
+            authorized_users=allowed_users,
+            expiry_days=expiry_days
+        )
+        
+        # Convert ShareInfo to dict for API response
+        share_dict = {
+            'share_id': share_info.share_id,
+            'folder_id': share_info.folder_id,
+            'access_string': share_info.access_string,
+            'share_type': share_info.share_type,
+            'expires_at': share_info.expires_at.isoformat() if share_info.expires_at else None,
+            'success': True
+        }
+        
+        logger.info(f"Created {share_type} share: {share_info.share_id}")
+        
+        return share_dict
     
     def verify_access(self, share_id: str, user_id: str,
                      password: Optional[str] = None) -> bool:
