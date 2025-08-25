@@ -5997,6 +5997,299 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get upload progress: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.get("/api/v1/upload/queue")
+        async def get_upload_queue(
+            state: Optional[str] = None,
+            entity_type: Optional[str] = None,
+            priority_min: Optional[int] = None,
+            limit: int = 100,
+            offset: int = 0,
+            sort_by: str = "priority,queued_at"
+        ):
+            """
+            Get list of items in the upload queue.
+            
+            Returns uploads with:
+            - Current state and progress
+            - Entity details (folder/file)
+            - Priority and retry information
+            - Error details for failed uploads
+            - Timing information
+            
+            state: queued, uploading, completed, failed, cancelled, retrying, paused
+            entity_type: folder, file
+            sort_by: priority, queued_at, progress, state
+            
+            NOTE: This shows the LOCAL upload queue.
+            Completed uploads have been posted to immutable Usenet.
+            """
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                import json
+                
+                # Build query with filters
+                query = """
+                    SELECT u.*, 
+                           CASE 
+                               WHEN u.entity_type = 'folder' THEN f.path
+                               WHEN u.entity_type = 'file' THEN fi.path
+                           END as entity_path,
+                           CASE 
+                               WHEN u.entity_type = 'folder' THEN f.file_count
+                               WHEN u.entity_type = 'file' THEN 1
+                           END as file_count
+                    FROM upload_queue u
+                    LEFT JOIN folders f ON u.entity_type = 'folder' AND u.entity_id = f.folder_id
+                    LEFT JOIN files fi ON u.entity_type = 'file' AND u.entity_id = fi.file_id
+                    WHERE 1=1
+                """
+                params = []
+                
+                if state:
+                    # Handle state aliases
+                    if state == "active":
+                        query += " AND u.state = 'uploading'"
+                    elif state == "pending":
+                        query += " AND u.state IN ('queued', 'retrying')"
+                    else:
+                        query += " AND u.state = ?"
+                        params.append(state)
+                
+                if entity_type:
+                    query += " AND u.entity_type = ?"
+                    params.append(entity_type)
+                
+                if priority_min is not None:
+                    query += " AND u.priority >= ?"
+                    params.append(priority_min)
+                
+                # Sort order
+                order_parts = []
+                for sort_field in sort_by.split(','):
+                    field = sort_field.strip()
+                    if field == "priority":
+                        order_parts.append("u.priority DESC")  # Higher priority first
+                    elif field == "queued_at":
+                        order_parts.append("u.queued_at ASC")  # Oldest first
+                    elif field == "progress":
+                        order_parts.append("u.progress DESC")
+                    elif field == "state":
+                        # Custom state ordering
+                        order_parts.append("""
+                            CASE u.state
+                                WHEN 'uploading' THEN 1
+                                WHEN 'retrying' THEN 2
+                                WHEN 'queued' THEN 3
+                                WHEN 'paused' THEN 4
+                                WHEN 'completed' THEN 5
+                                WHEN 'failed' THEN 6
+                                WHEN 'cancelled' THEN 7
+                                ELSE 8
+                            END
+                        """)
+                
+                if order_parts:
+                    query += " ORDER BY " + ", ".join(order_parts)
+                else:
+                    query += " ORDER BY u.priority DESC, u.queued_at ASC"
+                
+                query += f" LIMIT {limit} OFFSET {offset}"
+                
+                # Execute query
+                uploads = self.system.db.fetch_all(query, tuple(params)) if params else self.system.db.fetch_all(query)
+                
+                if not uploads:
+                    return {
+                        "success": True,
+                        "total": 0,
+                        "uploads": [],
+                        "filters": {
+                            "state": state,
+                            "entity_type": entity_type,
+                            "priority_min": priority_min
+                        }
+                    }
+                
+                # Process upload queue items
+                upload_list = []
+                for upload in uploads:
+                    # Parse metadata if available
+                    metadata = {}
+                    if upload.get('metadata'):
+                        try:
+                            metadata = json.loads(upload['metadata'])
+                        except:
+                            pass
+                    
+                    upload_data = {
+                        "queue_id": upload['queue_id'],
+                        "entity_id": upload['entity_id'],
+                        "entity_type": upload['entity_type'],
+                        "entity_path": upload.get('entity_path'),
+                        "state": upload['state'],
+                        "priority": upload.get('priority', 5),
+                        "progress": upload.get('progress', 0),
+                        "retry_count": upload.get('retry_count', 0),
+                        "max_retries": upload.get('max_retries', 3)
+                    }
+                    
+                    # Add size information
+                    upload_data["size"] = {
+                        "total": upload.get('total_size', 0),
+                        "uploaded": upload.get('uploaded_size', 0),
+                        "remaining": max(0, (upload.get('total_size', 0) - upload.get('uploaded_size', 0)))
+                    }
+                    
+                    # Add timing
+                    if upload.get('queued_at'):
+                        upload_data["queued_at"] = upload['queued_at']
+                        try:
+                            queued = datetime.fromisoformat(upload['queued_at'])
+                            wait_time = (datetime.now() - queued).total_seconds()
+                            upload_data["wait_time_seconds"] = round(wait_time)
+                        except:
+                            pass
+                    
+                    if upload.get('started_at'):
+                        upload_data["started_at"] = upload['started_at']
+                        if upload['state'] == 'uploading':
+                            try:
+                                started = datetime.fromisoformat(upload['started_at'])
+                                elapsed = (datetime.now() - started).total_seconds()
+                                upload_data["elapsed_seconds"] = round(elapsed)
+                                
+                                # Calculate speed
+                                if elapsed > 0 and upload.get('uploaded_size', 0) > 0:
+                                    speed_mbps = (upload['uploaded_size'] * 8 / elapsed) / 1_000_000
+                                    upload_data["speed_mbps"] = round(speed_mbps, 2)
+                            except:
+                                pass
+                    
+                    if upload.get('completed_at'):
+                        upload_data["completed_at"] = upload['completed_at']
+                    
+                    # Add error info
+                    if upload.get('error_message'):
+                        upload_data["error"] = {
+                            "message": upload['error_message'],
+                            "can_retry": upload.get('retry_count', 0) < upload.get('max_retries', 3)
+                        }
+                    
+                    # Add segment info from metadata
+                    if metadata.get('total_segments'):
+                        upload_data["segments"] = {
+                            "completed": metadata.get('segments_completed', 0),
+                            "total": metadata['total_segments'],
+                            "current": metadata.get('current_segment')
+                        }
+                    
+                    # Add file count
+                    upload_data["file_count"] = upload.get('file_count', 0)
+                    
+                    # Status message
+                    if upload['state'] == 'queued':
+                        upload_data["status"] = f"Waiting in queue (priority {upload.get('priority', 5)})"
+                    elif upload['state'] == 'uploading':
+                        upload_data["status"] = f"Uploading - {upload.get('progress', 0)}% complete"
+                    elif upload['state'] == 'completed':
+                        upload_data["status"] = "Successfully uploaded to Usenet"
+                    elif upload['state'] == 'failed':
+                        upload_data["status"] = f"Failed - {upload.get('error_message', 'Unknown error')}"
+                    elif upload['state'] == 'retrying':
+                        upload_data["status"] = f"Retrying (attempt {upload.get('retry_count', 0) + 1})"
+                    elif upload['state'] == 'paused':
+                        upload_data["status"] = "Paused by user"
+                    elif upload['state'] == 'cancelled':
+                        upload_data["status"] = "Cancelled by user"
+                    else:
+                        upload_data["status"] = upload['state']
+                    
+                    upload_list.append(upload_data)
+                
+                # Get total count
+                count_query = "SELECT COUNT(*) as total FROM upload_queue WHERE 1=1"
+                count_params = []
+                
+                if state:
+                    if state == "active":
+                        count_query += " AND state = 'uploading'"
+                    elif state == "pending":
+                        count_query += " AND state IN ('queued', 'retrying')"
+                    else:
+                        count_query += " AND state = ?"
+                        count_params.append(state)
+                
+                if entity_type:
+                    count_query += " AND entity_type = ?"
+                    count_params.append(entity_type)
+                
+                if priority_min is not None:
+                    count_query += " AND priority >= ?"
+                    count_params.append(priority_min)
+                
+                total_result = self.system.db.fetch_one(count_query, tuple(count_params)) if count_params else self.system.db.fetch_one(count_query)
+                total_count = total_result['total'] if total_result else 0
+                
+                # Calculate statistics
+                stats_query = """
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE WHEN state = 'queued' THEN 1 ELSE 0 END) as queued,
+                        SUM(CASE WHEN state = 'uploading' THEN 1 ELSE 0 END) as uploading,
+                        SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END) as completed,
+                        SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) as failed,
+                        SUM(CASE WHEN state = 'retrying' THEN 1 ELSE 0 END) as retrying,
+                        SUM(CASE WHEN state = 'paused' THEN 1 ELSE 0 END) as paused,
+                        SUM(CASE WHEN state = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
+                        SUM(total_size) as total_bytes,
+                        SUM(uploaded_size) as uploaded_bytes
+                    FROM upload_queue
+                """
+                
+                stats = self.system.db.fetch_one(stats_query)
+                
+                statistics = {
+                    "total": stats['total'] if stats else 0,
+                    "by_state": {
+                        "queued": stats['queued'] if stats and stats['queued'] else 0,
+                        "uploading": stats['uploading'] if stats and stats['uploading'] else 0,
+                        "completed": stats['completed'] if stats and stats['completed'] else 0,
+                        "failed": stats['failed'] if stats and stats['failed'] else 0,
+                        "retrying": stats['retrying'] if stats and stats['retrying'] else 0,
+                        "paused": stats['paused'] if stats and stats['paused'] else 0,
+                        "cancelled": stats['cancelled'] if stats and stats['cancelled'] else 0
+                    },
+                    "total_bytes": stats['total_bytes'] if stats and stats['total_bytes'] else 0,
+                    "uploaded_bytes": stats['uploaded_bytes'] if stats and stats['uploaded_bytes'] else 0
+                }
+                
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "uploads": upload_list,
+                    "pagination": {
+                        "total": total_count,
+                        "limit": limit,
+                        "offset": offset,
+                        "has_more": (offset + limit) < total_count
+                    },
+                    "statistics": statistics,
+                    "filters": {
+                        "state": state,
+                        "entity_type": entity_type,
+                        "priority_min": priority_min,
+                        "sort_by": sort_by
+                    },
+                    "usenet_note": "Completed uploads have been posted to Usenet and are immutable"
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get upload queue: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.get("/api/v1/status")
         async def get_system_status():
             """
