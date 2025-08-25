@@ -5779,6 +5779,284 @@ class UnifiedAPIServer:
                 "total_size": 0
             }
         
+        @self.app.get("/api/v1/status")
+        async def get_system_status():
+            """
+            Get comprehensive system status.
+            
+            Returns real-time information about:
+            - System health and uptime
+            - Database connectivity
+            - NNTP server connection
+            - Active operations (uploads/downloads)
+            - Resource usage
+            - Queue statistics
+            - Recent errors
+            
+            NOTE: This reflects the LOCAL application status.
+            Usenet server status is checked via NNTP connection.
+            """
+            try:
+                from datetime import datetime, timedelta
+                import psutil
+                import os
+                
+                status = {
+                    "timestamp": datetime.now().isoformat(),
+                    "status": "operational",
+                    "uptime_seconds": 0,
+                    "version": "1.0.0"
+                }
+                
+                # System health
+                try:
+                    process = psutil.Process(os.getpid())
+                    create_time = datetime.fromtimestamp(process.create_time())
+                    uptime = (datetime.now() - create_time).total_seconds()
+                    
+                    status["system"] = {
+                        "uptime_seconds": round(uptime),
+                        "uptime_hours": round(uptime / 3600, 2),
+                        "memory_mb": round(process.memory_info().rss / 1024 / 1024, 2),
+                        "cpu_percent": process.cpu_percent(),
+                        "threads": process.num_threads(),
+                        "pid": os.getpid()
+                    }
+                except:
+                    status["system"] = {"error": "Unable to get system metrics"}
+                
+                # Database status
+                if self.system and self.system.db:
+                    try:
+                        # Test database connection
+                        test = self.system.db.fetch_one("SELECT 1 as test")
+                        
+                        # Get database statistics
+                        folder_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM folders")
+                        file_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM files")
+                        segment_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM segments")
+                        share_count = self.system.db.fetch_one("SELECT COUNT(*) as count FROM shares")
+                        
+                        status["database"] = {
+                            "connected": True,
+                            "type": "sqlite",
+                            "statistics": {
+                                "folders": folder_count['count'] if folder_count else 0,
+                                "files": file_count['count'] if file_count else 0,
+                                "segments": segment_count['count'] if segment_count else 0,
+                                "shares": share_count['count'] if share_count else 0
+                            }
+                        }
+                    except Exception as e:
+                        status["database"] = {
+                            "connected": False,
+                            "error": str(e)
+                        }
+                        status["status"] = "degraded"
+                else:
+                    status["database"] = {
+                        "connected": False,
+                        "error": "Database not initialized"
+                    }
+                    status["status"] = "degraded"
+                
+                # NNTP status
+                nntp_status = {
+                    "configured": False,
+                    "connected": False
+                }
+                
+                if os.getenv("NNTP_SERVER"):
+                    nntp_status["configured"] = True
+                    nntp_status["server"] = os.getenv("NNTP_SERVER")
+                    nntp_status["port"] = int(os.getenv("NNTP_PORT", 563))
+                    nntp_status["ssl"] = os.getenv("NNTP_SSL", "true").lower() == "true"
+                    
+                    # Check if we can connect
+                    if self.system and hasattr(self.system, 'nntp_client'):
+                        try:
+                            # Try to get a connection from pool
+                            if hasattr(self.system, 'connection_pool'):
+                                conn = self.system.connection_pool.get_connection()
+                                if conn:
+                                    nntp_status["connected"] = True
+                                    self.system.connection_pool.release_connection(conn)
+                            else:
+                                nntp_status["note"] = "Connection pool not initialized"
+                        except:
+                            nntp_status["connected"] = False
+                    
+                    # Add server-specific info
+                    if "newshosting" in os.getenv("NNTP_SERVER", ""):
+                        nntp_status["provider"] = "Newshosting"
+                        nntp_status["retention_days"] = 4000
+                        nntp_status["max_connections"] = 50
+                else:
+                    nntp_status["error"] = "NNTP server not configured"
+                    status["status"] = "degraded"
+                
+                status["nntp"] = nntp_status
+                
+                # Queue statistics
+                if self.system and self.system.db:
+                    try:
+                        # Upload queue
+                        upload_stats = self.system.db.fetch_one(
+                            """SELECT 
+                               COUNT(*) as total,
+                               SUM(CASE WHEN state = 'pending' THEN 1 ELSE 0 END) as pending,
+                               SUM(CASE WHEN state = 'uploading' THEN 1 ELSE 0 END) as active,
+                               SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END) as completed,
+                               SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) as failed
+                               FROM upload_queue"""
+                        )
+                        
+                        # Download queue
+                        download_stats = self.system.db.fetch_one(
+                            """SELECT 
+                               COUNT(*) as total,
+                               SUM(CASE WHEN state = 'pending' THEN 1 ELSE 0 END) as pending,
+                               SUM(CASE WHEN state = 'downloading' THEN 1 ELSE 0 END) as active,
+                               SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END) as completed,
+                               SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) as failed
+                               FROM download_queue"""
+                        )
+                        
+                        status["queues"] = {
+                            "upload": {
+                                "total": upload_stats['total'] if upload_stats else 0,
+                                "pending": upload_stats['pending'] if upload_stats and upload_stats['pending'] else 0,
+                                "active": upload_stats['active'] if upload_stats and upload_stats['active'] else 0,
+                                "completed": upload_stats['completed'] if upload_stats and upload_stats['completed'] else 0,
+                                "failed": upload_stats['failed'] if upload_stats and upload_stats['failed'] else 0
+                            },
+                            "download": {
+                                "total": download_stats['total'] if download_stats else 0,
+                                "pending": download_stats['pending'] if download_stats and download_stats['pending'] else 0,
+                                "active": download_stats['active'] if download_stats and download_stats['active'] else 0,
+                                "completed": download_stats['completed'] if download_stats and download_stats['completed'] else 0,
+                                "failed": download_stats['failed'] if download_stats and download_stats['failed'] else 0
+                            }
+                        }
+                        
+                        # Check for active operations
+                        status["active_operations"] = {
+                            "uploads": status["queues"]["upload"]["active"],
+                            "downloads": status["queues"]["download"]["active"],
+                            "total": status["queues"]["upload"]["active"] + status["queues"]["download"]["active"]
+                        }
+                        
+                    except Exception as e:
+                        status["queues"] = {"error": str(e)}
+                
+                # Recent errors (last 24 hours)
+                if self.system and self.system.db:
+                    try:
+                        yesterday = (datetime.now() - timedelta(hours=24)).isoformat()
+                        
+                        # Upload errors
+                        upload_errors = self.system.db.fetch_all(
+                            """SELECT error_message, COUNT(*) as count
+                               FROM upload_queue 
+                               WHERE state = 'failed' 
+                               AND error_message IS NOT NULL
+                               AND updated_at >= ?
+                               GROUP BY error_message
+                               ORDER BY count DESC
+                               LIMIT 5""",
+                            (yesterday,)
+                        )
+                        
+                        # Download errors
+                        download_errors = self.system.db.fetch_all(
+                            """SELECT error_message, COUNT(*) as count
+                               FROM download_queue 
+                               WHERE state = 'failed'
+                               AND error_message IS NOT NULL
+                               AND updated_at >= ?
+                               GROUP BY error_message
+                               ORDER BY count DESC
+                               LIMIT 5""",
+                            (yesterday,)
+                        )
+                        
+                        status["recent_errors"] = {
+                            "upload_errors": [
+                                {"message": e['error_message'], "count": e['count']}
+                                for e in upload_errors
+                            ] if upload_errors else [],
+                            "download_errors": [
+                                {"message": e['error_message'], "count": e['count']}
+                                for e in download_errors
+                            ] if download_errors else [],
+                            "period": "last_24_hours"
+                        }
+                    except:
+                        # Tables might not have all columns
+                        status["recent_errors"] = {"available": False}
+                
+                # Disk usage for workspace
+                try:
+                    workspace_path = os.getenv("WORKSPACE_PATH", "/workspace")
+                    if os.path.exists(workspace_path):
+                        statvfs = os.statvfs(workspace_path)
+                        total_space = statvfs.f_blocks * statvfs.f_frsize
+                        free_space = statvfs.f_available * statvfs.f_frsize
+                        used_space = total_space - free_space
+                        
+                        status["disk"] = {
+                            "workspace_path": workspace_path,
+                            "total_gb": round(total_space / (1024**3), 2),
+                            "used_gb": round(used_space / (1024**3), 2),
+                            "free_gb": round(free_space / (1024**3), 2),
+                            "usage_percent": round((used_space / total_space) * 100, 2)
+                        }
+                except:
+                    status["disk"] = {"error": "Unable to get disk statistics"}
+                
+                # Features status
+                status["features"] = {
+                    "indexing": True,
+                    "segmentation": True,
+                    "encryption": True,
+                    "compression": True,
+                    "redundancy": True,
+                    "packing": True,
+                    "usenet_posting": nntp_status["configured"],
+                    "share_creation": True,
+                    "download": True
+                }
+                
+                # Overall health check
+                if status["status"] != "operational":
+                    pass  # Already set to degraded
+                elif not nntp_status["configured"]:
+                    status["status"] = "limited"
+                    status["message"] = "System operational but NNTP not configured"
+                elif status.get("active_operations", {}).get("total", 0) > 100:
+                    status["status"] = "busy"
+                    status["message"] = "High load - operations may be slower"
+                else:
+                    status["message"] = "All systems operational"
+                
+                # Add Usenet-specific note
+                status["usenet_note"] = (
+                    "This status reflects the LOCAL application state. "
+                    "Content posted to Usenet is immutable and remains available "
+                    "based on server retention policies (typically 3000+ days)."
+                )
+                
+                return status
+                
+            except Exception as e:
+                logger.error(f"Failed to get system status: {e}")
+                return {
+                    "timestamp": datetime.now().isoformat(),
+                    "status": "error",
+                    "error": str(e),
+                    "message": "Failed to retrieve system status"
+                }
+        
         @self.app.get("/api/v1/shares")
         async def get_shares(
             folder_id: Optional[str] = None,
