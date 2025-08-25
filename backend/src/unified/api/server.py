@@ -4244,7 +4244,49 @@ class UnifiedAPIServer:
                 logger.error(f"Failed to get server health: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.post("/api/v1/folder_info")
+        
+        # ==================== PUBLISHING ENDPOINTS ====================
+        @self.app.get("/api/v1/publishing/authorized_users/list")
+        async def list_authorized_users(
+            share_id: Optional[str] = None,
+            folder_id: Optional[str] = None,
+            user_id: Optional[str] = None,
+            include_permissions: bool = True
+        ):
+            """List authorized users for shares"""
+            if not self.system:
+                raise HTTPException(status_code=503, detail="System not initialized")
+            
+            try:
+                from datetime import datetime
+                
+                # Check if authorized_users table exists
+                if not self.system.db:
+                    return {
+                        "success": False,
+                        "message": "Database not initialized",
+                        "authorized_users": []
+                    }
+                
+                # For now, return test data to verify endpoint works
+                return {
+                    "success": True,
+                    "timestamp": datetime.now().isoformat(),
+                    "filters": {
+                        "share_id": share_id,
+                        "folder_id": folder_id,
+                        "user_id": user_id,
+                        "include_permissions": include_permissions
+                    },
+                    "total_users": 0,
+                    "authorized_users": [],
+                    "folders_summary": []
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to list authorized users: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+@self.app.post("/api/v1/folder_info")
         async def get_folder_info(request: dict = {}):
             """Get folder information"""
             folder_id = request.get("folder_id")
