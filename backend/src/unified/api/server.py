@@ -3380,22 +3380,32 @@ class UnifiedAPIServer:
         @self.app.post("/api/v1/configuration/backup")
         async def create_configuration_backup(request: dict):
             """
-            Create a backup of system configuration and metadata.
+            Create a backup of folder management data (FOLDER OWNERS ONLY).
             
-            This backs up LOCAL configuration only, NOT Usenet content:
-            - Database (folders, shares, users, settings)
-            - Configuration files
-            - Encryption keys (if include_keys=true)
-            - Access control lists
-            - Server configurations
+            This endpoint is exclusively for folder owners to:
+            - Backup their folder encryption keys
+            - Backup share configurations
+            - Backup Usenet message IDs and segment locations
+            - Enable folder/share recovery and management
+            
+            End users/downloaders:
+            - Do NOT have access to this endpoint
+            - Cannot backup encryption keys or Usenet locations
+            - Use share IDs provided by folder owners for downloads
+            
+            Backup Contents:
+            - Folder metadata and encryption keys
+            - Share configurations and access controls
+            - Usenet message IDs and segment headers (encrypted in DB)
+            - Authorization and access commitments
             
             Usenet Context:
             - Posted articles on Usenet are NOT backed up (immutable)
-            - Share IDs and message IDs are preserved for recovery
-            - Private keys are critical - loss means no access to encrypted content
+            - Message IDs and segment locations enable re-indexing
+            - Private keys are critical for folder management
             
             Backup Types:
-            - full: Complete backup of all configuration
+            - full: Complete backup of all owned folders
             - incremental: Only changes since last backup
             - differential: Changes since last full backup
             """
@@ -3411,11 +3421,29 @@ class UnifiedAPIServer:
                 
                 # Parse request parameters
                 backup_type = request.get("backup_type", "full")
-                include_keys = request.get("include_keys", True)
+                user_id = request.get("user_id")  # REQUIRED
+                include_keys = request.get("include_keys", True)  # Default to True for folder owners
+                include_sensitive = request.get("include_sensitive", True)  # Default to True for folder owners
                 include_database = request.get("include_database", True)
                 include_config = request.get("include_config", True)
                 compress = request.get("compress", True)
                 description = request.get("description", "")
+                
+                # User ID is required
+                if not user_id:
+                    raise HTTPException(status_code=400, 
+                        detail="user_id is required for backup operations")
+                
+                # Check if user owns any folders
+                owned_folders = self.system.db.fetch_all(
+                    "SELECT folder_id, path, status FROM folders WHERE owner_id = ?",
+                    (user_id,)
+                )
+                
+                # Only folder owners can use backup functionality
+                if len(owned_folders) == 0:
+                    raise HTTPException(status_code=403, 
+                        detail="Backup functionality is only available for folder owners. End users do not need backup/restore capabilities.")
                 
                 # Validate backup type
                 valid_types = ["full", "incremental", "differential"]
@@ -3444,36 +3472,82 @@ class UnifiedAPIServer:
                         "total_size": 0
                     }
                     
-                    # Backup database
-                    if include_database:
-                        db_backup_path = backup_path / "database"
-                        db_backup_path.mkdir()
-                        
-                        # Copy main database
+                    # Backup database (folder owners only - always include sensitive data)
+                    db_backup_path = backup_path / "database"
+                    db_backup_path.mkdir()
+                    
+                    # Backup owned folder data
+                    if include_sensitive:
+                        # Full database backup for folder owners
                         main_db = Path("data/usenetsync.db")
                         if main_db.exists():
                             shutil.copy2(main_db, db_backup_path / "usenetsync.db")
-                            backup_contents.append("Main database")
+                            backup_contents.append("Main database (full with encrypted Usenet locations)")
                             backup_stats["files"] += 1
                             backup_stats["total_size"] += main_db.stat().st_size
                         
-                        # Export critical tables as JSON for portability
+                        # Export tables as JSON with filtering
                         critical_tables = ["folders", "shares", "users", "configuration", 
                                          "authorized_users", "webhooks"]
                         
+                        # Sensitive columns that should be excluded for non-owners
+                        sensitive_columns = {
+                            "segments": ["message_id", "headers"],  # Usenet location data
+                            "messages": ["message_id", "headers", "body"],  # Actual Usenet messages
+                            "shares": ["encryption_key", "private_key"],  # Encryption data
+                            "folders": ["metadata"]  # Contains keys and sensitive info
+                        }
+                        
                         for table in critical_tables:
                             try:
-                                # Export table data
-                                rows = self.system.db.fetch_all(f"SELECT * FROM {table}")
+                                # Export only data owned by this user
+                                if table == "folders":
+                                    rows = self.system.db.fetch_all(
+                                        f"SELECT * FROM {table} WHERE owner_id = ?",
+                                        (user_id,)
+                                    )
+                                elif table == "shares":
+                                    rows = self.system.db.fetch_all(
+                                        f"""SELECT s.* FROM {table} s
+                                            JOIN folders f ON s.folder_id = f.folder_id
+                                            WHERE f.owner_id = ?""",
+                                        (user_id,)
+                                    )
+                                elif table == "segments":
+                                    # Include segment data for owned folders (contains message IDs)
+                                    rows = self.system.db.fetch_all(
+                                        f"""SELECT seg.* FROM segments seg
+                                            JOIN folders f ON seg.folder_id = f.folder_id
+                                            WHERE f.owner_id = ?""",
+                                        (user_id,)
+                                    )
+                                elif table == "messages":
+                                    # Include message data for owned folders
+                                    rows = self.system.db.fetch_all(
+                                        f"""SELECT m.* FROM messages m
+                                            JOIN folders f ON m.folder_id = f.folder_id
+                                            WHERE f.owner_id = ?""",
+                                        (user_id,)
+                                    )
+                                elif table == "authorized_users":
+                                    # Include authorization data for owned folders
+                                    rows = self.system.db.fetch_all(
+                                        f"""SELECT au.* FROM authorized_users au
+                                            JOIN folders f ON au.folder_id = f.folder_id
+                                            WHERE f.owner_id = ?""",
+                                        (user_id,)
+                                    )
+                                else:
+                                    # Other tables - export all (configuration, webhooks, etc.)
+                                    rows = self.system.db.fetch_all(f"SELECT * FROM {table}")
+                                
                                 if rows:
                                     export_file = db_backup_path / f"{table}.json"
                                     with open(export_file, 'w') as f:
-                                        # Convert rows to list of dicts
-                                        data = []
-                                        for row in rows:
-                                            data.append(dict(row))
+                                        data = [dict(row) for row in rows]
                                         json.dump(data, f, indent=2, default=str)
-                                    backup_contents.append(f"{table} table export")
+                                    
+                                    backup_contents.append(f"{table} table export (full with encrypted data)")
                                     backup_stats["files"] += 1
                             except Exception as e:
                                 logger.warning(f"Could not export table {table}: {e}")
@@ -3498,40 +3572,80 @@ class UnifiedAPIServer:
                                 backup_stats["files"] += 1
                                 backup_stats["total_size"] += source.stat().st_size
                     
-                    # Backup encryption keys (CRITICAL)
+                    # Backup encryption keys (CRITICAL - FOLDER OWNERS ONLY)
                     if include_keys:
                         keys_backup_path = backup_path / "keys"
                         keys_backup_path.mkdir()
                         
-                        # Get all folders with their keys
+                        # Get folders owned by this user
                         folders = self.system.db.fetch_all(
                             """SELECT folder_id, owner_id, metadata 
                                FROM folders 
-                               WHERE metadata IS NOT NULL"""
+                               WHERE owner_id = ? AND metadata IS NOT NULL""",
+                            (user_id,)
                         )
                         
                         key_count = 0
+                        segment_count = 0
+                        
                         for folder in folders:
                             try:
                                 metadata = json.loads(folder['metadata']) if folder['metadata'] else {}
-                                if 'private_key' in metadata or 'public_key' in metadata:
-                                    # Save keys for this folder
-                                    key_file = keys_backup_path / f"{folder['folder_id']}.json"
-                                    key_data = {
-                                        "folder_id": folder['folder_id'],
-                                        "owner_id": folder['owner_id'],
+                                
+                                # Backup encryption keys and Usenet location data
+                                key_data = {
+                                    "folder_id": folder['folder_id'],
+                                    "owner_id": folder['owner_id']
+                                }
+                                
+                                # Include sensitive data only if requested
+                                if include_sensitive:
+                                    key_data.update({
                                         "private_key": metadata.get('private_key'),
                                         "public_key": metadata.get('public_key'),
+                                        "key_type": metadata.get('key_type', 'RSA'),
+                                        "encryption_key": metadata.get('encryption_key'),
+                                        "message_ids": metadata.get('message_ids', [])
+                                    })
+                                    
+                                    # Also backup segment locations for this folder
+                                    segments = self.system.db.fetch_all(
+                                        """SELECT segment_id, message_id, headers 
+                                           FROM segments 
+                                           WHERE folder_id = ?""",
+                                        (folder['folder_id'],)
+                                    )
+                                    
+                                    if segments:
+                                        key_data['segments'] = [
+                                            {
+                                                "segment_id": s['segment_id'],
+                                                "message_id": s['message_id'],
+                                                "headers": s['headers']
+                                            } for s in segments
+                                        ]
+                                        segment_count += len(segments)
+                                else:
+                                    # Only backup public keys for recovery
+                                    key_data.update({
+                                        "public_key": metadata.get('public_key'),
                                         "key_type": metadata.get('key_type', 'RSA')
-                                    }
-                                    with open(key_file, 'w') as f:
-                                        json.dump(key_data, f, indent=2)
-                                    key_count += 1
+                                    })
+                                
+                                # Save keys for this folder
+                                key_file = keys_backup_path / f"{folder['folder_id']}.json"
+                                with open(key_file, 'w') as f:
+                                    json.dump(key_data, f, indent=2)
+                                key_count += 1
+                                
                             except Exception as e:
                                 logger.warning(f"Could not backup keys for folder {folder['folder_id']}: {e}")
                         
                         if key_count > 0:
-                            backup_contents.append(f"{key_count} encryption key sets")
+                            if include_sensitive:
+                                backup_contents.append(f"{key_count} encryption key sets (full with {segment_count} segment locations)")
+                            else:
+                                backup_contents.append(f"{key_count} public key sets (recovery only)")
                             backup_stats["files"] += key_count
                     
                     # Create backup metadata
@@ -3541,10 +3655,13 @@ class UnifiedAPIServer:
                         "backup_type": backup_type,
                         "description": description,
                         "system_version": "1.0.0",
+                        "user_type": "folder_owner",
+                        "user_id": user_id,
                         "included_components": {
                             "database": include_database,
                             "configuration": include_config,
-                            "encryption_keys": include_keys
+                            "encryption_keys": include_keys,
+                            "sensitive_data": include_sensitive
                         },
                         "statistics": backup_stats,
                         "contents": backup_contents
@@ -3599,11 +3716,13 @@ class UnifiedAPIServer:
                         if old_backups:
                             metadata["rotated_backups"] = old_backups
                     
-                    # Prepare response
+                    # Prepare response (folder owner only)
                     response = {
                         "success": True,
                         "backup_id": metadata["backup_id"],
                         "backup_type": backup_type,
+                        "user_type": "folder_owner",
+                        "user_id": user_id,
                         "filename": archive_name,
                         "path": str(backup_dir / archive_name),
                         "compressed": compress,
@@ -3612,21 +3731,35 @@ class UnifiedAPIServer:
                         "created_at": metadata["timestamp"],
                         "contents": backup_contents,
                         "statistics": backup_stats,
+                        "folder_management": {
+                            "owned_folders": len(owned_folders),
+                            "folders_backed_up": [f['folder_id'] for f in owned_folders],
+                            "includes_encryption_keys": include_keys,
+                            "includes_usenet_locations": include_sensitive,
+                            "can_restore_management": True
+                        },
                         "recovery_info": {
-                            "critical_warning": "Keep encryption keys safe! Loss means no access to encrypted Usenet content",
+                            "purpose": "Restore folder management capabilities",
                             "restore_endpoint": "POST /api/v1/configuration/restore",
-                            "restore_command": f"curl -X POST /api/v1/configuration/restore -d '{{\"backup_id\": \"{metadata['backup_id']}\"}}'",
-                            "backup_includes_keys": include_keys
+                            "restore_command": f"curl -X POST /api/v1/configuration/restore -d '{{\"backup_id\": \"{metadata['backup_id']}\", \"user_id\": \"{user_id}\"}}'",
+                            "critical_warning": "Contains private keys and Usenet locations - store securely!"
                         }
                     }
                     
-                    # Add warnings if keys not included
+                    # Add warnings if incomplete backup
+                    warnings = []
+                    
                     if not include_keys:
-                        response["warnings"] = [
-                            "Encryption keys NOT included in backup",
-                            "Without keys, encrypted Usenet content cannot be decrypted",
-                            "Create a separate secure backup of keys"
-                        ]
+                        warnings.append("Private keys NOT included - cannot manage folders without keys")
+                    if not include_sensitive:
+                        warnings.append("Usenet locations NOT included - cannot recover content from Usenet")
+                    if len(owned_folders) == 0:
+                        warnings.append("No folders to backup")
+                    
+                    if warnings:
+                        response["warnings"] = warnings
+                    else:
+                        response["status"] = "Complete folder owner backup with all management data"
                     
                     # Add incremental backup info
                     if backup_type == "incremental":
@@ -3659,25 +3792,32 @@ class UnifiedAPIServer:
         @self.app.post("/api/v1/configuration/restore")
         async def restore_configuration_backup(request: dict):
             """
-            Restore system configuration from a backup.
+            Restore folder management capabilities from backup (FOLDER OWNERS ONLY).
+            
+            This endpoint is exclusively for folder owners to:
+            - Restore folder encryption keys
+            - Restore share configurations
+            - Restore Usenet message IDs and segment locations
+            - Resume folder/share management
             
             CRITICAL Warnings:
-            - This will OVERWRITE current configuration
-            - Ensure backup includes encryption keys for Usenet content access
-            - Stop all active operations before restoring
-            - Backup current state before restoring
+            - This will OVERWRITE current folder configuration
+            - Requires backup with encryption keys for folder management
+            - Requires backup with message IDs for Usenet content access
+            - Only restores folders owned by the backup creator
             
             Restoration Process:
-            1. Validates backup integrity
+            1. Validates backup integrity and ownership
             2. Creates safety backup of current state
-            3. Restores database and configuration
-            4. Restores encryption keys (if included)
-            5. Verifies restoration success
+            3. Restores folder metadata and keys
+            4. Restores share configurations
+            5. Restores Usenet location data
+            6. Verifies restoration success
             
             Usenet Implications:
             - Does NOT restore Usenet articles (immutable)
-            - Restores share metadata for re-downloading
-            - Without correct keys, encrypted content is inaccessible
+            - Restores message IDs for re-indexing
+            - Without correct keys, folder management is impossible
             """
             if not self.system:
                 raise HTTPException(status_code=503, detail="System not initialized")
